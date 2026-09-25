@@ -1,0 +1,20 @@
+﻿148	  // Ayni anda iki createOffer ï¿½alÄ±ï¿½Ymasini engeller.
+149	  // ï¿½-zellikle medya alma ile arama baï¿½Ylatmanin yarÄ±ï¿½Ymasi halinde
+156	  // ikinci offer ï¿½retme yarÄ±ï¿½Yi oluï¿½Ymaz.
+172	        console.log("?? Arama ringback sesi zaten ï¿½alÄ±ï¿½Yiyor.");
+193	        console.log("?? Gelen arama ringtone zaten ï¿½alÄ±ï¿½Yiyor.");
+1083	   * dinler. Bï¿½ylece karï¿½Yi taraf aradÄ±ï¿½Yinda CALL_OFFER
+1434	          "ï¿½sï¿½ï¸ Android call audio oturumu baï¿½Ylatilamadi; WebRTC medya akÄ±ï¿½Yi yine de alinacak.",
+1457	      console.log("gYï¿½T?gY"ï¿½ Yerel medya akÄ±ï¿½Yi alindi.");
+1486	      throw new Error("Arama kullanicilari ayarlanmamÄ±ï¿½Y.");
+1495	      // createOffer()'in track'ler eklenmeden ï¿½alÄ±ï¿½Ymasina neden olur.
+1562	      console.log("gYï¿½ï¿½ Uzak medya akÄ±ï¿½Yi geldi.");
+1708	      throw new Error("Arama kullanicilari ayarlanmamÄ±ï¿½Y.");
+1750	      throw new Error("Arama kullanicilari ayarlanmamÄ±ï¿½Y.");
+1770	      console.log("gYYï¿½ ARAMA Ä°ï¿½?IN STOMP HAZIR");
+1779	    // tutarlilÄ±ï¿½Yini saï¿½Yliyoruz.
+1792	    // ï¿½alÄ±ï¿½Ymayalim. Bu kontrol "closed" hatasini daha anlaï¿½Yilir hale getirir.
+1848	      // Offer oluï¿½Yturulurken PeerConnection'in kapatilmadÄ±ï¿½Yindan emin ol.
+1860	      // createOffer tamamlandiktan sonra arama kapatilmÄ±ï¿½Y olabilir.
+1906	      throw new Error("Arama kullanicilari ayarlanmamÄ±ï¿½Y.");
+2122	        : "gY"ï¿½ WebRTC gï¿½rÃ¼ï¿½Ymesi sonlandiriliyor.",

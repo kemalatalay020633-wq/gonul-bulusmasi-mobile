@@ -1,0 +1,2418 @@
+import {
+  RTCPeerConnection,
+  RTCSessionDescription,
+  RTCIceCandidate,
+  mediaDevices,
+  MediaStream,
+} from "react-native-webrtc";
+// src/app/home.tsx
+import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import InCallManager from "react-native-incall-manager";
+import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
+import { Hoparlor } from "./Hoparlor";
+
+const SUNUCU_ADRESI = API_BASE_URL;
+
+const WEBSOCKET_ADRESI = WEBSOCKET_URL;
+
+const WEBSOCKET_BAGLANTI_TIMEOUT_MS = 15000;
+
+export type AramaTuru = "SES" | "VIDEO";
+
+export type AramaMesaji =
+  | {
+      tip: "CALL_OFFER";
+      arayanId: number;
+      arananId: number;
+      aramaTuru: AramaTuru;
+      teklif: RTCSessionDescriptionInit;
+    }
+  | {
+      tip: "CALL_ANSWER";
+      arayanId: number;
+      arananId: number;
+      cevap: RTCSessionDescriptionInit;
+    }
+  | {
+      tip: "CALL_ICE";
+      arayanId: number;
+      arananId: number;
+      aday: RTCIceCandidateInit;
+    }
+  | {
+      tip: "CALL_REJECT";
+      arayanId: number;
+      arananId: number;
+    }
+  | {
+      tip: "CALL_END";
+      arayanId: number;
+      arananId: number;
+    };
+
+type AramaOlaylari = {
+  teklif: (
+    mesaj: AramaMesaji & {
+      tip: "CALL_OFFER";
+    },
+  ) => void;
+
+  cevap: (
+    mesaj: AramaMesaji & {
+      tip: "CALL_ANSWER";
+    },
+  ) => void;
+
+  ice: (
+    mesaj: AramaMesaji & {
+      tip: "CALL_ICE";
+    },
+  ) => void;
+
+  reddet: (
+    mesaj: AramaMesaji & {
+      tip: "CALL_REJECT";
+    },
+  ) => void;
+
+  bitir: (
+    mesaj: AramaMesaji & {
+      tip: "CALL_END";
+    },
+  ) => void;
+
+  baglandi: () => void;
+
+  uzakStream: (stream: MediaStream) => void;
+
+  baglantiKoptu: () => void;
+
+  hata: (hata: Error) => void;
+};
+
+type BackendAramaSinyali = {
+  hedefKullaniciId: number;
+  tur: string;
+  tip: string;
+  sdp?: string | null;
+  aday?: string | null;
+  sdpMid?: string | null;
+  sdpMLineIndex?: number | null;
+};
+
+class AramaWebRTC {
+  private peerConnection: RTCPeerConnection | null = null;
+
+  private yerelStream: MediaStream | null = null;
+
+  private uzakStream: MediaStream | null = null;
+
+  private mevcutKullaniciId: number | null = null;
+
+  private arananKullaniciId: number | null = null;
+
+  private aramaTuru: AramaTuru = "SES";
+
+  /**
+   * =========================================================
+   * STOMP CLIENT
+   * =========================================================
+   */
+
+  private stompClient: Client | null = null;
+
+  private webSocketBagli = false;
+
+  private webSocketBaglantiPromise: Promise<void> | null = null;
+
+  private aramaSubscription: StompSubscription | null = null;
+
+  private hariciSinyalGonderici:
+    | ((sinyal: BackendAramaSinyali) => void | Promise<void>)
+    | null = null;
+
+  /**
+   * =========================================================
+   * ICE
+   * =========================================================
+   */
+
+  private bekleyenIceAdaylari: RTCIceCandidateInit[] = [];
+
+  private remoteDescriptionHazir = false;
+
+  private aramaSonlandiriliyor = false;
+  private webRtcBaglandiBildirildi = false;
+
+  // Ayni anda iki createOffer �alı�Ymasini engeller.
+  // �-zellikle medya alma ile arama ba�Ylatmanin yarı�Ymasi halinde
+  // SDP m-line sirasinin bozulmasini �nler.
+  private offerOlusturuluyor = false;
+
+  // Ayni arama i�in aramaBaslat() birden fazla kez tetiklenirse
+  // ikinci �a�Yri yeni bir createOffer ba�Ylatmaz; ilk �a�Yrinin
+  // Promise'ini bekler. B�ylece ayni PeerConnection kapanmadan
+  // ikinci offer �retme yarı�Yi olu�Ymaz.
+  private aramaBaslatPromise: Promise<RTCSessionDescriptionInit> | null = null;
+
+  /**
+   * =========================================================
+   * ARAMA SESI / ANDROID CALL AUDIO
+   * =========================================================
+   */
+
+  private aramaSesiCaliyor = false;
+  private aramaAudioOturumuAcik = false;
+  private hoparlorAcik = false;
+
+  private aramaSesiniBaslat() {
+    try {
+      if (this.aramaSesiCaliyor) {
+        console.log("?? Arama ringback sesi zaten �alı�Yiyor.");
+        return;
+      }
+
+      // GIDEN ARAMA: kar�Yi taraf cevap verene kadar ringback �al.
+      // Incoming arama i�in startRingtone(), outgoing arama i�in
+      // startRingback() kullanilmalidir.
+      InCallManager.startRingback("_DEFAULT_");
+
+      this.aramaSesiCaliyor = true;
+
+      console.log("gY""gY"� GIDEN ARAMA RINGBACK BASLATILDI (_DEFAULT_)");
+    } catch (hata) {
+      this.aramaSesiCaliyor = false;
+      console.warn("�s�️ Giden arama ringback ba�Ylatilamadi:", hata);
+    }
+  }
+
+  private gelenAramaSesiniBaslat() {
+    try {
+      if (this.aramaSesiCaliyor) {
+        console.log("?? Gelen arama ringtone zaten �alı�Yiyor.");
+        return;
+      }
+
+      // GELEN ARAMA: kullanici cevaplayana/reddedene kadar telefon zili.
+      InCallManager.startRingtone("_DEFAULT_");
+
+      this.aramaSesiCaliyor = true;
+
+      console.log("gY""gY"� GELEN ARAMA RINGTONE BASLATILDI");
+    } catch (hata) {
+      this.aramaSesiCaliyor = false;
+      console.warn("�s�️ Gelen arama ringtone ba�Ylatilamadi:", hata);
+    }
+  }
+
+  private aramaSesiniDurdur() {
+    try {
+      if (!this.aramaSesiCaliyor) {
+        return;
+      }
+
+      try {
+        InCallManager.stopRingback();
+      } catch (hata) {
+        console.warn("�s�️ Ringback durdurulamadi:", hata);
+      }
+
+      try {
+        InCallManager.stopRingtone();
+      } catch (hata) {
+        console.warn("�s�️ Ringtone durdurulamadi:", hata);
+      }
+
+      this.aramaSesiCaliyor = false;
+
+      console.log("gY".gY"� ARAMA ZIL SESI DURDURULDU");
+    } catch (hata) {
+      this.aramaSesiCaliyor = false;
+      console.warn("�s�️ Arama zil sesi durdurulamadi:", hata);
+    }
+  }
+
+  private aramaSesiniTemizle() {
+    try {
+      try {
+        InCallManager.stopRingback();
+      } catch {}
+
+      try {
+        InCallManager.stopRingtone();
+      } catch {}
+    } finally {
+      this.aramaSesiCaliyor = false;
+    }
+  }
+
+  private aramaAudioOturumunuBaslat(): boolean {
+    try {
+      if (this.aramaAudioOturumuAcik) {
+        console.log("?? CALL AUDIO OTURUMU ZATEN A�?IK");
+        return true;
+      }
+
+      const medya = this.aramaTuru === "VIDEO" ? "video" : "audio";
+
+      console.log("======================================");
+      console.log("gY�� CALL AUDIO OTURUMU BASLATILIYOR");
+      console.log("gY�� Medya:", medya);
+      console.log("======================================");
+
+      const baslatildi = Hoparlor.aramayiBaslat(medya);
+
+      if (!baslatildi) {
+        console.warn("�s�️ CALL AUDIO OTURUMU BASLATILAMADI.");
+
+        this.aramaAudioOturumuAcik = false;
+        this.hoparlorAcik = false;
+
+        return false;
+      }
+
+      // G�r�nt�l� aramada hoparl�r varsayilan olarak A�?IK,
+      // sesli aramada ahize varsayilan olarak A�?IK olsun.
+      this.hoparlorAcik = this.aramaTuru === "VIDEO";
+      this.aramaAudioOturumuAcik = true;
+
+      console.log("======================================");
+      console.log("gY��gY"� CALL AUDIO OTURUMU BASLATILDI");
+      console.log(
+        this.hoparlorAcik ? "gY"S VIDEO: HOPARL�-R A�?IK" : "gY"^ SES: AHIZE A�?IK",
+      );
+      console.log("======================================");
+
+      return true;
+    } catch (hata) {
+      this.aramaAudioOturumuAcik = false;
+      this.hoparlorAcik = false;
+
+      console.warn("�s�️ CALL AUDIO OTURUMU BASLATILAMADI:", hata);
+
+      return false;
+    }
+  }
+
+  private aramaAudioOturumunuKapat() {
+    try {
+      if (!this.aramaAudioOturumuAcik) {
+        return;
+      }
+
+      Hoparlor.aramayiBitir();
+
+      this.aramaAudioOturumuAcik = false;
+      this.hoparlorAcik = false;
+
+      console.log("gY��gY"� CALL AUDIO OTURUMU KAPATILDI");
+    } catch (hata) {
+      this.aramaAudioOturumuAcik = false;
+      console.warn("�s�️ Call audio oturumu kapatilamadi:", hata);
+    }
+  }
+
+  private readonly iceSunucular = [
+    {
+      urls: "stun:stun.l.google.com:19302",
+    },
+    {
+      urls: "stun:stun1.l.google.com:19302",
+    },
+  ];
+
+  /**
+   * =========================================================
+   * AYARLA
+   * =========================================================
+   */
+
+  ayarla(
+    mevcutKullaniciId: number,
+    arananKullaniciId: number,
+    aramaTuru: AramaTuru,
+  ) {
+    this.mevcutKullaniciId = mevcutKullaniciId;
+
+    this.arananKullaniciId = arananKullaniciId;
+
+    this.aramaTuru = aramaTuru;
+    this.aramaSonlandiriliyor = false;
+    this.webRtcBaglandiBildirildi = false;
+    this.bekleyenIceAdaylari = [];
+    this.remoteDescriptionHazir = false;
+
+    console.log("======================================");
+
+    console.log("gY"� WEBRTC ARAMA AYARLANDI");
+
+    console.log("gY"� Mevcut kullanici:", mevcutKullaniciId);
+
+    console.log("gY"� Aranan kullanici:", arananKullaniciId);
+
+    console.log("gY"� Arama t�r�:", aramaTuru);
+
+    console.log("======================================");
+  }
+
+  /**
+   * =========================================================
+   * OLAY DINLE
+   * =========================================================
+   */
+
+  olayDinle<K extends keyof AramaOlaylari>(
+    olay: K,
+    callback: AramaOlaylari[K],
+  ) {
+    this.olaylar[olay] = callback;
+  }
+
+  private olaylar: Partial<AramaOlaylari> = {};
+
+  private hoparloruAc() {
+    try {
+      if (!this.aramaAudioOturumuAcik) {
+        this.aramaAudioOturumunuBaslat();
+      }
+
+      const basarili = Hoparlor.ac();
+
+      if (!basarili) {
+        console.warn("�s�️ Hoparl�r Hoparlor servisi tarafindan a�ilamadi.");
+        return;
+      }
+
+      this.hoparlorAcik = true;
+
+      console.log(
+        this.aramaTuru === "VIDEO"
+          ? "gY"SgY"� G�r�nt�l� arama: HOPARL�-R A�?ILDI"
+          : "gY"SgY"� Sesli arama: HOPARL�-R A�?ILDI",
+      );
+    } catch (hata) {
+      console.warn("�s�️ Hoparl�r a�ilamadi:", hata);
+    }
+  }
+
+  private sesYonlendirmesiniKapat() {
+    this.aramaAudioOturumunuKapat();
+    console.log("gY"S Ses y�nlendirmesi kapatildi.");
+  }
+
+  public hoparloruDegistir(acik: boolean) {
+    try {
+      if (!this.aramaAudioOturumuAcik) {
+        this.aramaAudioOturumunuBaslat();
+      }
+
+      const basarili = Hoparlor.hoparloruDegistir(acik);
+
+      if (!basarili) {
+        console.warn("�s�️ Hoparl�r y�nlendirmesi de�Yi�Ytirilemedi.");
+        return;
+      }
+
+      this.hoparlorAcik = acik;
+
+      console.log(acik ? "gY"S Hoparl�r a�ildi." : "gY"^ Ahizeye ge�ildi.");
+    } catch (hata) {
+      console.warn("�s�️ Hoparl�r de�Yi�Ytirilemedi:", hata);
+    }
+  }
+
+  sinyalGondericiyiAyarla(
+    gonderici: ((sinyal: BackendAramaSinyali) => void | Promise<void>) | null,
+  ): void {
+    this.hariciSinyalGonderici = gonderici;
+  }
+
+  /**
+   * =========================================================
+   * STOMP WEBSOCKET BAGLANTISI
+   *
+   * �-NEMLI:
+   *
+   * brokerURL KULLANMIYORUZ.
+   *
+   * React Native native WebSocket
+   * olu�Yturuyoruz.
+   *
+   * Ayrica v12.stomp subprotocol
+   * a�ik�a g�nderiliyor.
+   * =========================================================
+   */
+
+  async webSocketBaglantisiAc(): Promise<void> {
+    // Harici STOMP ta�Yiyicisi (useMessages) kullaniliyorsa
+    // AramaWebRTC kendi /ws-native ba�Ylantisini kesinlikle a�maz.
+    if (this.hariciSinyalGonderici) {
+      console.log("======================================");
+      console.log("gY"� HARICI STOMP TASIYICISI AKTIF");
+      console.log("?? AramaWebRTC native STOMP ba�Ylantisi a�ilmayacak.");
+      console.log("======================================");
+      return;
+    }
+
+    if (this.webSocketBagli && this.stompClient && this.stompClient.connected) {
+      console.log("======================================");
+
+      console.log("gYY� ARAMA STOMP ZATEN BAGLI");
+
+      console.log("======================================");
+
+      return;
+    }
+
+    if (this.webSocketBaglantiPromise) {
+      console.log("======================================");
+
+      console.log("? MEVCUT STOMP BAGLANTISI BEKLENIYOR");
+
+      console.log("======================================");
+
+      return this.webSocketBaglantiPromise;
+    }
+
+    if (this.mevcutKullaniciId === null) {
+      throw new Error(
+        "WebSocket ba�Ylantisi i�in mevcut kullanici ID bulunamadi.",
+      );
+    }
+
+    const kullaniciId = this.mevcutKullaniciId;
+
+    const promise = new Promise<void>(async (resolve, reject) => {
+      let tamamlandi = false;
+
+      let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+      /**
+       * =====================================================
+       * TIMEOUT TEMIZLE
+       * =====================================================
+       */
+
+      const temizleTimeout = () => {
+        if (timeoutId !== null) {
+          clearTimeout(timeoutId);
+
+          timeoutId = null;
+        }
+      };
+
+      /**
+       * =====================================================
+       * BASARILI
+       * =====================================================
+       */
+
+      const basari = () => {
+        if (tamamlandi) {
+          return;
+        }
+
+        tamamlandi = true;
+
+        temizleTimeout();
+
+        this.webSocketBagli = true;
+
+        this.webSocketBaglantiPromise = null;
+
+        resolve();
+      };
+
+      /**
+       * =====================================================
+       * HATA
+       * =====================================================
+       */
+
+      const hata = (error: Error) => {
+        if (tamamlandi) {
+          return;
+        }
+
+        tamamlandi = true;
+
+        temizleTimeout();
+
+        this.webSocketBagli = false;
+
+        this.webSocketBaglantiPromise = null;
+
+        reject(error);
+      };
+
+      try {
+        /**
+         * =================================================
+         * TOKEN
+         * =================================================
+         */
+
+        const token = await AsyncStorage.getItem("token");
+
+        if (!token) {
+          hata(new Error("WebSocket ba�Ylantisi i�in JWT token bulunamadi."));
+
+          return;
+        }
+
+        console.log("======================================");
+
+        console.log("gY"O ARAMA STOMP BAGLANTISI A�?ILIYOR");
+
+        console.log("gY"O Adres:", WEBSOCKET_ADRESI);
+
+        console.log("gY"O Kullanici ID:", kullaniciId);
+
+        console.log("gY"� JWT bulundu: EVET");
+
+        console.log("======================================");
+
+        /**
+         * =================================================
+         * ESKI CLIENT KAPAT
+         * =================================================
+         */
+
+        if (this.stompClient) {
+          try {
+            console.log("gY�� Eski STOMP client kapatiliyor.");
+
+            await this.stompClient.deactivate();
+          } catch (eskiHata) {
+            console.warn("�s�️ Eski STOMP client kapatilamadi:", eskiHata);
+          }
+
+          this.stompClient = null;
+        }
+
+        this.aramaSubscription = null;
+
+        this.webSocketBagli = false;
+
+        /**
+         * =================================================
+         * STOMP CLIENT
+         * =================================================
+         *
+         * BURASI EN �-NEMLI KISIM.
+         *
+         * brokerURL YOK.
+         *
+         * webSocketFactory VAR.
+         *
+         * Native WebSocket:
+         *
+         * new WebSocket(
+         *   URL,
+         *   ["v12.stomp"]
+         * )
+         * =================================================
+         */
+
+        const client = new Client({
+          webSocketFactory: () => {
+            console.log("======================================");
+            console.log("gYO� ARAMA WEBSOCKET FACTORY");
+            console.log("gYO� Adres:", WEBSOCKET_ADRESI);
+            console.log("gYO� Protocol: v12.stomp");
+            console.log("======================================");
+
+            const socket = new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
+
+            /**
+             * =========================================
+             * NATIVE WEBSOCKET OPEN
+             * =========================================
+             */
+            socket.onopen = () => {
+              console.log("======================================");
+              console.log("gYY�gYY�gYY� ARAMA NATIVE WEBSOCKET OPEN");
+              console.log("======================================");
+
+              console.log("gYY� URL:", WEBSOCKET_ADRESI);
+              console.log("gYY� Protocol:", socket.protocol);
+              console.log("gYY� ReadyState:", socket.readyState);
+
+              console.log("======================================");
+            };
+
+            /**
+             * =========================================
+             * NATIVE WEBSOCKET ERROR
+             * =========================================
+             */
+            socket.onerror = (event: Event) => {
+              console.error("======================================");
+              console.error("gY"�gY"�gY"� ARAMA NATIVE WEBSOCKET ERROR");
+              console.error("======================================");
+
+              console.error(event);
+
+              console.error("======================================");
+            };
+
+            /**
+             * =========================================
+             * NATIVE WEBSOCKET CLOSE
+             * =========================================
+             */
+            socket.onclose = (event: CloseEvent) => {
+              console.log("======================================");
+              console.log("gY"�gY"�gY"� ARAMA NATIVE WEBSOCKET CLOSE");
+              console.log("======================================");
+
+              console.log("gY"� Code:", event.code);
+              console.log("gY"� Reason:", event.reason);
+              console.log("gY"� Clean:", event.wasClean);
+
+              console.log("======================================");
+            };
+
+            /**
+             * =========================================
+             * NATIVE MESSAGE
+             * =========================================
+             */
+            socket.onmessage = (event: MessageEvent) => {
+              console.log("======================================");
+              console.log("gYY�gYY�gYY� NATIVE WEBSOCKET MESSAGE GELDI");
+              console.log("======================================");
+
+              /**
+               * G�venlik nedeniyle mesajin tamamini
+               * burada yazdirmiyoruz.
+               */
+              if (typeof event.data === "string") {
+                console.log("gYY� Gelen mesaj uzunlu�Yu:", event.data.length);
+              } else {
+                console.log("gYY� Gelen mesaj tipi:", typeof event.data);
+              }
+
+              console.log("======================================");
+            };
+
+            console.log("gYY� Native WebSocket nesnesi olu�Yturuldu.");
+
+            return socket;
+          },
+
+          /**
+           * =================================================
+           * CONNECT HEADERS
+           * =================================================
+           */
+          connectHeaders: {
+            Authorization: `Bearer ${token}`,
+          },
+
+          /**
+           * =================================================
+           * RECONNECT
+           * =================================================
+           */
+          reconnectDelay: 0,
+
+          /**
+           * =================================================
+           * HEARTBEAT
+           * =================================================
+           */
+          heartbeatIncoming: 0,
+          heartbeatOutgoing: 0,
+
+          /**
+           * =================================================
+           * DEBUG
+           * =================================================
+           */
+          debug: (mesaj: string) => {
+            /**
+             * JWT tokenin console'a yazilmasini engelle.
+             */
+            if (mesaj.includes("Authorization:")) {
+              const temizMesaj = mesaj.replace(
+                /Authorization:Bearer\s+[^\s]+/gi,
+                "Authorization:Bearer [TOKEN]",
+              );
+
+              console.log("gY"� STOMP DEBUG:", temizMesaj);
+
+              return;
+            }
+
+            console.log("gY"� STOMP DEBUG:", mesaj);
+          },
+
+          /**
+           * =================================================
+           * STOMP CONNECTED
+           * =================================================
+           */
+          onConnect: (frame) => {
+            try {
+              console.log("======================================");
+              console.log("gYY�gYY�gYY� ARAMA STOMP CONNECTED");
+              console.log("======================================");
+              console.log("gYY� STOMP VERSION:", frame.headers["version"]);
+              console.log("gYY� SESSION:", frame.headers["session"]);
+              console.log("gYY� STOMP connected:", client.connected);
+
+              this.webSocketBagli = true;
+
+              const topic = `/topic/arama/${kullaniciId}`;
+
+              if (this.aramaSubscription) {
+                try {
+                  this.aramaSubscription.unsubscribe();
+                } catch (unsubscribeHatasi) {
+                  console.warn(
+                    "�s�️ Eski arama subscription kapatilamadi:",
+                    unsubscribeHatasi,
+                  );
+                }
+                this.aramaSubscription = null;
+              }
+
+              this.aramaSubscription = client.subscribe(
+                topic,
+                (message: IMessage) => {
+                  console.log("======================================");
+                  console.log("gY"�gY"�gY"� ARAMA STOMP MESSAGE");
+                  console.log("======================================");
+                  console.log("gY"� Destination:", message.headers.destination);
+                  console.log("gY"� Body length:", message.body?.length ?? 0);
+                  console.log("======================================");
+
+                  this.gelenAramaSinyaliniIsle(message.body);
+                },
+              );
+
+              console.log("gYY� ARAMA TOPIC SUBSCRIBE TAMAM");
+              console.log("gYY� TOPIC:", topic);
+              console.log("======================================");
+
+              basari();
+              this.olaylar.baglandi?.();
+            } catch (connectHatasi) {
+              const error =
+                connectHatasi instanceof Error
+                  ? connectHatasi
+                  : new Error("STOMP CONNECT i�Ylemi ba�Yarisiz.");
+
+              console.error("�O STOMP CONNECT HANDLER HATASI:", error);
+
+              this.webSocketBagli = false;
+              hata(error);
+            }
+          },
+
+          /**
+           * =================================================
+           * STOMP ERROR
+           * =================================================
+           */
+          onStompError: (frame) => {
+            console.error("======================================");
+            console.error("gY"�gY"�gY"� STOMP ERROR");
+            console.error("======================================");
+
+            console.error("gY"� MESSAGE:", frame.headers["message"]);
+
+            /**
+             * Body i�inde JWT varsa tamamini basmiyoruz.
+             */
+            console.error("gY"� BODY LENGTH:", frame.body?.length ?? 0);
+
+            console.error("======================================");
+
+            this.webSocketBagli = false;
+          },
+
+          /**
+           * =================================================
+           * WEBSOCKET ERROR
+           * =================================================
+           */
+          onWebSocketError: (event) => {
+            console.error("======================================");
+            console.error("gY"�gY"�gY"� STOMP WEBSOCKET ERROR");
+            console.error("======================================");
+
+            console.error(event);
+
+            console.error("======================================");
+
+            this.webSocketBagli = false;
+          },
+
+          /**
+           * =================================================
+           * WEBSOCKET CLOSE
+           * =================================================
+           */
+          onWebSocketClose: (event) => {
+            console.log("======================================");
+            console.log("gY"�gY"�gY"� STOMP WEBSOCKET CLOSE");
+            console.log("======================================");
+
+            console.log("gY"� Code:", event.code);
+            console.log("gY"� Reason:", event.reason);
+            console.log("gY"� Clean:", event.wasClean);
+
+            console.log("======================================");
+
+            this.webSocketBagli = false;
+          },
+        });
+
+        this.stompClient = client;
+
+        /**
+         * =====================================================
+         * STOMP CONNECT HANDLER
+         * =====================================================
+         *
+         * onConnect yalnizca Client options i�inde tanimlidir.
+         * Sonradan tekrar ezilmez.
+         */
+        /**
+         * =====================================================
+         * STOMP ERROR
+         * =====================================================
+         */
+
+        client.onStompError = (frame) => {
+          console.error("======================================");
+
+          console.error("gY"�gY"�gY"� STOMP ERROR");
+
+          console.error("======================================");
+
+          console.error("gY"� Headers:", frame.headers);
+
+          console.error("gY"� Body:", frame.body);
+
+          console.error("======================================");
+
+          const mesaj =
+            frame.headers?.message || frame.body || "STOMP sunucu hatasi.";
+
+          const error = new Error(mesaj);
+
+          this.webSocketBagli = false;
+
+          this.olaylar.hata?.(error);
+
+          hata(error);
+        };
+
+        /**
+         * =====================================================
+         * WEBSOCKET ERROR
+         * =====================================================
+         */
+
+        client.onWebSocketError = (event) => {
+          console.error("======================================");
+
+          console.error("gY"�gY"�gY"� STOMP WEBSOCKET ERROR");
+
+          console.error("======================================");
+
+          console.error(event);
+
+          console.error("======================================");
+
+          const error = new Error("Arama WebSocket ba�Ylanti hatasi.");
+
+          this.webSocketBagli = false;
+
+          this.olaylar.hata?.(error);
+
+          hata(error);
+        };
+
+        /**
+         * =====================================================
+         * WEBSOCKET CLOSE
+         * =====================================================
+         */
+
+        client.onWebSocketClose = (event) => {
+          console.log("======================================");
+
+          console.log("gY"�gY"�gY"� STOMP WEBSOCKET CLOSE");
+
+          console.log("======================================");
+
+          console.log("gY"� Code:", event.code);
+
+          console.log("gY"� Reason:", event.reason);
+
+          console.log("gY"� Clean:", event.wasClean);
+
+          console.log("======================================");
+
+          this.webSocketBagli = false;
+
+          this.aramaSubscription = null;
+
+          if (tamamlandi) {
+            this.olaylar.baglantiKoptu?.();
+          } else {
+            hata(
+              new Error(
+                `Arama WebSocket ba�Ylantisi kurulmadan kapandi. Kod: ${event.code}`,
+              ),
+            );
+          }
+        };
+
+        /**
+         * =====================================================
+         * TIMEOUT
+         * =====================================================
+         */
+
+        timeoutId = setTimeout(() => {
+          if (tamamlandi) {
+            return;
+          }
+
+          console.error("======================================");
+
+          console.error("�O�O�O STOMP CONNECT TIMEOUT �O�O�O");
+
+          console.error("======================================");
+
+          console.error(
+            `${WEBSOCKET_BAGLANTI_TIMEOUT_MS / 1000} saniye i�inde STOMP CONNECTED alinamadi.`,
+          );
+
+          console.error("STOMP connected:", client.connected);
+
+          console.error("STOMP active:", client.active);
+
+          console.error("======================================");
+
+          const error = new Error(
+            "Arama WebSocket ba�Ylantisi zaman a�Yimina u�Yradi. STOMP CONNECTED alinamadi.",
+          );
+
+          this.webSocketBagli = false;
+
+          this.olaylar.hata?.(error);
+
+          hata(error);
+
+          void client.deactivate();
+        }, WEBSOCKET_BAGLANTI_TIMEOUT_MS);
+
+        /**
+         * =====================================================
+         * ACTIVATE
+         * =====================================================
+         */
+
+        console.log("======================================");
+
+        console.log("gY"� STOMP CLIENT ACTIVATE");
+
+        console.log("======================================");
+
+        client.activate();
+
+        console.log("gYY� STOMP CLIENT ACTIVATE �?AGRILDI");
+      } catch (connectHatasi) {
+        console.error("======================================");
+
+        console.error("�O STOMP BAGLANTI BASLATMA HATASI");
+
+        console.error("======================================");
+
+        console.error(connectHatasi);
+
+        console.error("======================================");
+
+        const error =
+          connectHatasi instanceof Error
+            ? connectHatasi
+            : new Error("Arama WebSocket ba�Ylantisi kurulamadi.");
+
+        this.webSocketBagli = false;
+
+        this.olaylar.hata?.(error);
+
+        hata(error);
+      }
+    });
+
+    this.webSocketBaglantiPromise = promise;
+
+    try {
+      await promise;
+
+      console.log("======================================");
+
+      console.log("gYY�gYY�gYY� ARAMA STOMP HAZIR");
+
+      console.log("gYY� STOMP ba�Yli:", this.webSocketBagli);
+
+      console.log("======================================");
+    } catch (hata) {
+      this.webSocketBaglantiPromise = null;
+
+      this.webSocketBagli = false;
+
+      throw hata;
+    }
+  }
+
+  /**
+   * =========================================================
+   * GELEN ARAMALARI DINLEMEYI BASLAT
+   * =========================================================
+   *
+   * Kullanici arama ba�Ylatmadan �nce de arama topic'ini
+   * dinler. B�ylece kar�Yi taraf aradı�Yinda CALL_OFFER
+   * do�Yrudan uygulamaya ula�Yir.
+   */
+  async gelenAramalariDinlemeyeBaslat(kullaniciId: number): Promise<void> {
+    if (!Number.isFinite(kullaniciId)) {
+      throw new Error("Ge�ersiz kullanici ID.");
+    }
+
+    this.mevcutKullaniciId = kullaniciId;
+
+    console.log("======================================");
+    console.log("gY"� GELEN ARAMA DINLEME BASLATILIYOR");
+    console.log("gY"� Kullanici ID:", kullaniciId);
+    console.log("gY"� Topic:", `/topic/arama/${kullaniciId}`);
+    console.log("======================================");
+
+    if (this.hariciSinyalGonderici) {
+      console.log("gY"� Harici STOMP ta�Yiyicisi aktif.");
+      console.log("?? Native STOMP ba�Ylantisi a�ilmadan dinleme hazir.");
+    } else {
+      await this.webSocketBaglantisiAc();
+    }
+
+    console.log("======================================");
+    console.log("gYY� GELEN ARAMA DINLEME HAZIR");
+    console.log("gYY� Kullanici ID:", kullaniciId);
+    console.log("gYY� Topic:", `/topic/arama/${kullaniciId}`);
+    console.log("======================================");
+  }
+
+  /**
+   * =========================================================
+   * GELEN ARAMA MESAJI
+   * =========================================================
+   */
+
+  public gelenAramaSinyaliniIsle(body: string) {
+    try {
+      console.log("======================================");
+
+      console.log("gY"�gY"�gY"� ARAMA SINYALI ALINDI");
+
+      console.log("======================================");
+
+      console.log("gY"� BODY:", body);
+
+      const sinyal: BackendAramaSinyali = JSON.parse(body);
+
+      /**
+       * Backend'deki hedefKullaniciId
+       * mevcut yapida sinyalin
+       * g�nderen kullanicisini
+       * temsil ediyor.
+       */
+
+      const gonderenKullaniciId = sinyal.hedefKullaniciId;
+
+      if (!gonderenKullaniciId) {
+        console.warn("�s�️ Gelen arama sinyalinde g�nderen kullanici ID yok.");
+
+        return;
+      }
+
+      const aramaTuru: AramaTuru = sinyal.tur === "VIDEO" ? "VIDEO" : "SES";
+
+      switch (sinyal.tip) {
+        case "CALL_OFFER": {
+          if (!sinyal.sdp) {
+            console.warn("�s�️ CALL_OFFER SDP i�ermiyor.");
+
+            return;
+          }
+
+          const mesaj: AramaMesaji = {
+            tip: "CALL_OFFER",
+
+            arayanId: gonderenKullaniciId,
+
+            arananId: this.mevcutKullaniciId!,
+
+            aramaTuru,
+
+            teklif: {
+              type: "offer",
+
+              sdp: sinyal.sdp,
+            },
+          };
+
+          this.aramaTuru = aramaTuru;
+
+          this.arananKullaniciId = gonderenKullaniciId;
+
+          // GELEN ARAMA: kar�Yi taraf cevap verene/reddedene kadar telefon zili �al.
+          void this.gelenAramaSesiniBaslat();
+
+          console.log("======================================");
+
+          console.log("gY"� GELEN CALL_OFFER");
+
+          console.log("gY"� Arayan:", gonderenKullaniciId);
+
+          console.log("gY"� T�r:", aramaTuru);
+
+          console.log("======================================");
+
+          this.olaylar.teklif?.(mesaj);
+
+          break;
+        }
+
+        case "CALL_ANSWER": {
+          if (!sinyal.sdp) {
+            console.warn("�s�️ CALL_ANSWER SDP i�ermiyor.");
+
+            return;
+          }
+
+          const mesaj: AramaMesaji = {
+            tip: "CALL_ANSWER",
+
+            arayanId: gonderenKullaniciId,
+
+            arananId: this.mevcutKullaniciId!,
+
+            cevap: {
+              type: "answer",
+
+              sdp: sinyal.sdp,
+            },
+          };
+
+          console.log("gY"� GELEN CALL_ANSWER", "G�nderen:", gonderenKullaniciId);
+
+          this.aramaSesiniDurdur();
+          this.olaylar.cevap?.(mesaj);
+
+          break;
+        }
+
+        case "CALL_ICE": {
+          if (!sinyal.aday) {
+            console.warn("�s�️ CALL_ICE aday i�ermiyor.");
+
+            return;
+          }
+
+          let aday: RTCIceCandidateInit;
+
+          try {
+            aday =
+              typeof sinyal.aday === "string"
+                ? JSON.parse(sinyal.aday)
+                : (sinyal.aday as any);
+          } catch (hata) {
+            console.error("�O ICE aday JSON parse edilemedi:", hata);
+
+            return;
+          }
+
+          const mesaj: AramaMesaji = {
+            tip: "CALL_ICE",
+
+            arayanId: gonderenKullaniciId,
+
+            arananId: this.mevcutKullaniciId!,
+
+            aday,
+          };
+
+          console.log("gY�S GELEN CALL_ICE", "G�nderen:", gonderenKullaniciId);
+
+          this.olaylar.ice?.(mesaj);
+
+          void this.iceAdayiEkle(aday);
+
+          break;
+        }
+
+        case "CALL_REJECT": {
+          const mesaj: AramaMesaji = {
+            tip: "CALL_REJECT",
+
+            arayanId: gonderenKullaniciId,
+
+            arananId: this.mevcutKullaniciId!,
+          };
+
+          console.log("gY"� GELEN CALL_REJECT", "G�nderen:", gonderenKullaniciId);
+
+          this.aramaSesiniDurdur();
+          this.olaylar.reddet?.(mesaj);
+
+          break;
+        }
+
+        case "CALL_END": {
+          const mesaj: AramaMesaji = {
+            tip: "CALL_END",
+
+            arayanId: gonderenKullaniciId,
+
+            arananId: this.mevcutKullaniciId!,
+          };
+
+          console.log("gY"� GELEN CALL_END", "G�nderen:", gonderenKullaniciId);
+
+          this.aramaSesiniDurdur();
+
+          // Kar�Yi taraf zaten CALL_END g�nderdi.
+          // Bu nedenle ba�Ylantiyi kapatirken tekrar CALL_END g�ndermiyoruz.
+          void this.aramayiBitir(true);
+
+          this.olaylar.bitir?.(mesaj);
+
+          break;
+        }
+
+        default:
+          console.warn("�s�️ Bilinmeyen arama sinyal tipi:", sinyal.tip);
+      }
+    } catch (hata) {
+      console.error("�O Arama sinyali i�Ylenemedi:", hata);
+
+      const error =
+        hata instanceof Error ? hata : new Error("Arama sinyali i�Ylenemedi.");
+
+      this.olaylar.hata?.(error);
+    }
+  }
+
+  /**
+   * =========================================================
+   * BACKEND'E WEBRTC SIGNALING G�-NDER
+   * =========================================================
+   */
+
+  private aramaSinyaliGonder(
+    tip: string,
+    bilgiler: {
+      sdp?: string;
+      aday?: RTCIceCandidateInit;
+    } = {},
+  ) {
+    if (!this.arananKullaniciId) {
+      console.warn("�s�️ Arama sinyali g�nderilemedi. Hedef kullanici yok.");
+      return;
+    }
+
+    if (this.hariciSinyalGonderici) {
+      const sinyal: BackendAramaSinyali = {
+        hedefKullaniciId: this.arananKullaniciId,
+        tur: this.aramaTuru,
+        tip,
+        sdp: bilgiler.sdp ?? null,
+        aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
+        sdpMid: bilgiler.aday?.sdpMid ?? null,
+        sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
+      };
+      void Promise.resolve(this.hariciSinyalGonderici(sinyal)).catch((hata) => {
+        const error =
+          hata instanceof Error
+            ? hata
+            : new Error("Arama sinyali g�nderilemedi.");
+        console.error("�O Harici STOMP arama sinyali hatasi:", error);
+        this.olaylar.hata?.(error);
+      });
+      return;
+    }
+
+    if (
+      !this.stompClient ||
+      !this.stompClient.connected ||
+      !this.webSocketBagli
+    ) {
+      console.warn("�s�️ Arama sinyali g�nderilemedi. STOMP ba�Yli de�Yil.");
+      return;
+    }
+
+    if (!this.arananKullaniciId) {
+      console.warn("�s�️ Arama sinyali g�nderilemedi. Hedef kullanici yok.");
+
+      return;
+    }
+
+    const sinyal: BackendAramaSinyali = {
+      hedefKullaniciId: this.arananKullaniciId,
+
+      tur: this.aramaTuru,
+
+      tip,
+
+      sdp: bilgiler.sdp ?? null,
+
+      aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
+
+      sdpMid: bilgiler.aday?.sdpMid ?? null,
+
+      sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
+    };
+
+    console.log("======================================");
+
+    console.log("gY"� ARAMA SINYALI G�-NDERILIYOR");
+
+    console.log("gY"� Tip:", tip);
+
+    console.log("gY"� Hedef:", this.arananKullaniciId);
+
+    console.log("gY"� T�r:", this.aramaTuru);
+
+    console.log("======================================");
+
+    try {
+      this.stompClient.publish({
+        destination: "/app/arama/sinyal",
+
+        headers: {
+          "content-type": "application/json",
+        },
+
+        body: JSON.stringify(sinyal),
+      });
+
+      console.log("�o. ARAMA SINYALI BACKEND'E G�-NDERILDI");
+    } catch (hata) {
+      console.error("�O Arama sinyali g�nderilemedi:", hata);
+
+      const error =
+        hata instanceof Error
+          ? hata
+          : new Error("Arama sinyali g�nderilemedi.");
+
+      this.olaylar.hata?.(error);
+    }
+  }
+
+  /**
+   * =========================================================
+   * KAMERA / MIKROFON
+   * =========================================================
+   */
+
+  async medyaAkisiniAl(): Promise<MediaStream> {
+    try {
+      console.log("gY�T?gY"� Mikrofon/kamera eri�Yimi isteniyor...");
+
+      const audioOturumuBaslatildi = this.aramaAudioOturumunuBaslat();
+
+      if (!audioOturumuBaslatildi) {
+        console.warn(
+          "�s�️ Android call audio oturumu ba�Ylatilamadi; WebRTC medya akı�Yi yine de alinacak.",
+        );
+      }
+
+      const stream = await mediaDevices.getUserMedia({
+        audio: true,
+
+        video:
+          this.aramaTuru === "VIDEO"
+            ? {
+                facingMode: "user",
+
+                width: 640,
+
+                height: 480,
+
+                frameRate: 30,
+              }
+            : false,
+      });
+
+      this.yerelStream = stream;
+
+      console.log("gY�T?gY"� Yerel medya akı�Yi alindi.");
+
+      console.log("gY�T? Audio track sayisi:", stream.getAudioTracks().length);
+
+      console.log("gY"� Video track sayisi:", stream.getVideoTracks().length);
+
+      return stream;
+    } catch (hata) {
+      console.error("�O Mikrofon/kamera eri�Yim hatasi:", hata);
+
+      const error =
+        hata instanceof Error
+          ? hata
+          : new Error("Mikrofon veya kamera eri�Yilemedi.");
+
+      this.olaylar.hata?.(error);
+
+      throw error;
+    }
+  }
+
+  /**
+   * =========================================================
+   * PEER CONNECTION
+   * =========================================================
+   */
+
+  async baglantiOlustur(): Promise<RTCPeerConnection> {
+    if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
+      throw new Error("Arama kullanicilari ayarlanmamı�Y.");
+    }
+
+    if (this.peerConnection) {
+      console.log("gY"- Mevcut RTCPeerConnection kullaniliyor.");
+
+      // �-NEMLI:
+      // PeerConnection daha �nce olu�Yturulmu�Y olabilir ancak yerel medya
+      // hen�z hazir olmayabilir. Bu durumda do�Yrudan return etmek,
+      // createOffer()'in track'ler eklenmeden �alı�Ymasina neden olur.
+      // Sonu� olarak ikinci offer'da m-line sirasi de�Yi�Yir ve WebRTC:
+      // "The order of m-lines in subsequent offer..." hatasi verir.
+      if (!this.yerelStream) {
+        await this.medyaAkisiniAl();
+      }
+
+      if (this.yerelStream) {
+        const mevcutGondericiler = this.peerConnection.getSenders();
+
+        this.yerelStream.getTracks().forEach((track) => {
+          const zatenEklendi = mevcutGondericiler.some(
+            (sender) => sender.track?.id === track.id,
+          );
+
+          if (zatenEklendi) {
+            console.log("?? Track zaten PeerConnection'da:", track.kind);
+            return;
+          }
+
+          console.log(
+            "gY�T?gY"� Mevcut PeerConnection'a Track ekleniyor:",
+            track.kind,
+          );
+
+          this.peerConnection!.addTrack(track, this.yerelStream!);
+        });
+      }
+
+      return this.peerConnection;
+    }
+
+    console.log("gY"- RTCPeerConnection olu�Yturuluyor...");
+
+    const peerConnection = new RTCPeerConnection({
+      iceServers: this.iceSunucular,
+    });
+
+    this.peerConnection = peerConnection;
+
+    this.remoteDescriptionHazir = false;
+    this.webRtcBaglandiBildirildi = false;
+
+    if (!this.yerelStream) {
+      await this.medyaAkisiniAl();
+    }
+
+    if (this.yerelStream) {
+      const mevcutGondericiler = peerConnection.getSenders();
+
+      this.yerelStream.getTracks().forEach((track) => {
+        const zatenEklendi = mevcutGondericiler.some(
+          (sender) => sender.track?.id === track.id,
+        );
+
+        if (zatenEklendi) {
+          console.log("?? Track zaten PeerConnection'da:", track.kind);
+          return;
+        }
+
+        console.log("gY�T?gY"� Track PeerConnection'a ekleniyor:", track.kind);
+
+        peerConnection.addTrack(track, this.yerelStream!);
+      });
+    }
+
+    peerConnection.ontrack = (event: any) => {
+      console.log("gY�� Uzak medya akı�Yi geldi.");
+
+      if (event.track) {
+        console.log(
+          "gY�� Uzak track:",
+          event.track.kind,
+          "id:",
+          event.track.id,
+          "enabled:",
+          event.track.enabled,
+        );
+
+        if (event.track.kind === "audio") {
+          console.log("gY"SgY"SgY"S UZAK SES TRACK'I ALINDI");
+
+          try {
+            event.track.enabled = true;
+          } catch (hata) {
+            console.warn("�s�️ Uzak audio track aktif edilemedi:", hata);
+          }
+        }
+      }
+
+      let uzakStream: MediaStream | null = null;
+
+      if (event.streams && event.streams.length > 0) {
+        uzakStream = event.streams[0] as MediaStream;
+      } else {
+        if (!this.uzakStream) {
+          this.uzakStream = new MediaStream();
+        }
+        uzakStream = this.uzakStream;
+        if (event.track) {
+          try {
+            uzakStream.addTrack(event.track);
+          } catch (hata) {
+            console.warn("�s�️ Uzak track stream'e eklenemedi:", hata);
+          }
+        }
+      }
+
+      if (!uzakStream) {
+        console.warn("�s�️ Uzak medya stream'i olu�Yturulamadi.");
+        return;
+      }
+
+      this.uzakStream = uzakStream;
+
+      console.log("gY�� Uzak stream:", uzakStream.id);
+      console.log("gY�T? Uzak audio track:", uzakStream.getAudioTracks().length);
+      console.log("gY"� Uzak video track:", uzakStream.getVideoTracks().length);
+
+      this.olaylar.uzakStream?.(uzakStream);
+    };
+
+    peerConnection.onicecandidate = (event: any) => {
+      if (!event.candidate) {
+        console.log("gY�S ICE Candidate �retimi tamamlandi.");
+
+        return;
+      }
+
+      const aday = event.candidate.toJSON();
+
+      console.log("gY�S ICE Candidate �retildi.");
+
+      this.iceGonder(aday);
+    };
+
+    peerConnection.onconnectionstatechange = () => {
+      const durum = peerConnection.connectionState;
+
+      console.log("gY"� WebRTC ba�Ylanti durumu:", durum);
+
+      if (durum === "connected") {
+        console.log("gYY� WEBRTC BAGLANTISI KURULDU!");
+        if (!this.webRtcBaglandiBildirildi) {
+          this.webRtcBaglandiBildirildi = true;
+          this.aramaSesiniDurdur();
+
+          // WebRTC ba�Ylandiktan sonra ses y�nlendirmesini de�Yi�Ytirme.
+          // Ba�Ylangi� y�nlendirmesi arama t�r�ne g�re zaten belirlendi.
+          // Kullanicinin manuel hoparl�r/ahize tercihi korunur.
+          console.log(
+            this.hoparlorAcik
+              ? "gY"S Ba�Ylanti kuruldu: HOPARL�-R A�?IK"
+              : "gY"^ Ba�Ylanti kuruldu: AHIZE A�?IK",
+          );
+
+          this.olaylar.baglandi?.();
+        }
+      }
+
+      if (
+        durum === "disconnected" ||
+        durum === "failed" ||
+        durum === "closed"
+      ) {
+        console.log("gY"� WebRTC ba�Ylantisi koptu:", durum);
+        if (!this.aramaSonlandiriliyor) {
+          this.olaylar.baglantiKoptu?.();
+        }
+      }
+    };
+
+    peerConnection.oniceconnectionstatechange = () => {
+      const durum = peerConnection.iceConnectionState;
+      console.log("gY�S ICE durumu:", durum);
+
+      if (durum === "connected" || durum === "completed") {
+        console.log("gYY�gY�S ICE BAGLANTISI KURULDU:", durum);
+      }
+
+      if (durum === "failed") {
+        console.error("gY"�gY�S ICE BAGLANTISI BASARISIZ.");
+        this.olaylar.hata?.(new Error("WebRTC ICE ba�Ylantisi kurulamadi."));
+      }
+    };
+
+    peerConnection.onicecandidateerror = (event: any) => {
+      console.error("gY"�gY�S ICE CANDIDATE ERROR:", {
+        errorCode: event?.errorCode,
+        errorText: event?.errorText,
+        url: event?.url,
+      });
+    };
+
+    peerConnection.onicegatheringstatechange = () => {
+      console.log("gY�S ICE gathering durumu:", peerConnection.iceGatheringState);
+    };
+
+    peerConnection.onsignalingstatechange = () => {
+      console.log("gY"� Signaling durumu:", peerConnection.signalingState);
+    };
+
+    return peerConnection;
+  }
+
+  /**
+   * =========================================================
+   * ARAMA BASLAT
+   * =========================================================
+   */
+
+  async aramaBaslat(): Promise<RTCSessionDescriptionInit> {
+    if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
+      throw new Error("Arama kullanicilari ayarlanmamı�Y.");
+    }
+
+    // Ayni arama i�in aramaBaslat() birden fazla kez tetiklenirse
+    // ikinci �a�Yri ilk �a�Yrinin sonucunu bekler.
+    //
+    // �-NEMLI:
+    // Eski yapida ikinci �a�Yri "offerOlusturuluyor" hatasi firlatiyor,
+    // �st katman da bunu aramayi kapatma sebebi olarak yorumlayabiliyordu.
+    // Sonu�ta ilk createOffer tamamlanmadan PeerConnection kapaniyor
+    // ve:
+    // "Failed to set local offer sdp: Called in wrong state: closed"
+    // hatasi olu�Yuyordu.
+    if (this.aramaBaslatPromise) {
+      console.warn(
+        "?? Arama zaten ba�Ylatiliyor. Ikinci arama ba�Ylatma iste�Yi ilk i�Ylemi bekleyecek.",
+      );
+
+      return this.aramaBaslatPromise;
+    }
+
+    const baslatmaPromise = this.aramaBaslatInternal();
+
+    this.aramaBaslatPromise = baslatmaPromise;
+
+    try {
+      return await baslatmaPromise;
+    } finally {
+      // Sadece halen ayni Promise tutuluyorsa temizle.
+      if (this.aramaBaslatPromise === baslatmaPromise) {
+        this.aramaBaslatPromise = null;
+      }
+    }
+  }
+
+  /**
+   * =========================================================
+   * ARAMA BASLAT - ASIL ISLEM
+   * =========================================================
+   */
+  private async aramaBaslatInternal(): Promise<RTCSessionDescriptionInit> {
+    if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
+      throw new Error("Arama kullanicilari ayarlanmamı�Y.");
+    }
+
+    console.log("======================================");
+
+    if (this.hariciSinyalGonderici) {
+      console.log("gY"� HARICI STOMP TASIYICISI KULLANILIYOR");
+    } else {
+      console.log("gY"O ARAMA BASLATMADAN �-NCE STOMP KONTROL�o");
+
+      console.log("gY"O STOMP ba�Yli mi:", this.webSocketBagliMi());
+
+      console.log("======================================");
+
+      await this.webSocketBaglantisiAc();
+
+      if (!this.webSocketBagliMi()) {
+        throw new Error("Arama WebSocket ba�Ylantisi hazir de�Yil.");
+      }
+
+      console.log("gYY� ARAMA İ�?IN STOMP HAZIR");
+
+      console.log("gY"� Arama topic:", `/topic/arama/${this.mevcutKullaniciId}`);
+    }
+
+    this.aramaSonlandiriliyor = false;
+
+    // Yeni bir arama ba�Ylatiliyorsa eski offer kilidi temiz olmali.
+    // Ancak burada yeni bir createOffer ba�Ylatmiyoruz. Sadece durum
+    // tutarlilı�Yini sa�Yliyoruz.
+    this.offerOlusturuluyor = false;
+
+    // Arama ba�Ylar ba�Ylamaz Android call-audio oturumunu a�.
+    // SES: ahize, VIDEO: hoparl�r.
+    this.aramaAudioOturumunuBaslat();
+
+    // Kar�Yi taraf cevap verene kadar giden arama sesi �al.
+    void this.aramaSesiniBaslat();
+
+    const peerConnection = await this.baglantiOlustur();
+
+    // PeerConnection cleanup sirasinda kapandiysa yeni offer �retmeye
+    // �alı�Ymayalim. Bu kontrol "closed" hatasini daha anla�Yilir hale getirir.
+    if (peerConnection.signalingState === "closed") {
+      throw new Error("WebRTC PeerConnection arama ba�Ylamadan �nce kapandi.");
+    }
+
+    // Ayni Promise korumasi nedeniyle normal �Yartlarda buraya ikinci
+    // createOffer �a�Yrisi ula�Ymaz. Yine de g�venlik kontrol� birakiyoruz.
+    if (this.offerOlusturuluyor) {
+      console.warn(
+        "?? WebRTC Offer halen olu�Yturuluyor. Mevcut arama i�Ylemi korunuyor.",
+      );
+
+      if (
+        peerConnection.localDescription?.type === "offer" &&
+        peerConnection.localDescription.sdp
+      ) {
+        return {
+          type: peerConnection.localDescription.type,
+          sdp: peerConnection.localDescription.sdp,
+        };
+      }
+
+      throw new Error("WebRTC Offer halen olu�Yturuluyor.");
+    }
+
+    // Arayan tarafta yeni offer �retilecekse signaling state stable olmali.
+    if (peerConnection.signalingState !== "stable") {
+      const mevcutOffer = peerConnection.localDescription;
+
+      if (mevcutOffer?.type === "offer" && mevcutOffer.sdp) {
+        console.warn(
+          "�s�️ PeerConnection zaten local offer i�eriyor. Mevcut offer tekrar g�nderiliyor.",
+        );
+
+        const mevcutTeklif = {
+          type: mevcutOffer.type,
+          sdp: mevcutOffer.sdp,
+        };
+
+        this.aramaSinyaliGonder("CALL_OFFER", {
+          sdp: mevcutOffer.sdp,
+        });
+
+        return mevcutTeklif;
+      }
+
+      throw new Error(
+        `WebRTC Offer olu�Yturulamadi. Signaling durumu: ${peerConnection.signalingState}`,
+      );
+    }
+
+    this.offerOlusturuluyor = true;
+
+    try {
+      console.log("gY"� WebRTC Offer olu�Yturuluyor...");
+
+      // Offer olu�Yturulurken PeerConnection'in kapatilmadı�Yindan emin ol.
+      if (peerConnection.signalingState === "closed") {
+        throw new Error(
+          "WebRTC PeerConnection kapali oldu�Yu i�in Offer olu�Yturulamadi.",
+        );
+      }
+
+      const offer = await peerConnection.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: this.aramaTuru === "VIDEO",
+      });
+
+      // createOffer tamamlandiktan sonra arama kapatilmı�Y olabilir.
+      // Kapali PeerConnection'a setLocalDescription g�ndermiyoruz.
+      if (
+        peerConnection.signalingState === "closed" ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        throw new Error(
+          "Arama Offer olu�Yturulurken sonlandirildi; LocalDescription ayarlanmadi.",
+        );
+      }
+
+      await peerConnection.setLocalDescription(offer);
+
+      console.log("gY"� WebRTC Offer olu�Yturuldu.");
+      console.log("gY"� LocalDescription ayarlandi.");
+      console.log("gY"� Offer signaling state:", peerConnection.signalingState);
+
+      const teklif = {
+        type: offer.type,
+        sdp: offer.sdp,
+      };
+
+      // CALL_OFFER yalnizca local description ayarlandiktan sonra g�nderilir.
+      this.aramaSinyaliGonder("CALL_OFFER", {
+        sdp: offer.sdp ?? undefined,
+      });
+
+      console.log("gY"� CALL_OFFER kar�Yi tarafa g�nderildi.");
+
+      return teklif;
+    } finally {
+      this.offerOlusturuluyor = false;
+    }
+  }
+
+  /**
+   * =========================================================
+   * GELEN OFFER'I KABUL ET
+   * =========================================================
+   */
+
+  async teklifiKabulEt(
+    teklif: RTCSessionDescriptionInit,
+  ): Promise<RTCSessionDescriptionInit> {
+    if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
+      throw new Error("Arama kullanicilari ayarlanmamı�Y.");
+    }
+
+    console.log("gY"� Gelen teklif kabul ediliyor.");
+
+    if (!this.hariciSinyalGonderici) {
+      await this.webSocketBaglantisiAc();
+
+      if (!this.webSocketBagliMi()) {
+        throw new Error("Arama WebSocket ba�Ylantisi hazir de�Yil.");
+      }
+    }
+
+    this.aramaSonlandiriliyor = false;
+
+    // Gelen aramanin zilini durdur.
+    this.aramaSesiniDurdur();
+
+    // Arama kabul edildi�Yi anda Android call-audio oturumunu a�.
+    // Varsayilan olarak hoparl�r ve mikrofon aktif olur.
+    this.aramaAudioOturumunuBaslat();
+
+    const peerConnection = await this.baglantiOlustur();
+
+    if (!teklif.sdp) {
+      throw new Error("Teklif SDP bilgisi bulunamadi.");
+    }
+
+    const remoteDescription = new RTCSessionDescription({
+      type: teklif.type,
+
+      sdp: teklif.sdp,
+    });
+
+    console.log("gY"� RemoteDescription ayarlaniyor...");
+
+    await peerConnection.setRemoteDescription(remoteDescription);
+
+    this.remoteDescriptionHazir = true;
+
+    console.log("gYY� RemoteDescription hazir.");
+
+    await this.bekleyenIceAdaylariniEkle();
+
+    console.log("gY"� WebRTC Answer olu�Yturuluyor...");
+
+    const answer = await peerConnection.createAnswer();
+
+    await peerConnection.setLocalDescription(answer);
+
+    console.log("gY"� WebRTC Answer olu�Yturuldu.");
+
+    this.aramaSinyaliGonder("CALL_ANSWER", {
+      sdp: answer.sdp ?? undefined,
+    });
+
+    return {
+      type: answer.type,
+
+      sdp: answer.sdp,
+    };
+  }
+
+  /**
+   * =========================================================
+   * ANSWER ISLE
+   * =========================================================
+   */
+
+  async cevabiIsle(cevap: RTCSessionDescriptionInit) {
+    if (!this.peerConnection) {
+      throw new Error("PeerConnection bulunamadi.");
+    }
+
+    if (!cevap.sdp) {
+      throw new Error("Cevap SDP bilgisi bulunamadi.");
+    }
+
+    console.log("gY"� WebRTC Answer i�Yleniyor...");
+
+    const remoteDescription = new RTCSessionDescription({
+      type: cevap.type,
+
+      sdp: cevap.sdp,
+    });
+
+    await this.peerConnection.setRemoteDescription(remoteDescription);
+
+    this.remoteDescriptionHazir = true;
+
+    console.log("gY"� WebRTC Answer i�Ylendi.");
+
+    await this.bekleyenIceAdaylariniEkle();
+  }
+
+  /**
+   * =========================================================
+   * ICE EKLE
+   * =========================================================
+   */
+
+  async iceAdayiEkle(aday: RTCIceCandidateInit) {
+    if (!this.peerConnection) {
+      console.warn("�s�️ PeerConnection hazir de�Yil. ICE bekletiliyor.");
+
+      this.bekleyenIceAdaylari.push(aday);
+
+      return;
+    }
+
+    if (!this.remoteDescriptionHazir) {
+      console.log("? RemoteDescription hazir de�Yil. ICE bekletiliyor.");
+
+      this.bekleyenIceAdaylari.push(aday);
+
+      return;
+    }
+
+    try {
+      const candidate = new RTCIceCandidate(aday);
+
+      await this.peerConnection.addIceCandidate(candidate);
+
+      console.log("gY�S ICE Candidate eklendi.");
+    } catch (hata) {
+      console.error("�O ICE Candidate eklenemedi:", hata);
+    }
+  }
+
+  /**
+   * =========================================================
+   * BEKLEYEN ICE
+   * =========================================================
+   */
+
+  private async bekleyenIceAdaylariniEkle() {
+    if (!this.peerConnection || !this.remoteDescriptionHazir) {
+      return;
+    }
+
+    if (this.bekleyenIceAdaylari.length === 0) {
+      return;
+    }
+
+    console.log(
+      "gY�S Bekleyen ICE adaylari ekleniyor:",
+      this.bekleyenIceAdaylari.length,
+    );
+
+    const adaylar = [...this.bekleyenIceAdaylari];
+
+    this.bekleyenIceAdaylari = [];
+
+    for (const aday of adaylar) {
+      try {
+        const candidate = new RTCIceCandidate(aday);
+
+        await this.peerConnection.addIceCandidate(candidate);
+
+        console.log("gY�S Bekleyen ICE eklendi.");
+      } catch (hata) {
+        console.error("�O Bekleyen ICE eklenemedi:", hata);
+      }
+    }
+  }
+
+  /**
+   * =========================================================
+   * ICE G�-NDER
+   * =========================================================
+   */
+
+  private iceGonder(aday: RTCIceCandidateInit) {
+    this.aramaSinyaliGonder("CALL_ICE", {
+      aday,
+    });
+  }
+
+  /**
+   * =========================================================
+   * ARAMAYI REDDET
+   * =========================================================
+   */
+
+  aramayiReddet() {
+    if (!this.arananKullaniciId) {
+      return;
+    }
+
+    console.log("gY"� Arama reddediliyor.");
+
+    this.aramaSesiniDurdur();
+    this.aramaAudioOturumunuKapat();
+
+    this.aramaSinyaliGonder("CALL_REJECT");
+  }
+
+  /**
+   * =========================================================
+   * ARAMAYI BITIR
+   * =========================================================
+   */
+
+  async aramayiBitir(karsiTarafBitirdi = false) {
+    if (this.aramaSonlandiriliyor) {
+      console.log("?? Arama zaten sonlandiriliyor. Ikinci cleanup atlandi.");
+      return;
+    }
+
+    this.aramaSonlandiriliyor = true;
+
+    this.aramaSesiniDurdur();
+
+    console.log(
+      karsiTarafBitirdi
+        ? "gY"� Kar�Yi taraf aramayi bitirdi. WebRTC ba�Ylantisi kapatiliyor."
+        : "gY"� WebRTC g�rü�Ymesi sonlandiriliyor.",
+    );
+
+    if (
+      !karsiTarafBitirdi &&
+      this.arananKullaniciId &&
+      (this.hariciSinyalGonderici ||
+        (this.stompClient && this.stompClient.connected && this.webSocketBagli))
+    ) {
+      console.log("gY"� Kullanici aramayi kapatti. CALL_END g�nderiliyor.");
+      this.aramaSinyaliGonder("CALL_END");
+    } else if (karsiTarafBitirdi) {
+      console.log("�>" Gelen CALL_END i�in tekrar CALL_END g�nderilmiyor.");
+    }
+
+    this.sesYonlendirmesiniKapat();
+
+    if (this.yerelStream) {
+      this.yerelStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (hata) {
+          console.warn("�s�️ Yerel track kapatma hatasi:", hata);
+        }
+      });
+      this.yerelStream = null;
+    }
+
+    if (this.peerConnection) {
+      try {
+        this.peerConnection.ontrack = null;
+        this.peerConnection.onicecandidate = null;
+        this.peerConnection.onconnectionstatechange = null;
+        this.peerConnection.oniceconnectionstatechange = null;
+        this.peerConnection.onicegatheringstatechange = null;
+        this.peerConnection.onsignalingstatechange = null;
+        this.peerConnection.close();
+      } catch (hata) {
+        console.warn("PeerConnection kapatma hatasi:", hata);
+      }
+      this.peerConnection = null;
+    }
+
+    this.uzakStream = null;
+    this.bekleyenIceAdaylari = [];
+    this.remoteDescriptionHazir = false;
+    this.webRtcBaglandiBildirildi = false;
+    this.offerOlusturuluyor = false;
+
+    // Cleanup sonrasinda yeni arama ba�Ylayabilsin.
+    // Devam eden eski Promise varsa kendi finally blo�Yunda zaten temizlenir.
+    this.aramaBaslatPromise = null;
+
+    if (!karsiTarafBitirdi) {
+      this.olaylar.baglantiKoptu?.();
+    }
+  }
+
+  /**
+   * =========================================================
+   * STOMP BAGLANTISINI KAPAT
+   * =========================================================
+   */
+
+  async webSocketBaglantisiniKapat() {
+    if (this.hariciSinyalGonderici && !this.stompClient) {
+      console.log("gY"� Harici STOMP ta�Yiyicisi kullaniliyor.");
+      console.log("?? AramaWebRTC native STOMP ba�Ylantisi kapatilmayacak.");
+      this.webSocketBagli = false;
+      this.webSocketBaglantiPromise = null;
+      return;
+    }
+
+    console.log("gY"O Arama STOMP ba�Ylantisi kapatiliyor.");
+
+    /**
+     * Subscription kapat
+     */
+
+    if (this.aramaSubscription) {
+      try {
+        this.aramaSubscription.unsubscribe();
+
+        console.log("gY"� Arama subscription kapatildi.");
+      } catch (hata) {
+        console.warn("�s�️ Arama subscription kapatma hatasi:", hata);
+      }
+
+      this.aramaSubscription = null;
+    }
+
+    /**
+     * STOMP client kapat
+     */
+
+    const client = this.stompClient;
+
+    this.stompClient = null;
+
+    this.webSocketBagli = false;
+
+    this.webSocketBaglantiPromise = null;
+
+    if (client) {
+      try {
+        if (client.active || client.connected) {
+          console.log("gY"� STOMP client deactivate �a�Yriliyor.");
+
+          await client.deactivate();
+        }
+      } catch (hata) {
+        console.warn("�s�️ STOMP client kapatma hatasi:", hata);
+      }
+    }
+
+    console.log("gY"O Arama STOMP ba�Ylantisi kapatildi.");
+  }
+
+  /**
+   * =========================================================
+   * MIKROFON
+   * =========================================================
+   */
+
+  mikrofonuDegistir(acik: boolean) {
+    if (!this.yerelStream) {
+      return;
+    }
+
+    this.yerelStream.getAudioTracks().forEach((track) => {
+      track.enabled = acik;
+    });
+
+    console.log(acik ? "gY�T? Mikrofon a�ildi." : "gY"? Mikrofon kapatildi.");
+  }
+
+  /**
+   * =========================================================
+   * KAMERA
+   * =========================================================
+   */
+
+  kamerayiDegistir(acik: boolean) {
+    if (!this.yerelStream) {
+      return;
+    }
+
+    this.yerelStream.getVideoTracks().forEach((track) => {
+      track.enabled = acik;
+    });
+
+    console.log(acik ? "gY"� Kamera a�ildi." : "gYs� Kamera kapatildi.");
+  }
+
+  /**
+   * =========================================================
+   * KAMERA DEGISTIR
+   * =========================================================
+   */
+
+  kamerayiCevir() {
+    if (!this.yerelStream) {
+      return;
+    }
+
+    const videoTracks = this.yerelStream.getVideoTracks();
+
+    if (videoTracks.length === 0) {
+      return;
+    }
+
+    const videoTrack = videoTracks[0];
+
+    const kameraTrack = videoTrack as any;
+
+    if (typeof kameraTrack._switchCamera === "function") {
+      kameraTrack._switchCamera();
+
+      console.log("gY"" Kamera de�Yi�Ytirildi.");
+    } else {
+      console.warn("�s�️ Bu cihazda kamera de�Yi�Ytirme desteklenmiyor.");
+    }
+  }
+
+  /**
+   * =========================================================
+   * STREAM GETTER
+   * =========================================================
+   */
+
+  getYerelStream(): MediaStream | null {
+    return this.yerelStream;
+  }
+
+  getUzakStream(): MediaStream | null {
+    return this.uzakStream;
+  }
+
+  getPeerConnection(): RTCPeerConnection | null {
+    return this.peerConnection;
+  }
+
+  /**
+   * =========================================================
+   * STOMP BAGLI MI
+   * =========================================================
+   */
+
+  webSocketBagliMi(): boolean {
+    const client = this.stompClient;
+
+    return this.webSocketBagli && client !== null && client.connected;
+  }
+
+  /**
+   * =========================================================
+   * MIKROFON KISA METOTLARI
+   * =========================================================
+   */
+
+  mikrofonKapat() {
+    this.mikrofonuDegistir(false);
+  }
+
+  mikrofonAc() {
+    this.mikrofonuDegistir(true);
+  }
+
+  /**
+   * =========================================================
+   * KAMERA KISA METOTLARI
+   * =========================================================
+   */
+
+  kameraKapat() {
+    this.kamerayiDegistir(false);
+  }
+
+  kameraAc() {
+    this.kamerayiDegistir(true);
+  }
+
+  /**
+   * =========================================================
+   * OLAYLARI TEMIZLE
+   * =========================================================
+   */
+
+  olaylariTemizle() {
+    this.olaylar = {};
+  }
+
+  /**
+   * =========================================================
+   * TAM TEMIZLE
+   * =========================================================
+   */
+
+  async temizle() {
+    try {
+      if (this.peerConnection || this.yerelStream || this.arananKullaniciId) {
+        await this.aramayiBitir();
+      }
+    } catch (hata) {
+      console.warn("Arama temizleme hatasi:", hata);
+    }
+
+    try {
+      await this.webSocketBaglantisiniKapat();
+    } catch (hata) {
+      console.warn("STOMP temizleme hatasi:", hata);
+    }
+
+    this.aramaSesiniTemizle();
+
+    this.mevcutKullaniciId = null;
+
+    this.arananKullaniciId = null;
+
+    this.aramaTuru = "SES";
+    this.aramaAudioOturumuAcik = false;
+    this.hoparlorAcik = false;
+    this.aramaSonlandiriliyor = false;
+    this.webRtcBaglandiBildirildi = false;
+    this.aramaBaslatPromise = null;
+    this.uzakStream = null;
+    this.bekleyenIceAdaylari = [];
+    this.remoteDescriptionHazir = false;
+
+    this.olaylariTemizle();
+  }
+}
+
+const aramaWebRTC = new AramaWebRTC();
+
+export default aramaWebRTC;
+

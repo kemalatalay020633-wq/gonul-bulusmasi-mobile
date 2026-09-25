@@ -1,18 +1,32 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { Slot } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect } from "react";
+import { View, NativeModules } from "react-native";
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+export default function RootLayout() {
+  console.log(
+    "🔍 TÜM INCALL NATIVE:",
+    Object.keys(NativeModules).filter(
+      (isim) =>
+        isim.toLowerCase().includes("call") ||
+        isim.toLowerCase().includes("incall"),
+    ),
+  );
 
-SplashScreen.preventAutoHideAsync();
+  console.log("🔍 INCALL NATIVE:", NativeModules.InCallManager);
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  console.log(
+    "🔊 INCALL START TEST:",
+    typeof NativeModules.InCallManager?.start,
+  );
+
+  useEffect(() => {
+    SplashScreen.hideAsync();
+  }, []);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+      <Slot />
+    </View>
   );
 }
