@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -13,12 +13,13 @@ import {
   View,
 } from "react-native";
 // src/app/home.tsx
-import { API_BASE_URL } from "../config/api";
-import { router } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import { API_BASE_URL } from "../config/api";
 const API_ADRESI = API_BASE_URL + "/api";
 
 export default function Register() {
+  const navigation = useNavigation<any>();
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +41,7 @@ export default function Register() {
     setError("");
 
     if (!username.trim()) {
-      setError("L�tfen kullanici adinizi giriniz.");
+      setError("Lï¿½tfen kullanici adinizi giriniz.");
       return;
     }
 
@@ -50,12 +51,12 @@ export default function Register() {
     }
 
     if (!email.trim()) {
-      setError("L�tfen e-posta adresinizi giriniz.");
+      setError("Lï¿½tfen e-posta adresinizi giriniz.");
       return;
     }
 
     if (!password) {
-      setError("L�tfen �Yifrenizi giriniz.");
+      setError("Lï¿½tfen ï¿½Yifrenizi giriniz.");
       return;
     }
 
@@ -65,22 +66,22 @@ export default function Register() {
     }
 
     if (!firstName.trim()) {
-      setError("L�tfen adinizi giriniz.");
+      setError("Lï¿½tfen adinizi giriniz.");
       return;
     }
 
     if (!lastName.trim()) {
-      setError("L�tfen soyadinizi giriniz.");
+      setError("Lï¿½tfen soyadinizi giriniz.");
       return;
     }
 
     if (!birthDate.trim()) {
-      setError("L�tfen do�Yum tarihinizi giriniz.");
+      setError("Lï¿½tfen doï¿½Yum tarihinizi giriniz.");
       return;
     }
 
     if (!gender) {
-      setError("L�tfen cinsiyet se�iniz.");
+      setError("Lï¿½tfen cinsiyet seï¿½iniz.");
       return;
     }
 
@@ -99,7 +100,7 @@ export default function Register() {
     const parcalar = birthDate.split("/");
 
     if (parcalar.length !== 3) {
-      setError("Do�Yum tarihini GG/AA/YYYY �Yeklinde giriniz.");
+      setError("Doï¿½Yum tarihini GG/AA/YYYY ï¿½Yeklinde giriniz.");
       return;
     }
 
@@ -108,7 +109,7 @@ export default function Register() {
     const yil = parcalar[2];
 
     if (gun.length !== 2 || ay.length !== 2 || yil.length !== 4) {
-      setError("Do�Yum tarihini GG/AA/YYYY �Yeklinde giriniz.");
+      setError("Doï¿½Yum tarihini GG/AA/YYYY ï¿½Yeklinde giriniz.");
       return;
     }
 
@@ -121,26 +122,26 @@ export default function Register() {
       !Number.isInteger(aySayisi) ||
       !Number.isInteger(yilSayisi)
     ) {
-      setError("Do�Yum tarihi ge�ersiz.");
+      setError("Doï¿½Yum tarihi geï¿½ersiz.");
       return;
     }
 
     if (aySayisi < 1 || aySayisi > 12) {
-      setError("Do�Yum tarihi ge�ersiz. Ay 01-12 arasinda olmalidir.");
+      setError("Doï¿½Yum tarihi geï¿½ersiz. Ay 01-12 arasinda olmalidir.");
       return;
     }
 
     if (gunSayisi < 1 || gunSayisi > 31) {
-      setError("Do�Yum tarihi ge�ersiz. G�n 01-31 arasinda olmalidir.");
+      setError("Doï¿½Yum tarihi geï¿½ersiz. Gï¿½n 01-31 arasinda olmalidir.");
       return;
     }
 
     /*
      * =========================================================
-     * GER�?EK TAKVIM TARIHI KONTROL�o
+     * GERï¿½?EK TAKVIM TARIHI KONTROLï¿½o
      *
-     * �-rne�Yin:
-     * 31/02/1990 -> ge�ersiz
+     * ï¿½-rneï¿½Yin:
+     * 31/02/1990 -> geï¿½ersiz
      * =========================================================
      */
 
@@ -151,20 +152,20 @@ export default function Register() {
       kontrolTarihi.getMonth() !== aySayisi - 1 ||
       kontrolTarihi.getDate() !== gunSayisi
     ) {
-      setError("Ge�erli bir do�Yum tarihi giriniz.");
+      setError("Geï¿½erli bir doï¿½Yum tarihi giriniz.");
       return;
     }
 
     /*
      * =========================================================
-     * GELECEK TARIH KONTROL�o
+     * GELECEK TARIH KONTROLï¿½o
      * =========================================================
      */
 
     const bugun = new Date();
 
     if (kontrolTarihi >= bugun) {
-      setError("Do�Yum tarihi gelecekte olamaz.");
+      setError("Doï¿½Yum tarihi gelecekte olamaz.");
       return;
     }
 
@@ -246,8 +247,8 @@ export default function Register() {
        * =====================================================
        * HATA
        *
-       * Backend T�rk�e olarak "mesaj" d�nd�r�yor.
-       * Bu y�zden hem mesaj hem message kontrol ediyoruz.
+       * Backend Tï¿½rkï¿½e olarak "mesaj" dï¿½ndï¿½rï¿½yor.
+       * Bu yï¿½zden hem mesaj hem message kontrol ediyoruz.
        * =====================================================
        */
 
@@ -256,7 +257,7 @@ export default function Register() {
           data.mesaj ||
             data.message ||
             data.error ||
-            `Kayit ba�Yarisiz. HTTP ${response.status}`,
+            `Kayit baï¿½Yarisiz. HTTP ${response.status}`,
         );
       }
 
@@ -304,22 +305,26 @@ export default function Register() {
        * =====================================================
        */
 
-      Alert.alert("Kayit Ba�Yarili", "G�n�l Bulu�Ymasi'na ho�Y geldiniz.", [
-        {
-          text: "Devam Et",
+      Alert.alert(
+        "Kayit Baï¿½Yarili",
+        "Gï¿½nï¿½l Buluï¿½Ymasi'na hoï¿½Y geldiniz.",
+        [
+          {
+            text: "Devam Et",
 
-          onPress: () => {
-            router.replace("/home");
+            onPress: () => {
+              navigation.replace("home");
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (hata) {
       console.error("KAYIT HATASI:", hata);
 
       if (hata instanceof Error) {
         setError(hata.message);
       } else {
-        setError("Kayit sirasinda bir hata olu�Ytu.");
+        setError("Kayit sirasinda bir hata oluï¿½Ytu.");
       }
     } finally {
       setLoading(false);
@@ -328,7 +333,7 @@ export default function Register() {
 
   /*
    * =========================================================
-   * CINSIYET SE�?IMI
+   * CINSIYET SEï¿½?IMI
    *
    * Backend enum:
    * KADIN
@@ -359,12 +364,12 @@ export default function Register() {
       >
         <View style={styles.container}>
           {/* =================================================
-              �oST ALAN
+              ï¿½oST ALAN
           ================================================= */}
 
           <View style={styles.header}>
             {/* =================================================
-                GER�?EK G�-N�oL BULUSMASI LOGOSU
+                GERï¿½?EK Gï¿½-Nï¿½oL BULUSMASI LOGOSU
             ================================================= */}
 
             <View style={styles.logoAlan}>
@@ -375,10 +380,10 @@ export default function Register() {
               />
             </View>
 
-            <Text style={styles.appTitle}>G�n�l Bulu�Ymasi</Text>
+            <Text style={styles.appTitle}>Gï¿½nï¿½l Buluï¿½Ymasi</Text>
 
             <Text style={styles.subtitle}>
-              Yeni bir ba�Ylangi� i�in ilk adim
+              Yeni bir baï¿½Ylangiï¿½ iï¿½in ilk adim
             </Text>
           </View>
 
@@ -387,10 +392,10 @@ export default function Register() {
           ================================================= */}
 
           <View style={styles.card}>
-            <Text style={styles.title}>Hesabini olu�Ytur</Text>
+            <Text style={styles.title}>Hesabini oluï¿½Ytur</Text>
 
             <Text style={styles.description}>
-              �ocretsiz olarak kaydol ve G�n�l Bulu�Ymasi'na katil.
+              ï¿½ocretsiz olarak kaydol ve Gï¿½nï¿½l Buluï¿½Ymasi'na katil.
             </Text>
 
             {/* =================================================
@@ -519,7 +524,7 @@ export default function Register() {
             ================================================= */}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Do�Yum Tarihi</Text>
+              <Text style={styles.label}>Doï¿½Yum Tarihi</Text>
 
               <TextInput
                 value={birthDate}
@@ -564,7 +569,7 @@ export default function Register() {
                 style={styles.input}
               />
 
-              <Text style={styles.helperText}>�-rnek: 15/05/1990</Text>
+              <Text style={styles.helperText}>ï¿½-rnek: 15/05/1990</Text>
             </View>
 
             {/* =================================================
@@ -590,7 +595,7 @@ export default function Register() {
                       gender === "KADIN" && styles.genderTextSelected,
                     ]}
                   >
-                    gY'� Kadin
+                    gY'ï¿½ Kadin
                   </Text>
                 </Pressable>
 
@@ -609,7 +614,7 @@ export default function Register() {
                       gender === "ERKEK" && styles.genderTextSelected,
                     ]}
                   >
-                    gY'� Erkek
+                    gY'ï¿½ Erkek
                   </Text>
                 </Pressable>
               </View>
@@ -631,25 +636,25 @@ export default function Register() {
                 <ActivityIndicator color="#ffffff" />
               ) : (
                 <>
-                  <Text style={styles.buttonIcon}>gY'�</Text>
+                  <Text style={styles.buttonIcon}>gY'ï¿½</Text>
 
                   <Text style={styles.registerButtonText}>
-                    �ocretsiz Kayit Ol
+                    ï¿½ocretsiz Kayit Ol
                   </Text>
                 </>
               )}
             </Pressable>
 
             {/* =================================================
-                G�oVENLIK
+                Gï¿½oVENLIK
             ================================================= */}
 
             <View style={styles.securityBox}>
               <Text style={styles.securityIcon}>gY"'</Text>
 
               <Text style={styles.securityText}>
-                Ki�Yisel bilgilerini korumaya �nem veriyoruz. Hesabini istedi�Yin
-                zaman silebilirsin.
+                Kiï¿½Yisel bilgilerini korumaya ï¿½nem veriyoruz. Hesabini
+                istediï¿½Yin zaman silebilirsin.
               </Text>
             </View>
 
@@ -660,8 +665,8 @@ export default function Register() {
             <View style={styles.loginContainer}>
               <Text style={styles.loginText}>Zaten hesabin var mi?</Text>
 
-              <Pressable onPress={() => router.replace("/")}>
-                <Text style={styles.loginButton}>Giri�Y Yap</Text>
+              <Pressable onPress={() => navigation.replace("index")}>
+                <Text style={styles.loginButton}>Giriï¿½Y Yap</Text>
               </Pressable>
             </View>
 
@@ -670,13 +675,13 @@ export default function Register() {
             ================================================= */}
 
             <Text style={styles.footerText}>
-              Kayit olarak G�n�l Bulu�Ymasi topluluk kurallarina uymayi kabul
-              etmi�Y olursun.
+              Kayit olarak Gï¿½nï¿½l Buluï¿½Ymasi topluluk kurallarina uymayi
+              kabul etmiï¿½Y olursun.
             </Text>
           </View>
 
           {/* =================================================
-              �-ZELLIKLER
+              ï¿½-ZELLIKLER
           ================================================= */}
 
           <View style={styles.features}>
@@ -688,15 +693,17 @@ export default function Register() {
               />
             </View>
             <View style={styles.feature}>
-              <Text style={styles.featureIcon}>�o"</Text>
+              <Text style={styles.featureIcon}>ï¿½o"</Text>
 
-              <Text style={styles.featureText}>Profilini kendin olu�Ytur</Text>
+              <Text style={styles.featureText}>
+                Profilini kendin oluï¿½Ytur
+              </Text>
             </View>
 
             <View style={styles.feature}>
-              <Text style={styles.featureIcon}>gY"�</Text>
+              <Text style={styles.featureIcon}>gY"ï¿½</Text>
 
-              <Text style={styles.featureText}>G�venli kullanim</Text>
+              <Text style={styles.featureText}>Gï¿½venli kullanim</Text>
             </View>
           </View>
         </View>
@@ -742,7 +749,7 @@ const styles = StyleSheet.create({
 
   /*
    * =========================================================
-   * GER�?EK LOGO
+   * GERï¿½?EK LOGO
    * =========================================================
    */
 
@@ -966,7 +973,7 @@ const styles = StyleSheet.create({
 
   /*
    * =========================================================
-   * G�oVENLIK
+   * Gï¿½oVENLIK
    * =========================================================
    */
 
@@ -1050,7 +1057,7 @@ const styles = StyleSheet.create({
 
   /*
    * =========================================================
-   * �-ZELLIKLER
+   * ï¿½-ZELLIKLER
    * =========================================================
    */
 
@@ -1092,4 +1099,3 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 });
-

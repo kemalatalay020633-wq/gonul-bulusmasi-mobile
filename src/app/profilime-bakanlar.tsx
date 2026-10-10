@@ -11,7 +11,7 @@ import {
 } from "react-native";
 // src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_ADRESI = API_BASE_URL + "/api";
@@ -161,7 +161,7 @@ const medeniDurumGetir = (
   const sayisalDegerler: Record<string, string> = {
     "0": "Bekar",
     "1": "Evli",
-    "2": "Bo�Yanmı�Y",
+    "2": "Boşanmış",
     "3": "Dul",
   };
 
@@ -194,7 +194,7 @@ const medeniDurumGetir = (
  */
 
 export default function ProfilimeBakanlar() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [kullanicilar, setKullanicilar] = useState<BakanKullanici[]>([]);
 
@@ -395,7 +395,7 @@ export default function ProfilimeBakanlar() {
       );
 
       /*
-       * Hİ�? KIMSE YOK
+       * HİÇ KİMSE YOK
        */
 
       if (kullaniciIdleri.length === 0) {
@@ -448,7 +448,7 @@ export default function ProfilimeBakanlar() {
       setHata(
         error instanceof Error
           ? error.message
-          : "Profilinize bakan kullanicilar alinirken bir hata olu�Ytu.",
+          : "Profilinize bakan kullanıcılar alınırken bir hata oluştu.",
       );
     } finally {
       setYukleniyor(false);
@@ -457,7 +457,7 @@ export default function ProfilimeBakanlar() {
 
   /*
    * =======================================================
-   * SAYFA A�?ILINCA
+   * SAYFA AÇILINCA
    * =======================================================
    */
 
@@ -472,7 +472,7 @@ export default function ProfilimeBakanlar() {
    */
 
   const profileGit = (kullaniciId: number) => {
-    router.push(`/user/${kullaniciId}`);
+    navigation.navigate("user", { id: String(kullaniciId) });
   };
 
   /*
@@ -482,12 +482,12 @@ export default function ProfilimeBakanlar() {
    */
 
   const geriDon = () => {
-    router.back();
+    navigation.goBack();
   };
 
   /*
    * =======================================================
-   * Y�oKLENIYOR
+   * YÜKLENİYOR
    * =======================================================
    */
 
@@ -498,7 +498,7 @@ export default function ProfilimeBakanlar() {
           <ActivityIndicator size="large" color="#7c3aed" />
 
           <Text style={styles.yukleniyorText}>
-            Profilinize bakanlar y�kleniyor...
+            Profilinize bakanlar yükleniyor...
           </Text>
         </View>
       </SafeAreaView>
@@ -525,7 +525,7 @@ export default function ProfilimeBakanlar() {
 
         <View style={styles.ustBar}>
           <Pressable style={styles.geriButonu} onPress={geriDon}>
-            <Text style={styles.geriIcon}>�?�</Text>
+            <Text style={styles.geriIcon}>←</Text>
 
             <Text style={styles.geriText}>Geri</Text>
           </Pressable>
@@ -547,7 +547,7 @@ export default function ProfilimeBakanlar() {
 
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata olu�Ytu</Text>
+            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
@@ -567,10 +567,10 @@ export default function ProfilimeBakanlar() {
           <View style={styles.bosKart}>
             <Text style={styles.bosIcon}>gY'?</Text>
 
-            <Text style={styles.bosBaslik}>Hen�z profilinize bakan yok</Text>
+            <Text style={styles.bosBaslik}>Henüz profilinize bakan yok</Text>
 
             <Text style={styles.bosText}>
-              Profilinizi g�r�nt�leyen kullanicilar burada g�r�necek.
+              Profilinizi görüntüleyen kullanıcılar burada görünecek.
             </Text>
           </View>
         ) : null}
@@ -655,9 +655,9 @@ export default function ProfilimeBakanlar() {
 
                     {yas !== null || kullanici.city ? (
                       <Text style={styles.detay} numberOfLines={1}>
-                        {yas !== null ? `${yas} ya�Y` : ""}
+                        {yas !== null ? `${yas} yaş` : ""}
 
-                        {yas !== null && kullanici.city ? " � " : ""}
+                        {yas !== null && kullanici.city ? " · " : ""}
 
                         {kullanici.city || ""}
                       </Text>
@@ -674,20 +674,20 @@ export default function ProfilimeBakanlar() {
                     ) : null}
 
                     <Text style={styles.bakanBilgisi}>
-                      Profilinizi g�r�nt�ledi gY'?
+                      Profilinizi görüntüledi
                     </Text>
                   </View>
                 </View>
 
                 {/*
-                 * PROFILI G�-R
+                 * PROFİLİ GÖR
                  */}
 
                 <Pressable
                   style={styles.profilButonu}
                   onPress={() => profileGit(kullanici.id)}
                 >
-                  <Text style={styles.profilButonuText}>gY'� Profili G�r</Text>
+                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
                 </Pressable>
               </View>
             );
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Y�oKLENIYOR
+   * YÜKLENİYOR
    */
 
   yukleniyorContainer: {
@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * �oST BAR
+   * ÜST BAR
    */
 
   ustBar: {

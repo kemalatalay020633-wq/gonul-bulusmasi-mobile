@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   Image,
@@ -9,71 +10,112 @@ import {
   Text,
   View,
 } from "react-native";
+
 // src/app/home.tsx
-import { API_BASE_URL } from "../config/api";
-import { useRouter } from "expo-router";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { useNavigation } from "@react-navigation/native";
+
+import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = API_BASE_URL + "/api";
 
 const SUNUCU_ADRESI = API_BASE_URL;
+
 type LikeDto = {
   id: number;
+
   userId: number;
+
   likedUserId: number;
+
   createdAt?: string | null;
 };
 
 type Kullanici = {
   id: number;
+
   username?: string;
+
   email?: string;
+
   firstName?: string;
+
   lastName?: string;
+
   birthDate?: string | null;
+
   phoneNumber?: string | null;
+
   profilePhoto?: string | null;
+
   city?: string | null;
+
   active?: boolean;
+
   emailVerified?: boolean;
+
   phoneVerified?: boolean;
+
   createdAt?: string;
+
   updatedAt?: string;
+
   gender?: string;
 };
 
 type Profil = {
   id: number;
+
   userId: number;
+
   about?: string | null;
+
   profession?: string | number | null;
+
   education?: string | number | null;
+
   height?: number | null;
+
   weight?: number | null;
+
   maritalStatus?: string | number | null;
+
   religion?: string | number | null;
+
   interests?: string | number | null;
+
   profilePhoto?: string | null;
+
   profileVerified?: boolean;
 };
 
 type BegenenKullanici = {
   begeni: LikeDto;
+
   kullanici: Kullanici | null;
+
   profil: Profil | null;
 };
 
 export default function Begenenler() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [begenenler, setBegenenler] = useState<BegenenKullanici[]>([]);
+
   const [yukleniyor, setYukleniyor] = useState(true);
+
   const [hata, setHata] = useState("");
 
   /*
+
    * =========================================================
-   * FOTOGRAF URL
+
+   * FOTOĞRAF URL
+
    * =========================================================
+
    */
 
   const fotoUrlOlustur = useCallback(
@@ -98,13 +140,18 @@ export default function Begenenler() {
 
       return `${SUNUCU_ADRESI}/${temizFoto}`;
     },
+
     [],
   );
 
   /*
+
    * =========================================================
-   * YAS HESAPLA
+
+   * YAŞ HESAPLA
+
    * =========================================================
+
    */
 
   const yasHesapla = useCallback(
@@ -131,13 +178,18 @@ export default function Begenenler() {
 
       return yas;
     },
+
     [],
   );
 
   /*
+
    * =========================================================
-   * MEDENI DURUM
+
+   * MEDENİ DURUM
+
    * =========================================================
+
    */
 
   const medeniDurumGetir = useCallback(
@@ -153,9 +205,12 @@ export default function Begenenler() {
       }
 
       const sayisalDegerler: Record<string, string> = {
-        "0": "Bekar",
+        "0": "Bekâr",
+
         "1": "Evli",
-        "2": "Bosanmis",
+
+        "2": "Boşanmış",
+
         "3": "Dul",
       };
 
@@ -164,9 +219,12 @@ export default function Begenenler() {
       }
 
       const metinselDegerler: Record<string, string> = {
-        BEKAR: "Bekar",
+        BEKAR: "Bekâr",
+
         EVLI: "Evli",
-        BOSANMIS: "Bosanmis",
+
+        BOŞANMIS: "Boşanmış",
+
         DUL: "Dul",
       };
 
@@ -180,13 +238,18 @@ export default function Begenenler() {
 
       return deger;
     },
+
     [],
   );
 
   /*
+
    * =========================================================
-   * KULLANICI GETIR
+
+   * KULLANICI GETİR
+
    * =========================================================
+
    */
 
   const kullaniciGetir = useCallback(
@@ -194,8 +257,10 @@ export default function Begenenler() {
       try {
         const response = await fetch(`${API_ADRESI}/users/${kullaniciId}`, {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         });
@@ -205,8 +270,11 @@ export default function Begenenler() {
         if (!response.ok) {
           console.error(
             "KULLANICI ALINAMADI:",
+
             kullaniciId,
+
             response.status,
+
             responseText,
           );
 
@@ -219,18 +287,23 @@ export default function Begenenler() {
 
         return JSON.parse(responseText) as Kullanici;
       } catch (error) {
-        console.error("KULLANICI BILGISI HATASI:", error);
+        console.error("KULLANICI BİLGİSİ HATASI:", error);
 
         return null;
       }
     },
+
     [],
   );
 
   /*
+
    * =========================================================
-   * PROFILLERI GETIR
+
+   * PROFİLLERİ GETİR
+
    * =========================================================
+
    */
 
   const profilleriGetir = useCallback(
@@ -238,8 +311,10 @@ export default function Begenenler() {
       try {
         const response = await fetch(`${API_ADRESI}/profiles`, {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         });
@@ -247,7 +322,7 @@ export default function Begenenler() {
         const responseText = await response.text();
 
         if (!response.ok) {
-          console.error("PROFILLER ALINAMADI:", response.status, responseText);
+          console.error("PROFİLLER ALINAMADI:", response.status, responseText);
 
           return [];
         }
@@ -268,68 +343,90 @@ export default function Begenenler() {
 
         return [];
       } catch (error) {
-        console.error("PROFILLER HATASI:", error);
+        console.error("PROFİLLER HATASI:", error);
 
         return [];
       }
     },
+
     [],
   );
 
   /*
+
    * =========================================================
-   * BENI BEGENENLERI GETIR
+
+   * BENİ BEĞENENLERİ GETİR
+
    * =========================================================
+
    */
 
   const begenenleriGetir = useCallback(async () => {
     try {
       setYukleniyor(true);
+
       setHata("");
 
       /*
+
        * TOKEN
+
        */
 
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
-        throw new Error("Oturum bulunamadi.");
+        throw new Error("Oturum bulunamadı.");
       }
 
       /*
+
        * MEVCUT KULLANICI
+
        */
 
       const userId = await AsyncStorage.getItem("userId");
 
       if (!userId) {
-        throw new Error("Kullanici ID bulunamadi.");
+        throw new Error("Kullanıcı ID bulunamadı.");
       }
 
       const kullaniciId = Number(userId);
 
       if (!Number.isFinite(kullaniciId) || kullaniciId <= 0) {
-        throw new Error("Kullanici ID bulunamadi.");
+        throw new Error("Kullanıcı ID bulunamadı.");
       }
 
       /*
+
        * =================================================
-       * 1 - BENI BEGENENLER
+
+       * 1 - BENİ BEĞENENLER
+
        *
-       * GER�?EK ENDPOINT:
+
+       * GERÇEK ENDPOINT:
+
        *
+
        * GET
+
        * /api/likes/beni-begenenler/{kullaniciId}
+
        * =================================================
+
        */
 
       const response = await fetch(
         `${API_ADRESI}/likes/beni-begenenler/${kullaniciId}`,
+
         {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         },
@@ -338,7 +435,7 @@ export default function Begenenler() {
       const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error(responseText || "Beni be�Yenenler alinamadi.");
+        throw new Error(responseText || "Beni beğenenler alınamadı.");
       }
 
       let begeniler: LikeDto[] = [];
@@ -354,17 +451,25 @@ export default function Begenenler() {
       }
 
       /*
+
        * =================================================
-       * 2 - PROFILLER
+
+       * 2 - PROFİLLER
+
        * =================================================
+
        */
 
       const profiller = await profilleriGetir(token);
 
       /*
+
        * =================================================
-       * 3 - KULLANICI BILGILERI
+
+       * 3 - KULLANICI BİLGİLERI
+
        * =================================================
+
        */
 
       const sonuc = await Promise.all(
@@ -380,7 +485,9 @@ export default function Begenenler() {
 
           return {
             begeni,
+
             kullanici,
+
             profil,
           };
         }),
@@ -388,20 +495,22 @@ export default function Begenenler() {
 
       setBegenenler(sonuc);
     } catch (error) {
-      console.error("BEGENENLER HATASI:", error);
+      console.error("BEĞENENLER HATASI:", error);
 
-      setHata(
-        error instanceof Error ? error.message : "Be�Yenenler alinamadi.",
-      );
+      setHata(error instanceof Error ? error.message : "Beğenenler alınamadı.");
     } finally {
       setYukleniyor(false);
     }
   }, [kullaniciGetir, profilleriGetir]);
 
   /*
+
    * =========================================================
-   * SAYFA A�?ILINCA
+
+   * SAYFA AÇILINCA
+
    * =========================================================
+
    */
 
   useEffect(() => {
@@ -409,29 +518,41 @@ export default function Begenenler() {
   }, [begenenleriGetir]);
 
   /*
+
    * =========================================================
-   * PROFILE GIT
+
+   * PROFILE GİT
+
    * =========================================================
+
    */
 
   const profileGit = (kullaniciId: number) => {
-    router.push(`/user/${kullaniciId}`);
+    navigation.navigate("user", { id: String(kullaniciId) });
   };
 
   /*
+
    * =========================================================
-   * GERI
+
+   * GERİ
+
    * =========================================================
+
    */
 
   const geriDon = () => {
-    router.back();
+    navigation.goBack();
   };
 
   /*
+
    * =========================================================
-   * Y�oKLENIYOR
+
+   * YÜKLENİYOR
+
    * =========================================================
+
    */
 
   if (yukleniyor) {
@@ -441,7 +562,7 @@ export default function Begenenler() {
           <ActivityIndicator size="large" color="#ec4899" />
 
           <Text style={styles.yukleniyorText}>
-            Seni be�Yenenler y�kleniyor...
+            Seni beğenenler yükleniyor...
           </Text>
         </View>
       </SafeAreaView>
@@ -449,37 +570,42 @@ export default function Begenenler() {
   }
 
   /*
+
    * =========================================================
+
    * EKRAN
+
    * =========================================================
+
    */
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
+
         contentContainerStyle={styles.scrollContainer}
       >
-        {/* GERI */}
+        {/* GERİ */}
 
         <Pressable style={styles.geriButonu} onPress={geriDon}>
-          <Text style={styles.geriIcon}>�?�</Text>
+          <Text style={styles.geriIcon}>‹</Text>
 
           <Text style={styles.geriText}>Geri</Text>
         </Pressable>
 
-        {/* BASLIK */}
+        {/* BAŞLIK */}
 
         <View style={styles.baslikKart}>
           <View style={styles.baslikIkonKutusu}>
-            <Text style={styles.baslikIkon}>�T�</Text>
+            <Text style={styles.baslikIkon}>♡</Text>
           </View>
 
           <View style={styles.baslikBilgi}>
-            <Text style={styles.baslik}>Seni Be�Yenenler</Text>
+            <Text style={styles.baslik}>Seni Beğenenler</Text>
 
             <Text style={styles.baslikAciklama}>
-              Seni be�Yenen ki�Yileri g�r.
+              Seni beğenen kişileri gör.
             </Text>
           </View>
         </View>
@@ -488,7 +614,7 @@ export default function Begenenler() {
 
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata olu�Ytu</Text>
+            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
@@ -502,24 +628,26 @@ export default function Begenenler() {
 
         {!hata && begenenler.length === 0 ? (
           <View style={styles.bosKart}>
-            <Text style={styles.bosIkon}>�T�</Text>
+            <Text style={styles.bosIkon}>♡</Text>
 
-            <Text style={styles.bosBaslik}>Hen�z seni be�Yenen yok</Text>
+            <Text style={styles.bosBaslik}>Henüz seni beğenen yok</Text>
 
             <Text style={styles.bosText}>
-              Seni be�Yenen ki�Yiler burada g�r�necek.
+              Seni beğenen kişiler burada görünecek.
             </Text>
           </View>
         ) : null}
 
-        {/* BEGENENLER */}
+        {/* BEĞENENLER */}
 
         <View style={styles.liste}>
           {begenenler.map(({ begeni, kullanici, profil }) => {
             const yas = yasHesapla(kullanici?.birthDate);
 
             const adSoyad = [kullanici?.firstName, kullanici?.lastName]
+
               .filter(Boolean)
+
               .join(" ");
 
             const foto = fotoUrlOlustur(
@@ -541,27 +669,31 @@ export default function Begenenler() {
                         source={{
                           uri: foto,
                         }}
+
                         style={styles.foto}
+
                         resizeMode="cover"
                       />
                     ) : (
                       <View style={styles.fotoPlaceholder}>
                         <Text style={styles.fotoPlaceholderText}>
                           {(adSoyad || kullanici?.username || "?")
+
                             .charAt(0)
+
                             .toUpperCase()}
                         </Text>
                       </View>
                     )}
                   </View>
 
-                  {/* BILGILER */}
+                  {/* BİLGİLER */}
 
                   <View style={styles.bilgiler}>
                     <Text style={styles.adSoyad} numberOfLines={1}>
                       {adSoyad ||
                         kullanici?.username ||
-                        `Kullanici #${begenenKullaniciId}`}
+                        `Kullanıcı #${begenenKullaniciId}`}
                     </Text>
 
                     {kullanici?.username ? (
@@ -571,7 +703,7 @@ export default function Begenenler() {
                     ) : null}
 
                     {yas !== null ? (
-                      <Text style={styles.detay}>{yas} ya�Yinda</Text>
+                      <Text style={styles.detay}>{yas} yaşında</Text>
                     ) : null}
 
                     {kullanici?.city ? (
@@ -588,17 +720,18 @@ export default function Begenenler() {
                       <Text style={styles.detay}>{kullanici.gender}</Text>
                     ) : null}
 
-                    <Text style={styles.begeniBilgisi}>Seni be�Yendi ??</Text>
+                    <Text style={styles.begeniBilgisi}>Seni beğendi ♡</Text>
                   </View>
                 </View>
 
-                {/* PROFILI G�-R */}
+                {/* PROFİLİ GÖR */}
 
                 <Pressable
                   style={styles.profilButonu}
+
                   onPress={() => profileGit(begenenKullaniciId)}
                 >
-                  <Text style={styles.profilButonuText}>gY'� Profili G�r</Text>
+                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
                 </Pressable>
               </View>
             );
@@ -610,168 +743,243 @@ export default function Begenenler() {
 }
 
 /*
+
  * =========================================================
+
  * STYLES
+
  * =========================================================
+
  */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+
     backgroundColor: "#faf7ff",
   },
 
   scrollContainer: {
     paddingHorizontal: 16,
+
     paddingBottom: 30,
   },
 
   yukleniyorContainer: {
     flex: 1,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     paddingHorizontal: 30,
   },
 
   yukleniyorText: {
     marginTop: 14,
+
     fontSize: 15,
+
     color: "#9d174d",
+
     fontWeight: "600",
+
     textAlign: "center",
   },
 
   geriButonu: {
     alignSelf: "flex-start",
+
     minHeight: 48,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     marginTop: 8,
+
     marginBottom: 12,
   },
 
   geriIcon: {
     fontSize: 36,
+
     lineHeight: 36,
+
     color: "#6d28d9",
+
     marginRight: 3,
   },
 
   geriText: {
     fontSize: 15,
+
     fontWeight: "700",
+
     color: "#6d28d9",
   },
 
   baslikKart: {
     flexDirection: "row",
+
     alignItems: "center",
+
     padding: 18,
+
     borderRadius: 20,
+
     borderWidth: 1,
+
     borderColor: "#fbcfe8",
+
     backgroundColor: "#fff1f2",
+
     marginBottom: 18,
   },
 
   baslikIkonKutusu: {
     width: 58,
+
     height: 58,
+
     minWidth: 58,
+
     borderRadius: 15,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     backgroundColor: "#fce7f3",
   },
 
   baslikIkon: {
     fontSize: 32,
+
     color: "#ec4899",
   },
 
   baslikBilgi: {
     flex: 1,
+
     marginLeft: 14,
   },
 
   baslik: {
     fontSize: 21,
+
     fontWeight: "800",
+
     color: "#9d174d",
   },
 
   baslikAciklama: {
     marginTop: 4,
+
     fontSize: 14,
+
     color: "#78716c",
   },
 
   hataKart: {
     padding: 18,
+
     borderRadius: 16,
+
     backgroundColor: "#fff1f2",
+
     borderWidth: 1,
+
     borderColor: "#fecdd3",
+
     marginBottom: 18,
   },
 
   hataBaslik: {
     fontSize: 17,
+
     fontWeight: "800",
+
     color: "#be123c",
+
     marginBottom: 7,
   },
 
   hataText: {
     fontSize: 14,
+
     lineHeight: 21,
+
     color: "#881337",
   },
 
   tekrarButonu: {
     marginTop: 14,
+
     minHeight: 44,
+
     borderRadius: 12,
+
     backgroundColor: "#ec4899",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     paddingHorizontal: 16,
   },
 
   tekrarButonuText: {
     color: "#ffffff",
+
     fontSize: 14,
+
     fontWeight: "700",
   },
 
   bosKart: {
     padding: 30,
+
     borderRadius: 20,
+
     borderWidth: 1,
+
     borderColor: "#eadcff",
+
     backgroundColor: "#ffffff",
+
     alignItems: "center",
+
     marginBottom: 18,
   },
 
   bosIkon: {
     fontSize: 55,
+
     color: "#ec4899",
   },
 
   bosBaslik: {
     marginTop: 14,
+
     fontSize: 18,
+
     fontWeight: "700",
+
     color: "#5b21b6",
+
     textAlign: "center",
   },
 
   bosText: {
     marginTop: 8,
+
     fontSize: 14,
+
     lineHeight: 21,
+
     color: "#78716c",
+
     textAlign: "center",
   },
 
@@ -781,91 +989,129 @@ const styles = StyleSheet.create({
 
   kullaniciKart: {
     marginBottom: 16,
+
     padding: 16,
+
     borderRadius: 20,
+
     borderWidth: 1,
+
     borderColor: "#eadcff",
+
     backgroundColor: "#ffffff",
   },
 
   kullaniciUst: {
     flexDirection: "row",
+
     alignItems: "flex-start",
   },
 
   fotoContainer: {
     width: 82,
+
     height: 82,
+
     borderRadius: 41,
+
     overflow: "hidden",
+
     backgroundColor: "#fce7f3",
+
     flexShrink: 0,
   },
 
   foto: {
     width: 82,
+
     height: 82,
   },
 
   fotoPlaceholder: {
     width: 82,
+
     height: 82,
+
     borderRadius: 41,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     backgroundColor: "#fce7f3",
   },
 
   fotoPlaceholderText: {
     fontSize: 32,
+
     fontWeight: "800",
+
     color: "#ec4899",
   },
 
   bilgiler: {
     flex: 1,
+
     minWidth: 0,
+
     marginLeft: 14,
   },
 
   adSoyad: {
     fontSize: 18,
+
     fontWeight: "800",
+
     color: "#5b21b6",
   },
 
   kullaniciAdi: {
     marginTop: 3,
+
     fontSize: 14,
+
     color: "#78716c",
   },
 
   detay: {
     marginTop: 5,
+
     fontSize: 14,
+
     color: "#57534e",
   },
 
   begeniBilgisi: {
     marginTop: 8,
+
     fontSize: 14,
+
     fontWeight: "700",
+
     color: "#ec4899",
   },
 
   profilButonu: {
     marginTop: 16,
+
     minHeight: 48,
+
     borderRadius: 14,
+
     backgroundColor: "#7c3aed",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     paddingHorizontal: 16,
   },
 
   profilButonuText: {
     color: "#ffffff",
+
     fontSize: 15,
+
     fontWeight: "800",
   },
 });

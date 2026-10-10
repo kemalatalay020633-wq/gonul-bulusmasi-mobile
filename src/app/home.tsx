@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -6,7 +6,6 @@ import {
   FlatList,
   Image,
   Modal,
-  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -19,7 +18,7 @@ import {
 // src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
 
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -102,7 +101,7 @@ const bosFiltreler: Filtreler = {
 };
 
 export default function Home() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [users, setUsers] = useState<DiscoverUser[]>([]);
   const [loading, setLoading] = useState(true);
@@ -160,11 +159,11 @@ export default function Home() {
     return yas;
   };
 
-  const fotoğrafVarMi = (profile: Profile | null): boolean => {
+  const fotografVarMi = (profile: Profile | null): boolean => {
     return Boolean(profile?.profilePhoto && profile.profilePhoto.trim() !== "");
   };
 
-  const fotoğrafUrlOlustur = (photo?: string | null): string | null => {
+  const fotografUrlOlustur = (photo?: string | null): string | null => {
     if (!photo) {
       return null;
     }
@@ -195,7 +194,7 @@ export default function Home() {
       const userIdString = await AsyncStorage.getItem("userId");
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
         return;
       }
 
@@ -204,7 +203,7 @@ export default function Home() {
       if (!mevcutUserId || Number.isNaN(mevcutUserId)) {
         await AsyncStorage.multiRemove(["token", "userId", "username", "role"]);
 
-        router.replace("/");
+        navigation.replace("index");
         return;
       }
 
@@ -393,7 +392,7 @@ export default function Home() {
         return false;
       }
 
-      const fotografVar = fotoğrafVarMi(profile);
+      const fotografVar = fotografVarMi(profile);
 
       if (filtreler.onlyWithPhoto && !fotografVar) {
         return false;
@@ -445,8 +444,8 @@ export default function Home() {
         return 1;
       }
 
-      const aFoto = fotoğrafVarMi(a.profile);
-      const bFoto = fotoğrafVarMi(b.profile);
+      const aFoto = fotografVarMi(a.profile);
+      const bFoto = fotografVarMi(b.profile);
 
       if (aFoto && !bFoto) {
         return -1;
@@ -503,7 +502,7 @@ export default function Home() {
                 "role",
               ]);
 
-              router.replace("/");
+              navigation.replace("index");
             } catch (hata) {
               console.error("ÇIKIŞ HATASI:", hata);
             }
@@ -520,27 +519,27 @@ export default function Home() {
     );
   };
   const begenenleriAc = () => {
-    router.push("/begenenler");
+    navigation.navigate("begenenler");
   };
 
   const profilimeBakanlariAc = () => {
-    router.push("/profilime-bakanlar");
+    navigation.navigate("profilimeBakanlar");
   };
 
   const favorilerimeEkleyenleriAc = () => {
-    router.push("/favorilerime-ekleyenler");
+    navigation.navigate("favorilerimeEkleyenler");
   };
   const profilAc = (userId: number) => {
-    router.push(`/user/${userId}`);
+    navigation.navigate("user", { id: String(userId) });
   };
 
   const mesajlariAc = () => {
-    router.push("/messages");
+    navigation.navigate("messages");
   };
 
   // Kendi profil sayfasına git
   const profilimiAc = () => {
-    router.push("/profile");
+    navigation.navigate("profile");
   };
 
   const filtreGuncelle = (alan: keyof Filtreler, deger: string | boolean) => {
@@ -555,22 +554,22 @@ export default function Home() {
 
     const yas = yasHesapla(user.birthDate);
 
-    const fotoğraf = fotoğrafUrlOlustur(profile?.profilePhoto);
+    const fotograf = fotografUrlOlustur(profile?.profilePhoto);
 
-    const fotografVar = fotoğrafVarMi(profile);
+    const fotografVar = fotografVarMi(profile);
 
     return (
       <View style={styles.kullaniciKart}>
-        <View style={styles.fotoğrafAlani}>
-          {fotoğraf ? (
+        <View style={styles.fotografAlani}>
+          {fotograf ? (
             <Image
-              source={{ uri: fotoğraf }}
-              style={styles.fotoğraf}
+              source={{ uri: fotograf }}
+              style={styles.fotograf}
               resizeMode="cover"
             />
           ) : (
-            <View style={styles.varsayilanFotoğraf}>
-              <Text style={styles.varsayilanFotoğrafMetin}>👤</Text>
+            <View style={styles.varsayilanFotograf}>
+              <Text style={styles.varsayilanFotografMetin}>👤</Text>
             </View>
           )}
 
@@ -639,8 +638,8 @@ export default function Home() {
             )}
 
             {fotografVar && (
-              <View style={styles.fotoğrafEtiket}>
-                <Text style={styles.fotoğrafEtiketMetin}>📷 Fotoğraflı</Text>
+              <View style={styles.fotografEtiket}>
+                <Text style={styles.fotografEtiketMetin}>📷 Fotoğraflı</Text>
               </View>
             )}
 
@@ -1477,25 +1476,25 @@ const styles = StyleSheet.create({
     },
   },
 
-  fotoğrafAlani: {
+  fotografAlani: {
     height: 235,
     backgroundColor: "#ede9fe",
     position: "relative",
   },
 
-  fotoğraf: {
+  fotograf: {
     width: "100%",
     height: "100%",
   },
 
-  varsayilanFotoğraf: {
+  varsayilanFotograf: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#ede9fe",
   },
 
-  varsayilanFotoğrafMetin: {
+  varsayilanFotografMetin: {
     fontSize: 72,
   },
 
@@ -1601,14 +1600,14 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  fotoğrafEtiket: {
+  fotografEtiket: {
     backgroundColor: "#ede9fe",
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
   },
 
-  fotoğrafEtiketMetin: {
+  fotografEtiketMetin: {
     color: "#6d28d9",
     fontSize: 11,
     fontWeight: "800",

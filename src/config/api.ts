@@ -1,11 +1,9 @@
 import { Platform } from "react-native";
 
-export const SUNUCU_IP = "192.168.1.2";
-
+export const SUNUCU_IP = "192.168.1.6";
 export const SUNUCU_PORT = 8081;
 
 export const API_BASE_URL = `http://${SUNUCU_IP}:${SUNUCU_PORT}`;
-
 export const WS_BASE_URL = `ws://${SUNUCU_IP}:${SUNUCU_PORT}`;
 
 export const API_URL = API_BASE_URL;

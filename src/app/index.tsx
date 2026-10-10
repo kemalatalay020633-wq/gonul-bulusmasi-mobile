@@ -1,4 +1,7 @@
+import { useNavigation } from "@react-navigation/native";
+
 import { useState } from "react";
+
 import {
   Alert,
   Image,
@@ -9,13 +12,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 // src/app/home.tsx
 // src/app/index.tsx
 import { API_BASE_URL } from "../config/api";
-console.log("INDEX DOSYASI �?ALISIYOR");
+
+console.log("INDEX DOSYASI ÇALIŞIYOR");
 
 // =====================================================
 // BACKEND API ADRESI
@@ -24,8 +28,9 @@ console.log("INDEX DOSYASI �?ALISIYOR");
 const API_ADRESI = API_BASE_URL + "/api";
 
 const SUNUCU_ADRESI = API_BASE_URL;
+
 export default function AnaSayfa() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [kullaniciAdi, setKullaniciAdi] = useState("");
   const [sifre, setSifre] = useState("");
@@ -41,14 +46,14 @@ export default function AnaSayfa() {
     console.log("GIRIS BUTONUNA BASILDI");
 
     if (!kullaniciAdi.trim() || !sifre.trim()) {
-      setMesaj("Kullanici adi ve �Yifre zorunludur.");
-      setDebugMesaj("Kullanici adi veya �Yifre bo�Y.");
+      setMesaj("Kullanıcı adı ve Şifre zorunludur.");
+      setDebugMesaj("Kullanıcı adı veya Şifre boş.");
       return;
     }
 
     setYukleniyor(true);
     setMesaj("");
-    setDebugMesaj("1 - Login iste�Yi hazirlaniyor");
+    setDebugMesaj("1 - Login isteği hazırlanıyor");
 
     const xhr = new XMLHttpRequest();
 
@@ -91,7 +96,7 @@ export default function AnaSayfa() {
           console.log("ROLE KAYDEDILDI:", veri.role);
 
           // =====================================================
-          // ASYNCSTORAGE KONTROL�o
+          // ASYNCSTORAGE KONTROLÜ
           // =====================================================
 
           const kayitliToken = await AsyncStorage.getItem("token");
@@ -114,13 +119,13 @@ export default function AnaSayfa() {
           console.log("KAYITLI ROLE:", kayitliRole);
 
           // =====================================================
-          // JWT KONTROL�o
+          // JWT KONTROLÜ
           // =====================================================
 
           if (!kayitliToken) {
             console.log("JWT KAYDEDILEMEDI");
 
-            setMesaj("Giri�Y yapildi ancak oturum bilgisi kaydedilemedi.");
+            setMesaj("Giriş yapıldı ancak oturum bilgisi kaydedilemedi.");
 
             setDebugMesaj("JWT AsyncStorage'a kaydedilemedi.");
 
@@ -135,10 +140,10 @@ export default function AnaSayfa() {
 
           console.log("LOGIN BASARILI");
 
-          setMesaj("Giri�Y ba�Yarili!");
+          setMesaj("Giriş başarılı!");
 
           setDebugMesaj(
-            `Giri�Y ba�Yarili
+            `Giriş başarılı
 Kullanici: ${kayitliUsername}
 User ID: ${kayitliUserId}
 Rol: ${kayitliRole}
@@ -146,42 +151,56 @@ JWT: Kaydedildi`,
           );
 
           // =====================================================
-          // ANA SAYFAYA GE�?
+          // ANA SAYFAYA GEÇİŞ
           // =====================================================
 
-          console.log("ANA SAYFAYA Y�-NLENDIRILIYOR: /home");
+          console.log("ANA SAYFAYA YÖNLENDİRİLİYOR: /home");
 
           setYukleniyor(false);
 
           setTimeout(() => {
-            router.replace("/home");
+            navigation.reset({
+              index: 0,
+              routes: [{ name: "home" }],
+            });
           }, 500);
         } catch (hata) {
           console.log("LOGIN JSON / STORAGE HATASI:", hata);
 
-          setMesaj("Giri�Y ba�Yarili ancak kullanici bilgileri kaydedilemedi.");
+          setMesaj("Giriş başarılı ancak kullanıcı bilgileri kaydedilemedi.");
 
-          setDebugMesaj(`JWT kaydetme hatasi\n${String(hata)}`);
+          setDebugMesaj(`JWT kaydetme hatası
+${String(hata)}`);
 
           setYukleniyor(false);
         }
       } else if (xhr.status === 401) {
-        setMesaj("Kullanici adi veya �Yifre hatali.");
+        setMesaj("Kullanıcı adı veya Şifre hatalı.");
 
-        setDebugMesaj(`Login reddedildi\nHTTP: 401\n${xhr.responseText}`);
+        setDebugMesaj(
+          `Login reddedildi
+HTTP: 401
+${xhr.responseText}`,
+        );
 
         setYukleniyor(false);
       } else if (xhr.status === 400) {
-        setMesaj("G�nderilen bilgiler ge�ersiz.");
+        setMesaj("Gönderilen bilgiler geçersiz.");
 
-        setDebugMesaj(`Ge�ersiz istek\nHTTP: 400\n${xhr.responseText}`);
+        setDebugMesaj(
+          `Geçersiz istek
+HTTP: 400
+${xhr.responseText}`,
+        );
 
         setYukleniyor(false);
       } else {
-        setMesaj(`Giri�Y ba�Yarisiz. HTTP ${xhr.status}`);
+        setMesaj(`Giriş başarısız. HTTP ${xhr.status}`);
 
         setDebugMesaj(
-          `Backend hatasi\nHTTP: ${xhr.status}\n${xhr.responseText}`,
+          `Backend hatası
+HTTP: ${xhr.status}
+${xhr.responseText}`,
         );
 
         setYukleniyor(false);
@@ -195,9 +214,9 @@ JWT: Kaydedildi`,
     xhr.onerror = () => {
       console.log("LOGIN NETWORK HATASI");
 
-      setDebugMesaj("4 - Login network hatasi");
+      setDebugMesaj("4 - Login network hatası");
 
-      setMesaj("Backend'e ba�Ylanirken network hatasi olu�Ytu.");
+      setMesaj("Backend'e bağlanırken network hatası oluştu.");
 
       setYukleniyor(false);
     };
@@ -209,9 +228,9 @@ JWT: Kaydedildi`,
     xhr.ontimeout = () => {
       console.log("LOGIN TIMEOUT");
 
-      setDebugMesaj("4 - Login iste�Yi 10 saniyede cevap vermedi");
+      setDebugMesaj("4 - Login isteği 10 saniyede cevap vermedi");
 
-      setMesaj("Sunucu zaman a�Yimina u�Yradi.");
+      setMesaj("Sunucu zaman aşımına uğradı.");
 
       setYukleniyor(false);
     };
@@ -247,8 +266,8 @@ JWT: Kaydedildi`,
     console.log("SIFREMI UNUTTUM BASILDI");
 
     Alert.alert(
-      "Sifremi Unuttum",
-      "Sifre sifirlama ekranini daha sonra ekleyece�Yiz.",
+      "Şifremi Unuttum",
+      "Şifre sıfırlama ekranını daha sonra ekleyeceğiz.",
     );
   };
 
@@ -259,7 +278,7 @@ JWT: Kaydedildi`,
   const kayitOl = () => {
     console.log("KAYIT OL BASILDI");
 
-    router.push("/register");
+    navigation.navigate("register");
   };
 
   // =============================================================
@@ -271,7 +290,7 @@ JWT: Kaydedildi`,
       <View style={styles.klavye}>
         <View style={styles.kart}>
           {/* =====================================================
-              LOGO - EN �oST
+              LOGO - EN ÜST
               ===================================================== */}
 
           <View style={styles.logoAlan}>
@@ -286,19 +305,19 @@ JWT: Kaydedildi`,
               BASLIK
               ===================================================== */}
 
-          <Text style={styles.baslik}>G�n�l Bulu�Ymasi</Text>
+          <Text style={styles.baslik}>Gönül Buluşması</Text>
 
-          <Text style={styles.altBaslik}>Hayatinin g�zel insaniyla tanı�Y</Text>
+          <Text style={styles.altBaslik}>Hayatının güzel insanıyla tanış</Text>
 
           {/* =====================================================
               KULLANICI ADI
               ===================================================== */}
 
-          <Text style={styles.etiket}>Kullanici Adi</Text>
+          <Text style={styles.etiket}>Kullanıcı Adı</Text>
 
           <TextInput
             style={styles.girdi}
-            placeholder="Kullanici adiniz"
+            placeholder="Kullanıcı adınız"
             placeholderTextColor="#999"
             value={kullaniciAdi}
             onChangeText={setKullaniciAdi}
@@ -311,11 +330,11 @@ JWT: Kaydedildi`,
               SIFRE
               ===================================================== */}
 
-          <Text style={styles.etiket}>Sifre</Text>
+          <Text style={styles.etiket}>Şifre</Text>
 
           <TextInput
             style={styles.girdi}
-            placeholder="Sifreniz"
+            placeholder="Şifreniz"
             placeholderTextColor="#999"
             value={sifre}
             onChangeText={setSifre}
@@ -334,7 +353,7 @@ JWT: Kaydedildi`,
             onPress={sifremiUnuttum}
             disabled={yukleniyor}
           >
-            <Text style={styles.link}>Sifremi Unuttum</Text>
+            <Text style={styles.link}>Şifremi Unuttum</Text>
           </Pressable>
 
           {/* =====================================================
@@ -347,7 +366,7 @@ JWT: Kaydedildi`,
             disabled={yukleniyor}
           >
             <Text style={styles.girisYazi}>
-              {yukleniyor ? "Giri�Y yapiliyor..." : "Giri�Y Yap"}
+              {yukleniyor ? "Giriş yapılıyor..." : "Giriş Yap"}
             </Text>
           </Pressable>
 
@@ -374,10 +393,10 @@ JWT: Kaydedildi`,
               ===================================================== */}
 
           <View style={styles.kayitSatiri}>
-            <Text style={styles.kayitMetni}>Hesabin yok mu? </Text>
+            <Text style={styles.kayitMetni}>Hesabın yok mu? </Text>
 
             <Pressable onPress={kayitOl} disabled={yukleniyor}>
-              <Text style={styles.link}>Kayit Ol</Text>
+              <Text style={styles.link}>Kayıt Ol</Text>
             </Pressable>
           </View>
         </View>
@@ -598,4 +617,3 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
-

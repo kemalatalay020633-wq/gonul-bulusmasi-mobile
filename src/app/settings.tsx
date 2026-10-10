@@ -11,13 +11,13 @@ import {
 } from "react-native";
 // src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_ADRESI = API_BASE_URL + "/api";
 
 export default function Settings() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [siliniyor, setSiliniyor] = useState(false);
   const [hata, setHata] = useState("");
@@ -29,7 +29,7 @@ export default function Settings() {
    */
 
   const anaSayfayaGit = () => {
-    router.push("/home");
+    navigation.navigate("home");
   };
 
   /*
@@ -39,17 +39,17 @@ export default function Settings() {
    */
 
   const profileGit = () => {
-    router.push("/profile");
+    navigation.navigate("profile");
   };
 
   /*
    * =========================================================
-   * PROFIL D�oZENLE
+   * PROFIL Dï¿½oZENLE
    * =========================================================
    */
 
   const profilDuzenleyeGit = () => {
-    router.push("/profile/edit");
+    navigation.navigate("profileEdit");
   };
 
   /*
@@ -59,7 +59,7 @@ export default function Settings() {
    */
 
   const mesajlaraGit = () => {
-    router.push("/messages");
+    navigation.navigate("messages");
   };
 
   /*
@@ -73,10 +73,10 @@ export default function Settings() {
 
     Alert.alert(
       "Hesabi Sil",
-      "Hesabinizi silmek istedi�Yinizden emin misiniz?\n\nBu i�Ylem geri alinamaz. Profiliniz, mesajlariniz, medya dosyalariniz ve hesabiniza ait di�Yer veriler silinebilir.",
+      "Hesabinizi silmek istediï¿½Yinizden emin misiniz?\n\nBu iï¿½Ylem geri alinamaz. Profiliniz, mesajlariniz, medya dosyalariniz ve hesabiniza ait diï¿½Yer veriler silinebilir.",
       [
         {
-          text: "Vazge�",
+          text: "Vazgeï¿½",
           style: "cancel",
         },
         {
@@ -104,11 +104,11 @@ export default function Settings() {
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
-        setHata("Oturum bulunamadi. L�tfen tekrar giri�Y yapin.");
+        setHata("Oturum bulunamadi. Lï¿½tfen tekrar giriï¿½Y yapin.");
 
         Alert.alert(
           "Oturum Bulunamadi",
-          "Oturumunuz bulunamadi. L�tfen tekrar giri�Y yapin.",
+          "Oturumunuz bulunamadi. Lï¿½tfen tekrar giriï¿½Y yapin.",
         );
 
         return;
@@ -162,15 +162,15 @@ export default function Settings() {
 
       /*
        * =====================================================
-       * GIRIS SAYFASINA D�-N
+       * GIRIS SAYFASINA Dï¿½-N
        * =====================================================
        */
 
-      Alert.alert("Hesap Silindi", "Hesabiniz ba�Yariyla silindi.", [
+      Alert.alert("Hesap Silindi", "Hesabiniz baï¿½Yariyla silindi.", [
         {
           text: "Tamam",
           onPress: () => {
-            router.replace("/");
+            navigation.replace("index");
           },
         },
       ]);
@@ -180,7 +180,7 @@ export default function Settings() {
       const hataMesaji =
         error instanceof Error
           ? error.message
-          : "Hesap silinirken beklenmeyen bir hata olu�Ytu.";
+          : "Hesap silinirken beklenmeyen bir hata oluï¿½Ytu.";
 
       setHata(hataMesaji);
 
@@ -213,19 +213,19 @@ export default function Settings() {
         showsVerticalScrollIndicator={false}
       >
         {/* =================================================
-            �oST BASLIK
+            ï¿½oST BASLIK
         ================================================= */}
 
         <View style={styles.header}>
           <Pressable style={styles.anaSayfaButonu} onPress={anaSayfayaGit}>
-            <Text style={styles.anaSayfaIcon}>�?�</Text>
+            <Text style={styles.anaSayfaIcon}>ï¿½?ï¿½</Text>
 
             <Text style={styles.anaSayfaText}>Ana Sayfa</Text>
           </Pressable>
 
           <View style={styles.baslikAlani}>
             <View style={styles.baslikIconKutusu}>
-              <Text style={styles.baslikIcon}>�sT</Text>
+              <Text style={styles.baslikIcon}>ï¿½sT</Text>
             </View>
 
             <View>
@@ -248,11 +248,11 @@ export default function Settings() {
 
         {hata ? (
           <Pressable style={styles.hataKart} onPress={hatayiTemizle}>
-            <Text style={styles.hataBaslik}>�s� Bir hata olu�Ytu</Text>
+            <Text style={styles.hataBaslik}>ï¿½sï¿½ Bir hata oluï¿½Ytu</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
-            <Text style={styles.hataKapat}>Kapatmak i�in dokunun</Text>
+            <Text style={styles.hataKapat}>Kapatmak iï¿½in dokunun</Text>
           </Pressable>
         ) : null}
 
@@ -264,7 +264,7 @@ export default function Settings() {
           <Text style={styles.sectionTitle}>Hesap</Text>
 
           <Text style={styles.sectionDescription}>
-            Profilinizi ve mesajla�Yma se�eneklerinizi y�netin.
+            Profilinizi ve mesajlaï¿½Yma seï¿½eneklerinizi yï¿½netin.
           </Text>
         </View>
 
@@ -281,24 +281,24 @@ export default function Settings() {
             onPress={profileGit}
           >
             <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>gY'�</Text>
+              <Text style={styles.settingsIcon}>gY'ï¿½</Text>
             </View>
 
             <View style={styles.settingsItemContent}>
               <Text style={styles.settingsItemTitle}>Profilim</Text>
 
               <Text style={styles.settingsItemDescription}>
-                Profilinizi g�r�nt�leyin
+                Profilinizi gï¿½rï¿½ntï¿½leyin
               </Text>
             </View>
 
-            <Text style={styles.settingsArrow}>�?�</Text>
+            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
           </Pressable>
 
           <View style={styles.itemDivider} />
 
           {/* =================================================
-              PROFIL D�oZENLE
+              PROFIL Dï¿½oZENLE
           ================================================= */}
 
           <Pressable
@@ -309,18 +309,18 @@ export default function Settings() {
             onPress={profilDuzenleyeGit}
           >
             <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>�o�️</Text>
+              <Text style={styles.settingsIcon}>ï¿½oï¿½ï¸</Text>
             </View>
 
             <View style={styles.settingsItemContent}>
-              <Text style={styles.settingsItemTitle}>Profili D�zenle</Text>
+              <Text style={styles.settingsItemTitle}>Profili Dï¿½zenle</Text>
 
               <Text style={styles.settingsItemDescription}>
-                Profil bilgilerinizi g�ncelleyin
+                Profil bilgilerinizi gï¿½ncelleyin
               </Text>
             </View>
 
-            <Text style={styles.settingsArrow}>�?�</Text>
+            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
           </Pressable>
 
           <View style={styles.itemDivider} />
@@ -337,18 +337,18 @@ export default function Settings() {
             onPress={mesajlaraGit}
           >
             <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>gY'�</Text>
+              <Text style={styles.settingsIcon}>gY'ï¿½</Text>
             </View>
 
             <View style={styles.settingsItemContent}>
               <Text style={styles.settingsItemTitle}>Mesajlar</Text>
 
               <Text style={styles.settingsItemDescription}>
-                Mesajla�Ymalarinizi g�r�nt�leyin
+                Mesajlaï¿½Ymalarinizi gï¿½rï¿½ntï¿½leyin
               </Text>
             </View>
 
-            <Text style={styles.settingsArrow}>�?�</Text>
+            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
           </Pressable>
         </View>
 
@@ -362,17 +362,17 @@ export default function Settings() {
           </View>
 
           <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Hesap g�venli�Yi</Text>
+            <Text style={styles.infoTitle}>Hesap gï¿½venliï¿½Yi</Text>
 
             <Text style={styles.infoText}>
-              Hesap bilgilerinizi g�ncel tutun ve profilinizde yalnizca
-              payla�Ymak istedi�Yiniz bilgileri bulundurun.
+              Hesap bilgilerinizi gï¿½ncel tutun ve profilinizde yalnizca
+              paylaï¿½Ymak istediï¿½Yiniz bilgileri bulundurun.
             </Text>
           </View>
         </View>
 
         {/* =================================================
-            TEHLIKELI B�-LGE
+            TEHLIKELI Bï¿½-LGE
         ================================================= */}
 
         <View style={styles.dangerSection}>
@@ -382,18 +382,18 @@ export default function Settings() {
             </View>
 
             <View style={styles.dangerHeaderContent}>
-              <Text style={styles.dangerTitle}>Tehlikeli B�lge</Text>
+              <Text style={styles.dangerTitle}>Tehlikeli Bï¿½lge</Text>
 
               <Text style={styles.dangerDescription}>
-                Hesabinizi kalici olarak silme i�Ylemi
+                Hesabinizi kalici olarak silme iï¿½Ylemi
               </Text>
             </View>
           </View>
 
           <View style={styles.dangerContent}>
             <Text style={styles.dangerText}>
-              Hesabinizi sildi�Yinizde profil bilgileriniz, mesajlariniz, medya
-              dosyalariniz ve hesabiniza ait di�Yer veriler kalici olarak
+              Hesabinizi sildiï¿½Yinizde profil bilgileriniz, mesajlariniz, medya
+              dosyalariniz ve hesabiniza ait diï¿½Yer veriler kalici olarak
               silinebilir.
             </Text>
 
@@ -432,7 +432,7 @@ export default function Settings() {
         ================================================= */}
 
         <View style={styles.footer}>
-          <Text style={styles.footerBrand}>G�n�l Bulu�Ymasi</Text>
+          <Text style={styles.footerBrand}>Gï¿½nï¿½l Buluï¿½Ymasi</Text>
 
           <Text style={styles.footerText}>Hesap Ayarlari</Text>
         </View>

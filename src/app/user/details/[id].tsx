@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -7,8 +9,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useLocalSearchParams, useRouter } from "expo-router";
 // src/app/home.tsx
 // src/app/user/details/[id].tsx
 import { API_BASE_URL } from "../../../config/api";
@@ -68,13 +68,14 @@ type EnumSecenegi = {
 };
 
 export default function ProfilDetay() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
-  const params = useLocalSearchParams<{ id: string }>();
+  const route = useRoute<any>();
+  const params = route.params as { id: string };
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  const hedefKullaniciId = id ? Number(id) : null;
+  const hedefKullanıcıId = id ? Number(id) : null;
 
   const [user, setUser] = useState<User | null>(null);
 
@@ -110,7 +111,7 @@ export default function ProfilDetay() {
     const text = await response.text();
 
     if (!response.ok) {
-      throw new Error(text || `Istek ba�Yarisiz. HTTP ${response.status}`);
+      throw new Error(text || `İstek başarısız. HTTP ${response.status}`);
     }
 
     if (!text.trim()) {
@@ -144,12 +145,12 @@ export default function ProfilDetay() {
     kod: string | number | null,
   ) => {
     if (kod === null || kod === undefined || String(kod).trim() === "") {
-      return "Belirtilmemi�Y";
+      return "Belirtilmemiş";
     }
 
     const bulunan = liste.find((item) => Number(item.kod) === Number(kod));
 
-    return bulunan?.aciklama ?? "Belirtilmemi�Y";
+    return bulunan?.aciklama ?? "Belirtilmemiş";
   };
 
   const soruMetniniGetir = (soruId: number) => {
@@ -159,12 +160,12 @@ export default function ProfilDetay() {
   };
 
   const profilDon = () => {
-    if (!hedefKullaniciId) {
-      router.replace("/home");
+    if (!hedefKullanıcıId) {
+      navigation.replace("home");
       return;
     }
 
-    router.replace(`/user/${hedefKullaniciId}`);
+    navigation.replace("user", { id: String(hedefKullanıcıId) });
   };
 
   useEffect(() => {
@@ -183,13 +184,13 @@ export default function ProfilDetay() {
 
         console.log("ROUTE PARAMETRESI:", params);
 
-        console.log("HEDEF KULLANICI:", hedefKullaniciId);
+        console.log("HEDEF KULLANICI:", hedefKullanıcıId);
 
         if (!token) {
           console.log("TOKEN BULUNAMADI");
 
           if (aktif) {
-            router.replace("/");
+            navigation.replace("index");
           }
 
           return;
@@ -197,15 +198,15 @@ export default function ProfilDetay() {
 
         console.log("TOKEN VAR");
 
-        if (!hedefKullaniciId) {
-          throw new Error("Kullanici profili bulunamadi.");
+        if (!hedefKullanıcıId) {
+          throw new Error("Kullanıcı profili bulunamadi.");
         }
 
         // ========================================
         // 1. KULLANICI
         // ========================================
 
-        const kullanici = await apiGetir(`/users/${hedefKullaniciId}`, token);
+        const kullanici = await apiGetir(`/users/${hedefKullanıcıId}`, token);
 
         if (!aktif) {
           return;
@@ -230,7 +231,7 @@ export default function ProfilDetay() {
         const hedefProfil =
           profiller.find(
             (profil: Profile) =>
-              Number(profil.userId) === Number(hedefKullaniciId),
+              Number(profil.userId) === Number(hedefKullanıcıId),
           ) || null;
 
         setProfile(hedefProfil);
@@ -320,10 +321,10 @@ export default function ProfilDetay() {
 
           console.log("ILGI ALANLARI:", ilgi);
         } catch (enumHatasi) {
-          console.log("ENUM Y�oKLEME HATASI:", enumHatasi);
+          console.log("ENUM YÜKLEME HATASI:", enumHatasi);
         }
 
-        console.log("PROFIL DETAY Y�oKLEME TAMAMLANDI");
+        console.log("PROFİL DETAY YÜKLEME TAMAMLANDI");
 
         console.log("========================================");
       } catch (error) {
@@ -336,7 +337,7 @@ export default function ProfilDetay() {
         if (error instanceof Error) {
           setHata(error.message);
         } else {
-          setHata("Profil detaylari alinamadi.");
+          setHata("Profil detayları alinamadi.");
         }
       } finally {
         if (aktif) {
@@ -350,10 +351,10 @@ export default function ProfilDetay() {
     return () => {
       aktif = false;
     };
-  }, [hedefKullaniciId]);
+  }, [hedefKullanıcıId]);
 
   // ========================================
-  // Y�oKLENIYOR
+  // YÜKLENİYOR
   // ========================================
 
   if (yukleniyor) {
@@ -362,7 +363,7 @@ export default function ProfilDetay() {
         <ActivityIndicator size="large" />
 
         <Text style={styles.yukleniyorText}>
-          Profil detaylari y�kleniyor...
+          Profil detayları yükleniyor...
         </Text>
       </View>
     );
@@ -381,7 +382,7 @@ export default function ProfilDetay() {
           <Text style={styles.hataText}>{hata}</Text>
 
           <TouchableOpacity style={styles.outlineButton} onPress={profilDon}>
-            <Text style={styles.outlineButtonText}>�?� Profile D�n</Text>
+            <Text style={styles.outlineButtonText}>← Profile Dön</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -408,12 +409,12 @@ export default function ProfilDetay() {
         contentContainerStyle={styles.scrollContent}
       >
         {/* ========================================
-            �oST BAR
+            ÜST BAR
         ======================================== */}
 
         <View style={styles.topBar}>
           <TouchableOpacity style={styles.backButton} onPress={profilDon}>
-            <Text style={styles.backText}>�?�</Text>
+            <Text style={styles.backText}>←</Text>
           </TouchableOpacity>
 
           <View style={styles.topTitleArea}>
@@ -434,10 +435,10 @@ export default function ProfilDetay() {
             <Text style={styles.sectionTitle}>Profil Bilgileri</Text>
 
             <View style={styles.summaryBox}>
-              {/* Kullanici adi */}
+              {/* Kullanıcı adi */}
 
               <View style={styles.summaryRow}>
-                <Text style={styles.label}>Kullanici adi</Text>
+                <Text style={styles.label}>Kullanıcı adi</Text>
 
                 <Text style={styles.value}>{user.username}</Text>
               </View>
@@ -452,11 +453,11 @@ export default function ProfilDetay() {
                 </View>
               )}
 
-              {/* Ya�Y */}
+              {/* Yaş */}
 
               {yas !== null && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>Ya�Y</Text>
+                  <Text style={styles.label}>Yaş</Text>
 
                   <Text style={styles.value}>{yas}</Text>
                 </View>
@@ -474,11 +475,11 @@ export default function ProfilDetay() {
                 </View>
               )}
 
-              {/* E�Yitim */}
+              {/* Eğitim */}
 
               {profile?.education && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>E�Yitim</Text>
+                  <Text style={styles.label}>Eğitim</Text>
 
                   <Text style={styles.value}>
                     {enumAciklamasiGetir(egitimler, profile.education)}
@@ -579,7 +580,7 @@ export default function ProfilDetay() {
 
         <View style={styles.sectionCard}>
           <View style={styles.questionHeader}>
-            <Text style={styles.questionIcon}>�"�</Text>
+            <Text style={styles.questionIcon}>❓</Text>
 
             <Text style={styles.sectionTitle}>Sorular ve Cevaplar</Text>
           </View>
@@ -587,7 +588,7 @@ export default function ProfilDetay() {
           {cevaplar.length === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>
-                Bu profil i�in hen�z cevaplanmı�Y soru bulunmuyor.
+                Bu profil için henüz cevaplanmış soru bulunmuyor.
               </Text>
             </View>
           ) : (
@@ -614,14 +615,14 @@ export default function ProfilDetay() {
             style={styles.bottomOutlineButton}
             onPress={profilDon}
           >
-            <Text style={styles.bottomOutlineText}>�?� Profile D�n</Text>
+            <Text style={styles.bottomOutlineText}>← Profile Dön</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.bottomPrimaryButton}
-            onPress={() => router.push("/messages")}
+            onPress={() => navigation.navigate("messages")}
           >
-            <Text style={styles.bottomPrimaryText}>T�m Mesajlar</Text>
+            <Text style={styles.bottomPrimaryText}>Tüm Mesajlar</Text>
           </TouchableOpacity>
         </View>
 
@@ -929,4 +930,3 @@ const styles = StyleSheet.create({
     height: 30,
   },
 });
-

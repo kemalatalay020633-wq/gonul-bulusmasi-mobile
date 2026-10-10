@@ -1,33 +1,39 @@
-import { Alert } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as ImagePicker from "expo-image-picker";
-import * as DocumentPicker from "expo-document-picker";
-import type { MessageMediaDto } from "../types/messageMedia";
-import { File } from "expo-file-system";
-
 import {
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioRecorder,
-} from "expo-audio";
+  errorCodes,
+  isErrorWithCode,
+  pick,
+  types,
+} from "@react-native-documents/picker";
 import { Client, IMessage } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-// src/app/home.tsx
-// src/services/AramaWebRTC.ts
+import { Alert, NativeModules } from "react-native";
+import { launchImageLibrary } from "react-native-image-picker";
+import type { MessageMediaDto } from "../types/messageMedia";
+
+import { useNavigation } from "@react-navigation/native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
+import aramaWebRTC from "../services/AramaWebRTC";
 const API_ADRESI = API_BASE_URL + "/api";
 
-const SUNUCU_ADRESI = API_BASE_URL;
+const { SesKayitModule } = NativeModules as {
+  SesKayitModule?: {
+    startRecorder: () => Promise<string>;
+    stopRecorder: () => Promise<string | null>;
+  };
+};
 
-const SOCKJS_ADRESI = API_BASE_URL + "/ws";
+function sesKayitModuluGetir() {
+  if (!SesKayitModule) {
+    throw new Error(
+      "SesKayitModule bulunamadı. Android native ses kayıt modülü eklenmelidir.",
+    );
+  }
+
+  return SesKayitModule;
+}
+
+const SUNUCU_ADRESI = API_BASE_URL;
 
 const WEBSOCKET_ADRESI = WEBSOCKET_URL;
 export type MessageDto = {
@@ -80,7 +86,7 @@ function useMessages() {
    * STATE
    * =========================================================
    */
-
+  const navigation = useNavigation<any>();
   const [messages, setMessages] = useState<MessageDto[]>([]);
 
   const [conversation, setConversation] = useState<MessageDto[]>([]);
@@ -193,7 +199,7 @@ function useMessages() {
    * =========================================================
    */
 
-  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const audioKayitUriRef = useRef<string | null>(null);
 
   /*
    * =========================================================
@@ -531,7 +537,7 @@ function useMessages() {
          * Sadece yeni WebSocket mesajlarında retry.
          */
         if (yeniMesajMi && deneme < MAX_DENEME) {
-          await new Promise((resolve) => setTimeout(resolve, BEKLEME_MS));
+          await new Promise<void>((resolve) => setTimeout(resolve, BEKLEME_MS));
         }
       }
 
@@ -548,30 +554,150 @@ function useMessages() {
    * =========================================================
    */
 
-  const stompFrameGonder = useCallback((destination: string, body: any) => {
-    const client = stompClientRef.current;
-
-    if (!client || !client.connected || !stompBagliRef.current) {
-      console.log("STOMP MESAJ GÖNDERİLEMEDİ: bağlantı hazır değil.");
-      return false;
-    }
-
+  /*
+   * =========================================================
+   * PREMIUM KONTROLÜ
+   * =========================================================
+   * Mesaj, medya ve arama gibi iletişim özelliklerinde
+   * frontend kontrolü kullanıcı deneyimi içindir. Backend de
+   * ayrıca kontrol edecektir.
+   */
+  const premiumKontrolEt = useCallback(async (): Promise<boolean> => {
     try {
-      client.publish({
-        destination,
-        body: JSON.stringify(body),
+      const token = await getToken();
+
+      if (!token) {
+        Alert.alert(
+          "Oturum gerekli",
+          "Bu özelliği kullanmak için giriş yapmalısınız.",
+        );
+        return false;
+      }
+
+      const response = await fetch(`${API_ADRESI}/memberships/me/premium`, {
+        method: "GET",
         headers: {
-          "content-type": "application/json",
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
       });
 
+      const responseText = await response.text();
+
+      console.log("PREMIUM KONTROL HTTP:", response.status);
+      console.log("PREMIUM KONTROL CEVABI:", responseText);
+
+      if (!response.ok) {
+        throw new Error(
+          `Premium durumu kontrol edilemedi. HTTP ${response.status}`,
+        );
+      }
+
+      let premium = false;
+
+      try {
+        const sonuc: unknown = JSON.parse(responseText);
+
+        if (typeof sonuc === "boolean") {
+          premium = sonuc;
+        } else if (typeof sonuc === "object" && sonuc !== null) {
+          const veri = sonuc as {
+            premium?: unknown;
+            aktif?: unknown;
+          };
+
+          if (typeof veri.premium === "boolean") {
+            premium = veri.premium;
+          } else if (typeof veri.aktif === "boolean") {
+            premium = veri.aktif;
+          }
+        }
+      } catch {
+        premium = responseText.trim().toLowerCase() === "true";
+      }
+
+      console.log("PREMIUM KONTROL SONUCU:", premium);
+
+      if (!premium) {
+        Alert.alert(
+          "🔒 Premium Üyelik Gerekli",
+          "Mesaj, dosya gönderme ve sesli/görüntülü arama özelliklerini kullanabilmek için Premium üye olmanız gerekiyor.",
+          [
+            {
+              text: "Vazgeç",
+              style: "cancel",
+            },
+            {
+              text: "⭐ Premium Ol",
+              onPress: () => {
+                navigation.navigate("premium");
+              },
+            },
+          ],
+        );
+
+        return false;
+      }
+
       return true;
-    } catch (err) {
-      console.error("STOMP PUBLISH HATASI:", err);
+    } catch (error) {
+      console.error("PREMIUM KONTROL HATASI:", error);
+
       return false;
     }
-  }, []);
+  }, [getToken, navigation]);
 
+  const stompFrameGonder = useCallback(
+    async (destination: string, body: any): Promise<boolean> => {
+      console.log("📡 STOMP MESAJ GÖNDERİLMEK ÜZERE:", destination);
+
+      const maksimumBekleme = 10000;
+      const kontrolAraligi = 100;
+      const baslangic = Date.now();
+
+      while (Date.now() - baslangic < maksimumBekleme) {
+        const client = stompClientRef.current;
+
+        if (client && client.connected === true) {
+          try {
+            client.publish({
+              destination,
+              body: JSON.stringify(body),
+              headers: {
+                "content-type": "application/json",
+              },
+            });
+
+            console.log("📡 STOMP MESAJI BAŞARIYLA GÖNDERİLDİ:", {
+              destination,
+              tip: body?.tip,
+              hedefKullaniciId: body?.hedefKullaniciId,
+            });
+
+            return true;
+          } catch (err) {
+            console.error("❌ STOMP PUBLISH HATASI:", err);
+            return false;
+          }
+        }
+
+        console.log("⏳ STOMP HAZIR DEĞİL, BEKLENİYOR...", {
+          clientVarMi: !!client,
+          clientConnected: client?.connected === true,
+          stompBagli: stompBagliRef.current,
+        });
+
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, kontrolAraligi);
+        });
+      }
+
+      console.error("❌ STOMP 10 SANİYE İÇİNDE HAZIR OLMADI.");
+
+      return false;
+    },
+    [],
+  );
   /*
    * =========================================================
    * ARAMA SİNYAL DİNLE
@@ -591,12 +717,146 @@ function useMessages() {
    * =========================================================
    */
   const aramaSinyaliGonder = useCallback(
-    (sinyal: any) => {
-      return stompFrameGonder("/app/arama/sinyal", sinyal);
+    async (sinyal: any): Promise<void> => {
+      /*
+       * Sadece yeni çağrıyı başlatan CALL_OFFER Premium kontrolünden geçer.
+       */
+      if (sinyal?.tip === "CALL_OFFER") {
+        console.log("📞 CALL_OFFER PREMIUM KONTROLÜ BAŞLIYOR.");
+
+        const premium = await premiumKontrolEt();
+
+        console.log("📞 CALL_OFFER PREMIUM SONUCU:", premium);
+
+        if (!premium) {
+          console.log("📵 CALL_OFFER PREMIUM OLMADIĞI İÇİN ENGELLENDİ.");
+
+          throw new Error("Arama başlatmak için Premium üyelik gereklidir.");
+        }
+      }
+
+      console.log("📞 ARAMA SİNYALİ STOMP'A GÖNDERİLİYOR:", {
+        tip: sinyal?.tip,
+        hedefKullaniciId: sinyal?.hedefKullaniciId,
+      });
+
+      const gonderildi = await stompFrameGonder("/app/arama/sinyal", sinyal);
+
+      if (!gonderildi) {
+        console.error(
+          "❌ ARAMA SİNYALİ GÖNDERİLEMEDİ: STOMP BAĞLANTISI HAZIR DEĞİL.",
+        );
+
+        throw new Error(
+          "Arama sinyali gönderilemedi. WebSocket/STOMP bağlantısı hazır değil.",
+        );
+      }
+
+      console.log("📞 ARAMA SİNYALİ BAŞARIYLA STOMP'A GÖNDERİLDİ:", {
+        tip: sinyal?.tip,
+        hedefKullaniciId: sinyal?.hedefKullaniciId,
+      });
     },
-    [stompFrameGonder],
+    [premiumKontrolEt, stompFrameGonder],
+  );
+  /*
+   * =========================================================
+   * ARAMA İZNİ VER
+   * =========================================================
+   *
+   * Mevcut kullanıcı:
+   *   izinVerenKullanici
+   *
+   * Seçilen kullanıcı:
+   *   izinVerilenKullanici
+   *
+   * Yani:
+   *
+   * Ayşe -> Kemal
+   *
+   * Ayşe, Kemal'in Ayşe'yi aramasına izin veriyor.
+   */
+  const aramaIzniVer = useCallback(
+    async (kullaniciId: number) => {
+      console.log("📞 ARAMA İZNİ VERİLİYOR:", kullaniciId);
+
+      return await apiGetir("/arama-izinleri/ver", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          kullaniciId,
+        }),
+      });
+    },
+    [apiGetir],
   );
 
+  /*
+   * =========================================================
+   * ARAMA İZNİNİ GERİ AL
+   * =========================================================
+   */
+  const aramaIzniGeriAl = useCallback(
+    async (kullaniciId: number) => {
+      console.log("📵 ARAMA İZNİ GERİ ALINIYOR:", kullaniciId);
+
+      return await apiGetir(`/arama-izinleri/geri-al/${kullaniciId}`, {
+        method: "DELETE",
+      });
+    },
+    [apiGetir],
+  );
+
+  /*
+   * =========================================================
+   * ARAMA İZNİ DURUMUNU KONTROL ET
+   * =========================================================
+   *
+   * Mevcut kullanıcı:
+   *   izinVeren
+   *
+   * kullaniciId:
+   *   izin verilen kişi
+   *
+   * Örnek:
+   * Ayşe giriş yaptı.
+   * Ayşe -> Kemal izni var mı?
+   */
+  const aramaIzniKontrolEt = useCallback(
+    async (kullaniciId: number) => {
+      console.log("🔎 ARAMA İZNİ KONTROL EDİLİYOR:", kullaniciId);
+
+      return await apiGetir(`/arama-izinleri/kontrol/${kullaniciId}`, {
+        method: "GET",
+      });
+    },
+    [apiGetir],
+  );
+
+  /*
+   * =========================================================
+   * ARAMA İZNİ VAR MI?
+   * =========================================================
+   *
+   * Bu endpoint boolean döndürür.
+   *
+   * Arama yapan kullanıcı açısından:
+   *
+   * hedef kullanıcı -> mevcut kullanıcıya
+   * arama izni vermiş mi?
+   */
+  const aramaIzniVarMi = useCallback(
+    async (kullaniciId: number) => {
+      console.log("🔎 ARAMA İZNİ VAR MI:", kullaniciId);
+
+      return await apiGetir(`/arama-izinleri/var-mi/${kullaniciId}`, {
+        method: "GET",
+      });
+    },
+    [apiGetir],
+  );
   /*
    * =========================================================
    * STOMP MESAJ İŞLE
@@ -609,12 +869,13 @@ function useMessages() {
         const destination = message.headers.destination;
         const bodyPart = message.body;
 
-        console.log("STOMP MESAJI GELDİ:", {
+        console.log("📨 STOMP MESAJI GELDİ:", {
           destination,
           body: bodyPart,
         });
 
         if (!bodyPart) {
+          console.log("⚠️ STOMP MESAJ BODY BOŞ");
           return;
         }
 
@@ -623,7 +884,7 @@ function useMessages() {
         try {
           veri = JSON.parse(bodyPart);
         } catch {
-          console.log("STOMP JSON PARSE EDİLEMEDİ:", bodyPart);
+          console.log("❌ STOMP JSON PARSE EDİLEMEDİ:", bodyPart);
           return;
         }
 
@@ -633,10 +894,20 @@ function useMessages() {
          * =========================================================
          */
         if (destination?.includes("/topic/arama/")) {
-          console.log("📞 ARAMA SİNYALİ GELDİ");
+          console.log("📨📨📨 STOMP ARAMA TOPIC MESAJI GELDİ");
+          console.log("📨 DESTINATION:", destination);
+          console.log("📨 BODY:", bodyPart);
+          console.log(
+            "📨 ARAMA DİNLEYİCİ SAYISI:",
+            aramaSinyalDinleyicileriRef.current.size,
+          );
 
           aramaSinyalDinleyicileriRef.current.forEach((callback) => {
             try {
+              console.log(
+                "📨📨📨 useMessages ARAMA SİNYALİ DİNLİYİCİYE AKTARILIYOR",
+              );
+
               callback(bodyPart);
             } catch (hata) {
               console.error("❌ ARAMA SİNYAL CALLBACK HATASI:", hata);
@@ -654,10 +925,13 @@ function useMessages() {
         if (destination?.includes("/topic/yeni-mesaj/")) {
           const yeniMesaj = veri as MessageDto;
 
-          console.log("YENİ MESAJ GELDİ:", yeniMesaj);
+          console.log("📩 YENİ MESAJ GELDİ:", yeniMesaj);
 
           void getCurrentUserId().then((currentId) => {
             if (currentId === null) {
+              console.log(
+                "⚠️ YENİ MESAJ İŞLENEMEDİ: currentUserId bulunamadı.",
+              );
               return;
             }
 
@@ -695,7 +969,7 @@ function useMessages() {
                   mesajEkleVeyaGuncelle(previous, okunmusMesaj),
                 );
 
-                stompFrameGonder("/app/okundu", {
+                void stompFrameGonder("/app/okundu", {
                   id: yeniMesaj.id,
                   receiverId: currentId,
                   content: yeniMesaj.content || "",
@@ -726,7 +1000,8 @@ function useMessages() {
 
             /*
              * Yeni mesajın medya kaydını hemen getir.
-             * Fotoğraf/video/ses mesajı ekranda anında görünür.
+             * Fotoğraf / video / ses mesajı ekranda
+             * mümkün olduğunca hızlı görünür.
              */
             void mesajMedyalariniGetir(yeniMesaj.id);
           });
@@ -742,7 +1017,7 @@ function useMessages() {
         if (destination?.includes("/topic/mesaj-okundu/")) {
           const okunanMesaj = veri as MessageDto;
 
-          console.log("MESAJ OKUNDU:", okunanMesaj);
+          console.log("📖 MESAJ OKUNDU:", okunanMesaj);
 
           setConversation((previous) =>
             previous.map((mesaj) =>
@@ -777,7 +1052,7 @@ function useMessages() {
          * =========================================================
          */
         if (destination?.includes("/topic/yaziyor/")) {
-          console.log("YAZIYOR BİLDİRİMİ:", veri);
+          console.log("✍️ YAZIYOR BİLDİRİMİ:", veri);
 
           if (veri === false) {
             setYaziyor(false);
@@ -790,9 +1065,18 @@ function useMessages() {
             selectedUserIdRef.current !== null &&
               Number(selectedUserIdRef.current) === Number(yazanId),
           );
+
+          return;
         }
+
+        /*
+         * =========================================================
+         * TANIMSIZ DESTINATION
+         * =========================================================
+         */
+        console.log("⚠️ STOMP TANIMSIZ DESTINATION:", destination);
       } catch (err) {
-        console.error("STOMP MESAJ İŞLEME HATASI:", err);
+        console.error("❌ STOMP MESAJ İŞLEME HATASI:", err);
       }
     },
     [
@@ -805,43 +1089,168 @@ function useMessages() {
 
   /*
    * =========================================================
-   * STOMP SUBSCRIBE
+   * STOMP MESAJ HANDLER REF
    * =========================================================
+   *
+   * STOMP subscription sabit kalır.
+   * Güncel mesaj işleyici ref üzerinden çağrılır.
+   *
+   * Böylece stompMesajIsle yeniden oluşturulsa bile
+   * STOMP bağlantısının yaşam döngüsü değişmez.
+   */
+  const stompMesajIsleRef = useRef<(message: IMessage) => void>(() => {});
+
+  stompMesajIsleRef.current = stompMesajIsle;
+  /*
+   * =========================================================
+   * WEBRTC ARAMA <-> MESAJ STOMP ENTEGRASYONU
+   * =========================================================
+   *
+   * AramaWebRTC kendi WebSocket/STOMP bağlantısını açmaz.
+   * Gelen arama sinyalleri mevcut mesaj STOMP bağlantısından
+   * AramaWebRTC'ye aktarılır; giden sinyaller de aynı bağlantı
+   * üzerinden /app/arama/sinyal hedefine gönderilir.
    */
 
-  const stompSubscribe = useCallback(
-    (destination: string) => {
-      const client = stompClientRef.current;
+  /*
+   * =========================================================
+   * WEBRTC ARAMA <-> MESAJ STOMP ENTEGRASYONU
+   * =========================================================
+   *
+   * AramaWebRTC için tek sinyal dinleyicisi burada bulunur.
+   * Gelen ve giden sinyaller mevcut mesaj STOMP bağlantısını
+   * kullanır. İkinci bir sinyal dinleyicisi kurulmaz.
+   */
 
-      if (!client || !client.connected || !stompBagliRef.current) {
-        console.log(
-          "STOMP SUBSCRIBE YAPILAMADI, bağlantı hazır değil:",
-          destination,
-        );
+  useEffect(() => {
+    let aktif = true;
+
+    const dinleyiciTemizle = aramaSinyaliDinle((body) => {
+      if (!aktif) {
         return;
       }
 
       try {
-        client.subscribe(destination, stompMesajIsle);
+        console.log("📨 WEBRTC ARAMA SİNYALİ TEK NOKTADAN İŞLENİYOR");
 
-        console.log("STOMP SUBSCRIBE YAPILDI:", destination);
-      } catch (err) {
-        console.error("STOMP SUBSCRIBE HATASI:", err);
+        aramaWebRTC.gelenAramaSinyaliniIsle(body);
+      } catch (hata) {
+        console.error("❌ WEBRTC GELEN ARAMA SİNYALİ İŞLEME HATASI:", hata);
       }
-    },
-    [stompMesajIsle],
-  );
+    });
+
+    aramaWebRTC.sinyalGondericiyiAyarla((sinyal) => {
+      if (!aktif) {
+        return;
+      }
+
+      void aramaSinyaliGonder(sinyal).catch((hata) => {
+        console.error("❌ WEBRTC SİNYALİ GÖNDERİLEMEDİ:", hata);
+      });
+    });
+
+    console.log("🟢 WEBRTC -> MESAJ STOMP TAŞIYICISI BAĞLANDI");
+
+    return () => {
+      aktif = false;
+
+      dinleyiciTemizle();
+      aramaWebRTC.sinyalGondericiyiAyarla(null);
+
+      console.log("🔴 WEBRTC -> MESAJ STOMP TAŞIYICISI AYRILDI");
+    };
+  }, [aramaSinyaliDinle, aramaSinyaliGonder]);
+  /*
+   * =========================================================
+   * STOMP SUBSCRIBE
+   * =========================================================
+   */
 
   /*
    * =========================================================
-   * WEBSOCKET / SOCKJS BAĞLANTISI
+   * STOMP SUBSCRIBE
+   * =========================================================
+   */
+
+  /*
+   * =========================================================
+   * STOMP SUBSCRIBE
+   * =========================================================
+   */
+
+  const stompSubscribe = useCallback((destination: string) => {
+    const client = stompClientRef.current;
+
+    if (!client) {
+      console.log("STOMP SUBSCRIBE YAPILAMADI: client yok:", destination);
+      return null;
+    }
+
+    if (!client.connected) {
+      console.log(
+        "STOMP SUBSCRIBE YAPILAMADI: client bağlı değil:",
+        destination,
+      );
+      return null;
+    }
+
+    try {
+      const subscription = client.subscribe(
+        destination,
+        (message: IMessage) => {
+          try {
+            stompMesajIsleRef.current(message);
+          } catch (err) {
+            console.error("❌ STOMP MESAJ HANDLER HATASI:", err);
+          }
+        },
+      );
+
+      console.log("🟢 STOMP SUBSCRIBE YAPILDI:", destination);
+
+      return subscription;
+    } catch (err) {
+      console.error("❌ STOMP SUBSCRIBE HATASI:", destination, err);
+
+      return null;
+    }
+  }, []);
+
+  /*
+   * =========================================================
+   * NATIVE WEBSOCKET / STOMP BAĞLANTISI
+   * =========================================================
+   *
+   * Mobil uygulamada SockJS kullanmıyoruz.
+   *
+   * Backend:
+   *   /ws       -> SockJS
+   *   /ws-native -> Native WebSocket
+   *
+   * React Native tarafında doğrudan native WebSocket
+   * üzerinden /ws-native endpointine bağlanıyoruz.
+   */
+  /*
+   * =========================================================
+   * WEBSOCKET / STOMP BAĞLANTISI
+   * =========================================================
+   */
+
+  /*
+   * =========================================================
+   * NATIVE WEBSOCKET / STOMP BAĞLANTISI
    * =========================================================
    */
 
   const websocketBaglan = useCallback(async () => {
     const token = await getToken();
-
     const currentUserId = await getCurrentUserId();
+
+    console.log("STOMP KİMLİK KONTROLÜ:", {
+      tokenVarMi: Boolean(token),
+      currentUserId,
+      websocketAdresi: WEBSOCKET_ADRESI,
+    });
 
     if (!token || currentUserId === null) {
       console.log(
@@ -853,98 +1262,104 @@ function useMessages() {
     const mevcutClient = stompClientRef.current;
 
     if (mevcutClient?.active || mevcutClient?.connected) {
+      console.log("🟡 STOMP ZATEN AKTİF. YENİ BAĞLANTI AÇILMAYACAK.");
       return;
     }
 
-    try {
-      console.log("SOCKJS BAĞLANTISI BAŞLATILIYOR:", SOCKJS_ADRESI);
+    console.log("🔌 STOMP BAĞLANTISI BAŞLATILIYOR:", WEBSOCKET_ADRESI);
 
-      const client = new Client({
-        webSocketFactory: () => {
-          console.log("SOCKJS WEBSOCKET OLUŞTURULUYOR:", SOCKJS_ADRESI);
+    const client = new Client({
+      webSocketFactory: () => {
+        console.log("🔌 NATIVE WEBSOCKET OLUŞTURULUYOR:", WEBSOCKET_ADRESI);
 
-          return new SockJS(SOCKJS_ADRESI) as any;
-        },
+        return new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
+      },
 
-        connectHeaders: {
-          Authorization: `Bearer ${token}`,
-        },
+      connectHeaders: {
+        Authorization: `Bearer ${token}`,
+      },
+      forceBinaryWSFrames: true,
+      appendMissingNULLonIncoming: true,
+      reconnectDelay: 3000,
 
-        reconnectDelay: 3000,
+      heartbeatIncoming: 0,
+      heartbeatOutgoing: 0,
 
-        heartbeatIncoming: 10000,
+      debug: (str) => {
+        console.log("🟣 STOMP:", str);
+      },
 
-        heartbeatOutgoing: 10000,
+      onConnect: (frame) => {
+        console.log("🟢🟢🟢 STOMP CONNECTED 🟢🟢🟢");
 
-        debug: (str) => {
-          console.log("STOMP:", str);
-        },
+        console.log("STOMP FRAME:", frame);
 
-        onConnect: () => {
-          console.log("STOMP CONNECTED ALINDI");
+        /*
+         * Önce bağlantıyı hazır kabul et.
+         */
+        stompBagliRef.current = true;
+        stompClientRef.current = client;
 
-          stompBagliRef.current = true;
+        console.log("🟢 STOMP CLIENT HAZIR:", {
+          connected: client.connected,
+          active: client.active,
+        });
 
-          stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
+        /*
+         * =====================================================
+         * SUBSCRIPTIONS
+         * =====================================================
+         */
 
-          stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
+        stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
 
-          stompSubscribe(`/topic/yaziyor/${currentUserId}`);
+        stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
 
-          stompSubscribe(`/topic/arama/${currentUserId}`);
+        stompSubscribe(`/topic/yaziyor/${currentUserId}`);
 
-          console.log(
-            "STOMP ABONELİKLERİ TAMAMLANDI:",
-            `/topic/yeni-mesaj/${currentUserId}`,
-            `/topic/mesaj-okundu/${currentUserId}`,
-            `/topic/yaziyor/${currentUserId}`,
-            `/topic/arama/${currentUserId}`,
-          );
-        },
+        stompSubscribe(`/topic/arama/${currentUserId}`);
 
-        onStompError: (frame) => {
-          console.error(
-            "STOMP SUNUCU HATASI:",
-            frame.headers["message"],
-            frame.body,
-          );
-        },
+        console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
+      },
 
-        onWebSocketError: (event) => {
-          console.error("WEBSOCKET HATASI:", event);
-        },
+      onStompError: (frame) => {
+        console.error(
+          "❌ STOMP SUNUCU HATASI:",
+          frame.headers["message"],
+          frame.body,
+        );
 
-        onWebSocketClose: (event) => {
-          console.log("WEBSOCKET KAPANDI:", event);
+        stompBagliRef.current = false;
+      },
 
-          stompBagliRef.current = false;
+      onWebSocketError: (event) => {
+        console.error("❌ WEBSOCKET HATASI:", event);
 
-          // STOMP kendi reconnectDelay mekanizmasıyla yeniden bağlanır.
-          // Burada aktif bağlantı durumunu kesin olarak temizliyoruz.
-          if (stompClientRef.current === client && !client.active) {
-            stompClientRef.current = null;
-          }
-        },
+        stompBagliRef.current = false;
+      },
 
-        onDisconnect: () => {
-          console.log("STOMP BAĞLANTISI KAPANDI");
+      onWebSocketClose: (event) => {
+        console.log("🔴 WEBSOCKET KAPANDI:", event);
 
-          stompBagliRef.current = false;
-        },
-      });
+        stompBagliRef.current = false;
+      },
 
-      stompClientRef.current = client;
+      onDisconnect: () => {
+        console.log("🔴 STOMP DISCONNECT");
 
-      client.activate();
+        stompBagliRef.current = false;
+      },
+    });
 
-      console.log("STOMP ACTIVATE ÇAĞRILDI");
-    } catch (err) {
-      console.error("STOMP BAĞLANTI HATASI:", err);
+    /*
+     * Client'ı activate etmeden önce ref'e koy.
+     */
+    stompClientRef.current = client;
 
-      stompBagliRef.current = false;
-    }
+    console.log("🚀🚀🚀 STOMP CLIENT ACTIVATE ÇAĞRILIYOR 🚀🚀🚀");
+
+    client.activate();
   }, [getToken, getCurrentUserId, stompSubscribe]);
-
   /*
    * =========================================================
    * KULLANICI BİLGİLERİ
@@ -1370,6 +1785,10 @@ function useMessages() {
 
     const selectedId = selectedUserIdRef.current;
 
+    if (!(await premiumKontrolEt())) {
+      return;
+    }
+
     if (selectedId === null) {
       setError("Önce bir konuşma seçin.");
       return;
@@ -1404,7 +1823,7 @@ function useMessages() {
         content: icerik,
       });
 
-      const gonderildi = stompFrameGonder("/app/mesaj", {
+      const gonderildi = await stompFrameGonder("/app/mesaj", {
         receiverId: selectedId,
         content: icerik,
       });
@@ -1433,8 +1852,13 @@ function useMessages() {
     } finally {
       setSending(false);
     }
-  }, [messageText, stompFrameGonder, yazmiyorBildir, hataMesaji]);
-
+  }, [
+    messageText,
+    stompFrameGonder,
+    yazmiyorBildir,
+    hataMesaji,
+    premiumKontrolEt,
+  ]);
   /*
    * =========================================================
    * MESAJ SİL
@@ -1557,6 +1981,10 @@ function useMessages() {
     async (asset: MediaAsset, type: MediaType) => {
       const selectedId = selectedUserIdRef.current;
 
+      if (!(await premiumKontrolEt())) {
+        return;
+      }
+
       if (selectedId === null) {
         setError("Önce bir konuşma seçin.");
         return;
@@ -1615,17 +2043,19 @@ function useMessages() {
          * olarak logluyoruz. Böylece messages.id ile
          * message_media.message_id eşleşmesini kontrol edebiliriz.
          */
-
         const formData = new FormData();
 
-        const dosya = new File(asset.uri);
+        const dosya = {
+          uri: asset.uri,
+          name: fileName,
+          type: mimeType,
+        };
 
         console.log("========================================");
         console.log("MEDYA DOSYASI HAZIR");
         console.log("DOSYA URI:", dosya.uri);
         console.log("DOSYA ADI:", dosya.name);
         console.log("DOSYA TYPE:", dosya.type);
-        console.log("DOSYA SIZE:", dosya.size);
         console.log("MESAJ ID:", yeniMesaj.id);
         console.log("ALICI ID:", selectedId);
         console.log("MEDYA TÜRÜ:", medyaTipi);
@@ -1633,7 +2063,6 @@ function useMessages() {
 
         formData.append("file", dosya as any);
         formData.append("type", medyaTipi);
-
         const medyaUploadUrl =
           `${API_ADRESI}/message-media/upload` +
           `?messageId=${encodeURIComponent(String(yeniMesaj.id))}` +
@@ -1717,8 +2146,20 @@ function useMessages() {
         setMediaSending(false);
       }
     },
-    [getToken, getMediaType, mesajEkleVeyaGuncelle, hataMesaji],
+    [
+      getToken,
+      getMediaType,
+      mesajEkleVeyaGuncelle,
+      hataMesaji,
+      premiumKontrolEt,
+    ],
   );
+
+  /*
+   * =========================================================
+   * MEDYA SEÇ
+   * =========================================================
+   */
 
   /*
    * =========================================================
@@ -1732,96 +2173,115 @@ function useMessages() {
 
       try {
         /*
+         * =====================================================
          * FOTOĞRAF
+         * =====================================================
          */
 
         if (type === "image") {
-          const permission =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-          if (!permission.granted) {
-            Alert.alert(
-              "İzin gerekli",
-              "Fotoğraf seçebilmek için galeri izni gerekiyor.",
-            );
-
-            return;
-          }
-
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ["images"],
-            allowsEditing: false,
-            quality: 0.9,
+          const result = await launchImageLibrary({
+            mediaType: "photo",
+            selectionLimit: 1,
+            includeBase64: false,
           });
 
-          if (result.canceled || !result.assets?.[0]) {
+          if (result.didCancel || !result.assets?.[0]) {
             return;
           }
 
-          await medyaYukle(result.assets[0], "image");
+          const asset = result.assets[0];
+
+          if (!asset.uri) {
+            Alert.alert("Hata", "Fotoğraf dosyasının URI bilgisi alınamadı.");
+
+            return;
+          }
+
+          await medyaYukle(
+            {
+              uri: asset.uri,
+              fileName: asset.fileName || `foto-${Date.now()}.jpg`,
+              mimeType: asset.type || "image/jpeg",
+            },
+            "image",
+          );
 
           return;
         }
 
         /*
+         * =====================================================
          * VİDEO
+         * =====================================================
          */
 
         if (type === "video") {
-          const permission =
-            await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-          if (!permission.granted) {
-            Alert.alert(
-              "İzin gerekli",
-              "Video seçebilmek için galeri izni gerekiyor.",
-            );
-
-            return;
-          }
-
-          const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ["videos"],
-            allowsEditing: false,
+          const result = await launchImageLibrary({
+            mediaType: "video",
+            selectionLimit: 1,
+            includeBase64: false,
           });
 
-          if (result.canceled || !result.assets?.[0]) {
+          if (result.didCancel || !result.assets?.[0]) {
             return;
           }
 
-          await medyaYukle(result.assets[0], "video");
+          const asset = result.assets[0];
+
+          if (!asset.uri) {
+            Alert.alert("Hata", "Video dosyasının URI bilgisi alınamadı.");
+
+            return;
+          }
+
+          await medyaYukle(
+            {
+              uri: asset.uri,
+              fileName: asset.fileName || `video-${Date.now()}.mp4`,
+              mimeType: asset.type || "video/mp4",
+            },
+            "video",
+          );
 
           return;
         }
 
         /*
+         * =====================================================
          * SES / DOSYA
+         * =====================================================
          */
 
-        const result = await DocumentPicker.getDocumentAsync({
-          type:
-            type === "audio"
-              ? ["audio/*", "audio/mpeg", "audio/mp4", "audio/wav", "audio/ogg"]
-              : "*/*",
-          copyToCacheDirectory: true,
-          multiple: false,
+        const [result] = await pick({
+          type: type === "audio" ? [types.audio] : [types.allFiles],
         });
 
-        if (result.canceled || !result.assets?.[0]) {
+        if (!result.uri) {
+          Alert.alert("Hata", "Dosyanın URI bilgisi alınamadı.");
+
           return;
         }
 
-        const asset = result.assets[0];
-
         await medyaYukle(
           {
-            uri: asset.uri,
-            fileName: asset.name,
-            mimeType: asset.mimeType,
+            uri: result.uri,
+            fileName:
+              result.name ||
+              `${type === "audio" ? "ses" : "dosya"}-${Date.now()}`,
+            mimeType:
+              result.type ||
+              (type === "audio" ? "audio/mpeg" : "application/octet-stream"),
           },
           type,
         );
       } catch (err) {
+        if (
+          isErrorWithCode(err) &&
+          err.code === errorCodes.OPERATION_CANCELED
+        ) {
+          return;
+        }
+
         console.error("MEDYA SEÇİCİ HATASI:", err);
 
         setError(hataMesaji(err, "Medya seçilemedi."));
@@ -1829,14 +2289,23 @@ function useMessages() {
     },
     [medyaYukle, hataMesaji],
   );
-
   /*
    * =========================================================
    * SES KAYDI
    * =========================================================
    */
 
+  /*
+   * =========================================================
+   * SES KAYDI BAŞLAT
+   * =========================================================
+   */
+
   const startAudioRecording = useCallback(async () => {
+    if (!(await premiumKontrolEt())) {
+      return;
+    }
+
     if (selectedUserIdRef.current === null) {
       setError("Önce bir konuşma seçin.");
 
@@ -1850,25 +2319,14 @@ function useMessages() {
     try {
       setError("");
 
-      const permission = await AudioModule.requestRecordingPermissionsAsync();
+      /*
+       * Native Android mikrofon kaydı
+       */
+      const uri = await sesKayitModuluGetir().startRecorder();
 
-      if (!permission.granted) {
-        Alert.alert(
-          "Mikrofon izni gerekli",
-          "Sesli mesaj gönderebilmek için mikrofon iznine izin vermelisiniz.",
-        );
+      audioKayitUriRef.current = uri;
 
-        return;
-      }
-
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        allowsRecording: true,
-      });
-
-      await audioRecorder.prepareToRecordAsync();
-
-      audioRecorder.record();
+      console.log("🎙️ SES KAYDI BAŞLADI:", uri);
 
       setRecording(true);
 
@@ -1882,7 +2340,9 @@ function useMessages() {
         setRecordingSeconds((previous) => previous + 1);
       }, 1000);
     } catch (err) {
-      console.error("SES KAYDI BAŞLATILAMADI:", err);
+      console.error("❌ SES KAYDI BAŞLATILAMADI:", err);
+
+      audioKayitUriRef.current = null;
 
       setRecording(false);
 
@@ -1896,8 +2356,13 @@ function useMessages() {
 
       setError(hataMesaji(err, "Mikrofon açılamadı."));
     }
-  }, [audioRecorder, recording, mediaSending, hataMesaji]);
+  }, [premiumKontrolEt, recording, mediaSending, hataMesaji]);
 
+  /*
+   * =========================================================
+   * SES KAYDI DURDUR
+   * =========================================================
+   */
   /*
    * =========================================================
    * SES KAYDI DURDUR
@@ -1916,9 +2381,14 @@ function useMessages() {
         recordingTimerRef.current = null;
       }
 
-      await audioRecorder.stop();
+      /*
+       * Native Android mikrofon kaydı durdur
+       */
+      const uri = await sesKayitModuluGetir().stopRecorder();
 
-      const uri = audioRecorder.uri;
+      console.log("🎙️ SES KAYDI DURDU:", uri);
+
+      audioKayitUriRef.current = null;
 
       setRecording(false);
 
@@ -1944,13 +2414,8 @@ function useMessages() {
       console.log(`SES KAYDI GÖNDERİLDİ: ${sure} saniye`);
 
       setRecordingSeconds(0);
-
-      await setAudioModeAsync({
-        playsInSilentMode: true,
-        allowsRecording: false,
-      });
     } catch (err) {
-      console.error("SES KAYDI DURDURULAMADI:", err);
+      console.error("❌ SES KAYDI DURDURULAMADI:", err);
 
       setRecording(false);
 
@@ -1964,7 +2429,7 @@ function useMessages() {
         recordingTimerRef.current = null;
       }
     }
-  }, [audioRecorder, recording, recordingSeconds, medyaYukle, hataMesaji]);
+  }, [recording, recordingSeconds, medyaYukle, hataMesaji]);
 
   /*
    * =========================================================
@@ -1972,37 +2437,70 @@ function useMessages() {
    * =========================================================
    */
 
+  /*
+   * =========================================================
+   * MESAJLARI İLK YÜKLE
+   * =========================================================
+   */
+
   useEffect(() => {
     mountedRef.current = true;
 
-    void mesajlariGetir();
+    console.log("🟢 useMessages MOUNT OLDU.");
 
-    void websocketBaglan();
+    void mesajlariGetir();
+  }, [mesajlariGetir]);
+  /*
+   * =========================================================
+   * STOMP BAĞLANTISI
+   * =========================================================
+   */
+
+  useEffect(() => {
+    let temizlendi = false;
+
+    console.log("🔌 STOMP BAĞLANTI EFFECT ÇALIŞTI.");
+
+    const baslat = async () => {
+      if (temizlendi) {
+        return;
+      }
+
+      await websocketBaglan();
+    };
+
+    void baslat();
 
     return () => {
-      mountedRef.current = false;
+      temizlendi = true;
 
-      if (yaziyorTimerRef.current) {
-        clearTimeout(yaziyorTimerRef.current);
-      }
-
-      if (recordingTimerRef.current) {
-        clearInterval(recordingTimerRef.current);
-      }
+      console.log("🧹 STOMP BAĞLANTI EFFECT CLEANUP.");
 
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
+
+        reconnectTimerRef.current = null;
       }
+
+      const client = stompClientRef.current;
+
+      if (!client) {
+        stompBagliRef.current = false;
+        return;
+      }
+
+      /*
+       * Gerçek component kapanıyorsa STOMP kapatılır.
+       */
+      console.log("🔴 STOMP CLIENT DEACTIVATE ÇAĞRILIYOR.");
 
       stompBagliRef.current = false;
 
-      if (stompClientRef.current) {
-        void stompClientRef.current.deactivate();
-        stompClientRef.current = null;
-      }
-    };
-  }, [mesajlariGetir, websocketBaglan, audioRecorder]);
+      stompClientRef.current = null;
 
+      void client.deactivate();
+    };
+  }, [websocketBaglan]);
   /*
    * =========================================================
    * SEÇİLİ KULLANICI DEĞİŞİNCE
@@ -2093,8 +2591,7 @@ function useMessages() {
 
     yaziyor,
 
-    webSocketBagli:
-      stompClientRef.current?.connected === true && stompBagliRef.current,
+    webSocketBagli: stompClientRef.current?.connected === true,
 
     setSelectedUserId,
 
@@ -2123,9 +2620,18 @@ function useMessages() {
     /*
      * Arama sinyalleşmesi mevcut mesaj STOMP bağlantısını kullanır.
      */
-    aramaSinyaliDinle,
+    premiumKontrolEt,
 
+    aramaSinyaliDinle,
     aramaSinyaliGonder,
+
+    /*
+     * Arama izinleri
+     */
+    aramaIzniVer,
+    aramaIzniGeriAl,
+    aramaIzniKontrolEt,
+    aramaIzniVarMi,
 
     mesajiOkunduYap: (mesaj: MessageDto) => {
       const currentId = currentUserIdState;

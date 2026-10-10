@@ -1,26 +1,26 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
+  Alert,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
-  Pressable,
-  Alert,
 } from "react-native";
 
-import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
 // src/app/home.tsx
-import { API_BASE_URL } from "../config/api";
-import ProfileHeader from "../components/profile/ProfileHeader";
-import UserInfo from "../components/profile/UserInfo";
-import ProfileInfo from "../components/profile/ProfileInfo";
-import ProfileQuestions from "../components/profile/ProfileQuestions";
 import ProfileActions from "../components/profile/ProfileActions";
-import ProfileLoading from "../components/profile/ProfileLoading";
 import ProfileError from "../components/profile/ProfileError";
+import ProfileHeader from "../components/profile/ProfileHeader";
+import ProfileInfo from "../components/profile/ProfileInfo";
+import ProfileLoading from "../components/profile/ProfileLoading";
+import ProfileQuestions from "../components/profile/ProfileQuestions";
+import UserInfo from "../components/profile/UserInfo";
+import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = API_BASE_URL + "/api";
 
@@ -114,7 +114,7 @@ type ProfilCevabi = {
  */
 
 export default function Profil() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [kullanici, setKullanici] = useState<Kullanici | null>(null);
 
@@ -244,7 +244,7 @@ export default function Profil() {
         }
       }
     } catch (error) {
-      console.log("ENUM GETIRME HATASI:", error);
+      console.log("ENUM GETİRME HATASI:", error);
     }
   }, []);
 
@@ -347,7 +347,7 @@ export default function Profil() {
         setSoruCevaplari(seciliCevaplar);
         setSoruCevapHatasi("");
       } catch (error) {
-        console.log("SORU CEVAP GETIRME HATASI:", error);
+        console.log("SORU CEVAP GETİRME HATASI:", error);
 
         setSorular([]);
         setSoruCevaplari({});
@@ -404,7 +404,7 @@ export default function Profil() {
 
   const soruCevaplariniKaydet = async () => {
     if (!profil?.id) {
-      setSoruCevapHatasi("�-nce profil bilgilerinizi olu�Yturmaniz gerekiyor.");
+      setSoruCevapHatasi("Önce profil bilgilerinizi oluşturmanız gerekiyor.");
       return;
     }
 
@@ -415,7 +415,7 @@ export default function Profil() {
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
         return;
       }
 
@@ -427,7 +427,7 @@ export default function Profil() {
 
       /*
        * Backend'deki mevcut cevaplari tekrar aliyoruz.
-       * B�ylece kayit sirasinda eski cevap ID'leri g�ncel kalir.
+       * Böylece kayıt sırasında eski cevap ID'leri güncel kalır.
        */
       const mevcutResponse = await fetch(
         `${API_ADRESI}/profile-answers/profile/${profil.id}`,
@@ -457,10 +457,10 @@ export default function Profil() {
       }
 
       /*
-       * Her aktif soru i�in:
+       * Her aktif soru için:
        * - Yeni cevap varsa POST
-       * - Mevcut cevap de�Yi�Ymi�Yse PUT
-       * - Cevap tamamen kaldirilmı�Ysa DELETE
+       * - Mevcut cevap değişmişse PUT
+       * - Cevap tamamen kaldırılmışsa DELETE
        */
       for (const soru of sorular) {
         const questionId = Number(soru.id);
@@ -509,7 +509,7 @@ export default function Profil() {
             if (!response.ok) {
               const hataMetni = await response.text();
               throw new Error(
-                hataMetni || `Cevap g�ncellenemedi. HTTP ${response.status}`,
+                hataMetni || `Cevap güncellenemedi. HTTP ${response.status}`,
               );
             }
           }
@@ -535,18 +535,18 @@ export default function Profil() {
       }
 
       /*
-       * Kayit sonrasi backend'deki son durumu tekrar �ekiyoruz.
+       * Kayıt sonrası backend'deki son durumu tekrar çekiyoruz.
        */
       await soruCevaplariGetir(token, profil.id);
 
-      Alert.alert("Ba�Yarili", "Profil cevaplariniz ba�Yariyla kaydedildi.");
+      Alert.alert("Başarılı", "Profil cevaplarınız başarıyla kaydedildi.");
     } catch (error) {
       console.log("SORU CEVAP KAYDETME HATASI:", error);
 
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil cevaplari kaydedilirken bir hata olu�Ytu.";
+          : "Profil cevapları kaydedilirken bir hata oluştu.";
 
       setSoruCevapHatasi(mesaj);
     } finally {
@@ -569,16 +569,16 @@ export default function Profil() {
 
       const kayitliUserId = await AsyncStorage.getItem("userId");
 
-      console.log("KENDI PROFIL TOKEN VAR MI:", !!token);
+      console.log("KENDİ PROFİL TOKEN VAR MI:", !!token);
 
-      console.log("KENDI PROFIL USER ID:", kayitliUserId);
+      console.log("KENDİ PROFİL USER ID:", kayitliUserId);
 
       /*
        * TOKEN YOK
        */
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
         return;
       }
 
@@ -587,7 +587,7 @@ export default function Profil() {
        */
 
       if (!kayitliUserId) {
-        setHata("Kullanici bilgisi bulunamadi.");
+        setHata("Kullanıcı bilgisi bulunamadı.");
 
         return;
       }
@@ -595,11 +595,11 @@ export default function Profil() {
       const userId = Number(kayitliUserId);
 
       /*
-       * USER ID GE�?ERSIZ
+       * USER ID GEÇERSİZ
        */
 
       if (!Number.isFinite(userId) || userId <= 0) {
-        setHata("Ge�ersiz kullanici bilgisi.");
+        setHata("Geçersiz kullanıcı bilgisi.");
 
         return;
       }
@@ -618,9 +618,9 @@ export default function Profil() {
           },
         }),
 
-        // Kendi profilimizi do�Yrudan /profiles/me �zerinden aliyoruz.
-        // /profiles listesinde ba�Yka bir kullanicinin profili gelebilece�Yi
-        // i�in burada userId ile liste i�inde arama yapmiyoruz.
+        // Kendi profilimizi doğrudan /profiles/me üzerinden alıyoruz.
+        // /profiles listesinde başka bir kullanıcının profili gelebileceği
+        // için burada userId ile liste içinde arama yapmıyoruz.
         fetch(`${API_ADRESI}/profiles/me`, {
           method: "GET",
           headers: {
@@ -631,8 +631,8 @@ export default function Profil() {
         }),
       ]);
 
-      console.log("KENDI PROFIL USER STATUS:", kullaniciResponse.status);
-      console.log("KENDI PROFIL PROFILE/ME STATUS:", profilResponse.status);
+      console.log("KENDİ PROFİL USER STATUS:", kullaniciResponse.status);
+      console.log("KENDİ PROFİL PROFILE/ME STATUS:", profilResponse.status);
 
       /*
        * USER HATASI
@@ -640,7 +640,7 @@ export default function Profil() {
 
       if (!kullaniciResponse.ok) {
         throw new Error(
-          `Kullanici bilgisi alinamadi. HTTP ${kullaniciResponse.status}`,
+          `Kullanıcı bilgisi alınamadı. HTTP ${kullaniciResponse.status}`,
         );
       }
 
@@ -650,7 +650,7 @@ export default function Profil() {
 
       if (!profilResponse.ok) {
         throw new Error(
-          `Profil bilgisi alinamadi. HTTP ${profilResponse.status}`,
+          `Profil bilgisi alınamadı. HTTP ${profilResponse.status}`,
         );
       }
 
@@ -661,8 +661,8 @@ export default function Profil() {
       const kullaniciVerisi = await kullaniciResponse.json();
       const profilVerisi = await profilResponse.json();
 
-      console.log("KENDI PROFIL KULLANICI:", kullaniciVerisi);
-      console.log("KENDI PROFIL VERISI:", profilVerisi);
+      console.log("KENDİ PROFİL KULLANICI:", kullaniciVerisi);
+      console.log("KENDİ PROFİL VERİSİ:", profilVerisi);
 
       /*
        * KENDI PROFILINI DOGRUDAN SET ET
@@ -690,22 +690,22 @@ export default function Profil() {
         setSoruCevaplari({});
       }
     } catch (error) {
-      console.log("KENDI PROFIL HATASI:", error);
+      console.log("KENDİ PROFİL HATASI:", error);
 
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil y�klenirken bir hata olu�Ytu.";
+          : "Profil yüklenirken bir hata oluştu.";
 
       setHata(mesaj);
     } finally {
       setYukleniyor(false);
     }
-  }, [router, enumlariGetir, soruCevaplariGetir]);
+  }, [navigation, enumlariGetir, soruCevaplariGetir]);
 
   /*
    * =======================================================
-   * SAYFA A�?ILINCA PROFIL GETIR
+   * SAYFA AÇILINCA PROFİL GETİR
    * =======================================================
    */
 
@@ -737,29 +737,29 @@ export default function Profil() {
 
   /*
    * =======================================================
-   * GERI D�-N
+   * GERİ DÖN
    * =======================================================
    */
 
   const geriDon = () => {
-    router.back();
+    navigation.goBack();
   };
 
   /*
    * =======================================================
-   * PROFIL G�oNCELLE
+   * PROFİL GÜNCELLE
    * =======================================================
    */
 
   const profilGuncelle = () => {
-    router.push("/profile/edit");
+    navigation.navigate("profileEdit");
   };
   const ayarlaraGit = () => {
-    router.push("/settings");
+    navigation.navigate("settings");
   };
   /*
    * =======================================================
-   * Y�oKLENIYOR
+   * YÜKLENİYOR
    * =======================================================
    */
 
@@ -807,7 +807,7 @@ export default function Profil() {
 
   /*
    * =======================================================
-   * USER INFO İ�?IN TAM MODEL
+   * USER INFO İÇİN TAM MODEL
    * =======================================================
    */
 
@@ -830,7 +830,7 @@ export default function Profil() {
 
   /*
    * =======================================================
-   * PROFILE INFO İ�?IN MODEL
+   * PROFILE INFO İÇİN MODEL
    * =======================================================
    */
 
@@ -874,13 +874,13 @@ export default function Profil() {
       >
         {/*
          * =================================================
-         * �oST BAR
+         * ÜST BAR
          * =================================================
          */}
 
         <View style={styles.ustBar}>
           <Pressable style={styles.geri} onPress={geriDon}>
-            <Text style={styles.geriIcon}>�?�</Text>
+            <Text style={styles.geriIcon}>←</Text>
 
             <Text style={styles.geriText}>Geri</Text>
           </Pressable>
@@ -912,9 +912,9 @@ export default function Profil() {
 
         {/*
          * =================================================
-         * FOTOGRAF + �?EVRIMİ�?I BILGISI
+         * FOTOĞRAF + ÇEVRİMİÇİ BİLGİSİ
          *
-         * Mevcut tasarimdaki foto�Yraf ve
+         * Mevcut tasarımdaki fotoğraf ve
          * online bilgisini koruyoruz.
          * =================================================
          */}
@@ -926,11 +926,11 @@ export default function Profil() {
                 <View style={styles.profilFotoWrapper}>
                   {/*
                    * ProfileHeader componenti
-                   * adi g�steriyor.
+                   * adı gösteriyor.
                    *
-                   * Foto�Yrafi burada ayrica
+                   * Fotoğrafı burada ayrıca
                    * mevcut tasarimdaki gibi
-                   * g�steriyoruz.
+                   * gösteriyoruz.
                    */}
                   <Pressable onPress={() => {}}>
                     <View style={styles.profilFoto}>
@@ -957,31 +957,31 @@ export default function Profil() {
           <Text style={styles.kullaniciAdi}>@{kullanici.username}</Text>
 
           {kullanici.city && (
-            <Text style={styles.sehir}>gY"� {kullanici.city}</Text>
+            <Text style={styles.sehir}>📍 {kullanici.city}</Text>
           )}
 
           {kullanici.online && (
             <View style={styles.onlineEtiket}>
-              <Text style={styles.onlineText}>�?evrimi�i</Text>
+              <Text style={styles.onlineText}>Çevrimiçi</Text>
             </View>
           )}
 
           {profil?.profileVerified && (
             <View style={styles.dogrulamaEtiket}>
-              <Text style={styles.dogrulamaText}>�o" Profil Do�Yrulandi</Text>
+              <Text style={styles.dogrulamaText}>✓ Profil Doğrulandı</Text>
             </View>
           )}
         </View>
 
         {/*
          * =================================================
-         * PROFIL G�oNCELLE
+         * PROFİL GÜNCELLE
          * =================================================
          */}
 
         <View style={styles.guncelleContainer}>
           <Pressable style={styles.guncelleButonu} onPress={profilGuncelle}>
-            <Text style={styles.guncelleButonuText}>�o� Profili G�ncelle</Text>
+            <Text style={styles.guncelleButonuText}>✏️ Profili Güncelle</Text>
           </Pressable>
         </View>
 
@@ -1013,7 +1013,7 @@ export default function Profil() {
             <Text style={styles.bolumBaslik}>Profil Bilgileri</Text>
 
             <Text style={styles.bilgiYok}>
-              Hen�z profil bilgilerinizi tamamlamadiniz.
+              Henüz profil bilgilerinizi tamamlamadınız.
             </Text>
           </View>
         )}
@@ -1029,7 +1029,7 @@ export default function Profil() {
             {soruCevapYukleniyor ? (
               <View style={styles.soruCevapYukleniyor}>
                 <Text style={styles.soruCevapYukleniyorText}>
-                  Sorular ve cevaplar y�kleniyor...
+                  Sorular ve cevaplar yükleniyor...
                 </Text>
               </View>
             ) : (
@@ -1056,7 +1056,7 @@ export default function Profil() {
           <ProfileActions />
 
           <Pressable style={styles.ayarlarButonu} onPress={ayarlaraGit}>
-            <Text style={styles.ayarlarButonuText}>�sT Ayarlar</Text>
+            <Text style={styles.ayarlarButonuText}>⚙️ Ayarlar</Text>
           </Pressable>
         </View>
         {/*
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * �oST BAR
+   * ÜST BAR
    */
 
   ustBar: {
@@ -1276,7 +1276,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * G�oNCELLE
+   * GÜNCELLE
    */
 
   guncelleContainer: {
@@ -1300,7 +1300,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * B�-L�oM
+   * BÖLÜM
    */
 
   bolum: {
@@ -1370,4 +1370,3 @@ const styles = StyleSheet.create({
     height: 20,
   },
 });
-

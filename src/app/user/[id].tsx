@@ -1,3 +1,5 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,15 +13,13 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 // src/app/home.tsx
 // src/app/user/[id].tsx
 import { API_BASE_URL } from "../../config/api";
 const API_ADRESI = API_BASE_URL + "/api";
 
 const SUNUCU_ADRESI = API_BASE_URL;
-type Kullanici = {
+type Kullanıcı = {
   id: number;
   username: string;
   email?: string;
@@ -61,14 +61,15 @@ type Favori = {
   favoriteUserId?: number;
 };
 
-export default function KullaniciProfil() {
-  const router = useRouter();
+export default function KullanıcıProfil() {
+  const navigation = useNavigation<any>();
 
-  const { id } = useLocalSearchParams<{
+  const route = useRoute<any>();
+  const { id } = route.params as {
     id: string;
-  }>();
+  };
 
-  const [kullanici, setKullanici] = useState<Kullanici | null>(null);
+  const [kullanici, setKullanıcı] = useState<Kullanıcı | null>(null);
   const [profil, setProfil] = useState<Profil | null>(null);
 
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -96,16 +97,16 @@ export default function KullaniciProfil() {
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
         return;
       }
 
       if (!id) {
-        setHata("Kullanici bulunamadi.");
+        setHata("Kullanıcı bulunamadi.");
         return;
       }
 
-      console.log("KULLANICI PROFILI A�?ILIYOR:", id);
+      console.log("KULLANICI PROFİLİ AÇILIYOR:", id);
 
       const kullaniciResponse = await fetch(`${API_ADRESI}/users/${id}`, {
         method: "GET",
@@ -119,11 +120,11 @@ export default function KullaniciProfil() {
 
       if (!kullaniciResponse.ok) {
         throw new Error(
-          `Kullanici bilgisi alinamadi. HTTP ${kullaniciResponse.status}`,
+          `Kullanıcı bilgisi alinamadi. HTTP ${kullaniciResponse.status}`,
         );
       }
 
-      const kullaniciVerisi = (await kullaniciResponse.json()) as Kullanici;
+      const kullaniciVerisi = (await kullaniciResponse.json()) as Kullanıcı;
 
       const profilResponse = await fetch(`${API_ADRESI}/profiles`, {
         method: "GET",
@@ -157,7 +158,7 @@ export default function KullaniciProfil() {
 
       console.log("BULUNAN PROFIL:", bulunanProfil);
 
-      setKullanici(kullaniciVerisi);
+      setKullanıcı(kullaniciVerisi);
       setProfil(bulunanProfil || null);
 
       await durumlariGetir(token, Number(id));
@@ -167,22 +168,22 @@ export default function KullaniciProfil() {
       setHata(
         error instanceof Error
           ? error.message
-          : "Profil y�klenirken hata olu�Ytu.",
+          : "Profil yüklenirken hata oluştu.",
       );
     } finally {
       setYukleniyor(false);
     }
   };
 
-  const durumlariGetir = async (token: string, hedefKullaniciId: number) => {
+  const durumlariGetir = async (token: string, hedefKullanıcıId: number) => {
     try {
-      const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
+      const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
 
-      if (!mevcutKullaniciId) {
+      if (!mevcutKullanıcıId) {
         return;
       }
 
-      if (mevcutKullaniciId === hedefKullaniciId) {
+      if (mevcutKullanıcıId === hedefKullanıcıId) {
         return;
       }
 
@@ -209,8 +210,8 @@ export default function KullaniciProfil() {
 
         const mevcutBegeni = begeniler.some(
           (item) =>
-            Number(item.userId) === mevcutKullaniciId &&
-            Number(item.likedUserId) === hedefKullaniciId,
+            Number(item.userId) === mevcutKullanıcıId &&
+            Number(item.likedUserId) === hedefKullanıcıId,
         );
 
         setBegendi(mevcutBegeni);
@@ -221,8 +222,8 @@ export default function KullaniciProfil() {
 
         const mevcutFavori = favoriler.some(
           (item) =>
-            Number(item.userId) === mevcutKullaniciId &&
-            Number(item.favoriteUserId) === hedefKullaniciId,
+            Number(item.userId) === mevcutKullanıcıId &&
+            Number(item.favoriteUserId) === hedefKullanıcıId,
         );
 
         setFavoride(mevcutFavori);
@@ -236,15 +237,15 @@ export default function KullaniciProfil() {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
+      const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
 
-      if (!token || !mevcutKullaniciId || !kullanici) {
+      if (!token || !mevcutKullanıcıId || !kullanici) {
         Alert.alert("Hata", "Oturum veya kullanici bilgisi bulunamadi.");
         return;
       }
 
-      if (mevcutKullaniciId === kullanici.id) {
-        Alert.alert("Uyari", "Kendinizi be�Yenemezsiniz.");
+      if (mevcutKullanıcıId === kullanici.id) {
+        Alert.alert("Uyarı", "Kendinizi beğenemezsiniz.");
         return;
       }
 
@@ -262,7 +263,7 @@ export default function KullaniciProfil() {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          userId: mevcutKullaniciId,
+          userId: mevcutKullanıcıId,
           likedUserId: kullanici.id,
         }),
       });
@@ -273,19 +274,19 @@ export default function KullaniciProfil() {
 
       if (!response.ok) {
         throw new Error(
-          responseText || `Be�Yeni g�nderilemedi. HTTP ${response.status}`,
+          responseText || `Beğeni gönderilemedi. HTTP ${response.status}`,
         );
       }
 
       setBegendi(true);
 
-      Alert.alert("Ba�Yarili", "?? Be�Yeni g�nderildi.");
+      Alert.alert("Başarılı", "?? Beğeni gönderildi.");
     } catch (error) {
       console.log("BEGENI HATASI:", error);
 
       Alert.alert(
         "Hata",
-        error instanceof Error ? error.message : "Be�Yeni g�nderilemedi.",
+        error instanceof Error ? error.message : "Beğeni gönderilemedi.",
       );
     } finally {
       setBegeniYukleniyor(false);
@@ -296,15 +297,15 @@ export default function KullaniciProfil() {
     try {
       const token = await AsyncStorage.getItem("token");
 
-      const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
+      const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
 
-      if (!token || !mevcutKullaniciId || !kullanici) {
+      if (!token || !mevcutKullanıcıId || !kullanici) {
         Alert.alert("Hata", "Oturum veya kullanici bilgisi bulunamadi.");
         return;
       }
 
-      if (mevcutKullaniciId === kullanici.id) {
-        Alert.alert("Uyari", "Kendinizi favorilere ekleyemezsiniz.");
+      if (mevcutKullanıcıId === kullanici.id) {
+        Alert.alert("Uyarı", "Kendinizi favorilere ekleyemezsiniz.");
         return;
       }
 
@@ -322,7 +323,7 @@ export default function KullaniciProfil() {
           Accept: "application/json",
         },
         body: JSON.stringify({
-          userId: mevcutKullaniciId,
+          userId: mevcutKullanıcıId,
           favoriteUserId: kullanici.id,
         }),
       });
@@ -339,7 +340,7 @@ export default function KullaniciProfil() {
 
       setFavoride(true);
 
-      Alert.alert("Ba�Yarili", "? Favorilere eklendi.");
+      Alert.alert("Başarılı", "? Favorilere eklendi.");
     } catch (error) {
       console.log("FAVORI HATASI:", error);
 
@@ -364,7 +365,7 @@ export default function KullaniciProfil() {
       const temizMesaj = mesaj.trim();
 
       if (!temizMesaj) {
-        Alert.alert("Uyari", "Mesaj bo�Y olamaz.");
+        Alert.alert("Uyarı", "Mesaj boş olamaz.");
         return;
       }
 
@@ -388,14 +389,14 @@ export default function KullaniciProfil() {
       console.log("MESAJ RESPONSE:", response.status, responseText);
 
       if (!response.ok) {
-        let hataMesaji = `Mesaj g�nderilemedi. HTTP ${response.status}`;
+        let hataMesaji = `Mesaj gönderilemedi. HTTP ${response.status}`;
 
         try {
           const veri = JSON.parse(responseText);
 
           if (veri?.kod === "PREMIUM_GEREKLI") {
             hataMesaji =
-              "Mesaj g�nderebilmek i�in aktif PREMIUM �yeli�Yiniz bulunmalidir.";
+              "Mesaj gönderebilmek için aktif PREMIUM üyeliğiniz bulunmalıdır.";
           } else if (veri?.mesaj) {
             hataMesaji = veri.mesaj;
           }
@@ -410,13 +411,13 @@ export default function KullaniciProfil() {
 
       setMesaj("");
 
-      Alert.alert("Ba�Yarili", "Mesaj ba�Yariyla g�nderildi.");
+      Alert.alert("Başarılı", "Mesaj başarıyla gönderildi.");
     } catch (error) {
       console.log("MESAJ HATASI:", error);
 
       Alert.alert(
         "Hata",
-        error instanceof Error ? error.message : "Mesaj g�nderilemedi.",
+        error instanceof Error ? error.message : "Mesaj gönderilemedi.",
       );
     } finally {
       setMesajYukleniyor(false);
@@ -465,7 +466,7 @@ export default function KullaniciProfil() {
 
   const enumGoster = (deger?: string | number) => {
     if (deger === undefined || deger === null || String(deger).trim() === "") {
-      return "Belirtilmemi�Y";
+      return "Belirtilmemiş";
     }
 
     return String(deger);
@@ -478,7 +479,7 @@ export default function KullaniciProfil() {
           <ActivityIndicator size="large" />
 
           <Text style={styles.loadingText}>
-            Kullanici profili y�kleniyor...
+            Kullanıcı profili yükleniyor...
           </Text>
         </View>
       </SafeAreaView>
@@ -489,7 +490,7 @@ export default function KullaniciProfil() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.hataBaslik}>Profil Y�klenemedi</Text>
+          <Text style={styles.hataBaslik}>Profil Yüklenemedi</Text>
 
           <Text style={styles.hataText}>{hata}</Text>
 
@@ -502,9 +503,9 @@ export default function KullaniciProfil() {
 
           <Pressable
             style={styles.secondaryButton}
-            onPress={() => router.back()}
+            onPress={() => navigation.goBack()}
           >
-            <Text style={styles.secondaryButtonText}>Geri D�n</Text>
+            <Text style={styles.secondaryButtonText}>Geri Dön</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -515,10 +516,13 @@ export default function KullaniciProfil() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.hataBaslik}>Kullanici bulunamadi.</Text>
+          <Text style={styles.hataBaslik}>Kullanıcı bulunamadi.</Text>
 
-          <Pressable style={styles.primaryButton} onPress={() => router.back()}>
-            <Text style={styles.primaryButtonText}>Geri D�n</Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Text style={styles.primaryButtonText}>Geri Dön</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -539,11 +543,14 @@ export default function KullaniciProfil() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* �oST BAR */}
+        {/* ÜST BAR */}
 
         <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} style={styles.backButton}>
-            <Text style={styles.backIcon}>�?�</Text>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Text style={styles.backIcon}>←</Text>
 
             <Text style={styles.backText}>Geri</Text>
           </Pressable>
@@ -551,7 +558,7 @@ export default function KullaniciProfil() {
           <Text style={styles.topTitle}>Profil</Text>
 
           <Pressable
-            onPress={() => router.replace("/home")}
+            onPress={() => navigation.replace("home")}
             style={styles.homeButton}
           >
             <Text style={styles.homeButtonText}>Ana Sayfa</Text>
@@ -591,7 +598,7 @@ export default function KullaniciProfil() {
           <View style={styles.tags}>
             {yas !== null && (
               <View style={styles.tag}>
-                <Text style={styles.tagText}>gY'� {yas} ya�Yinda</Text>
+                <Text style={styles.tagText}>📍 {yas} yaşında</Text>
               </View>
             )}
 
@@ -603,14 +610,14 @@ export default function KullaniciProfil() {
 
             {kullanici.city && (
               <View style={styles.tag}>
-                <Text style={styles.tagText}>gY"� {kullanici.city}</Text>
+                <Text style={styles.tagText}>📍 {kullanici.city}</Text>
               </View>
             )}
 
             {profil?.profession && (
               <View style={styles.tag}>
                 <Text style={styles.tagText}>
-                  gY'� {enumGoster(profil.profession)}
+                  📍 {enumGoster(profil.profession)}
                 </Text>
               </View>
             )}
@@ -626,14 +633,14 @@ export default function KullaniciProfil() {
 
           {kullanici.online && (
             <View style={styles.onlineBadge}>
-              <Text style={styles.onlineBadgeText}>�-� �?evrimi�i</Text>
+              <Text style={styles.onlineBadgeText}>🟢 Çevrimiçi</Text>
             </View>
           )}
 
           {profil?.profileVerified && (
             <View style={styles.verifiedBadge}>
               <Text style={styles.verifiedBadgeText}>
-                �o" Profil Do�Yrulandi
+                ✓ Profil Doğrulandı
               </Text>
             </View>
           )}
@@ -649,10 +656,10 @@ export default function KullaniciProfil() {
           >
             <Text style={styles.likeButtonText}>
               {begeniYukleniyor
-                ? "G�nderiliyor..."
+                ? "Gönderiliyor..."
                 : begendi
-                  ? "?? Be�Yenildi"
-                  : "?? Be�Yen"}
+                  ? "♥ Beğenildi"
+                  : "♥ Beğen"}
             </Text>
           </Pressable>
 
@@ -666,7 +673,7 @@ export default function KullaniciProfil() {
                 ? "Ekleniyor..."
                 : favoride
                   ? "? Favorilerde"
-                  : "�~? Favorilere Ekle"}
+                  : "☆ Favorilere Ekle"}
             </Text>
           </Pressable>
         </View>
@@ -679,14 +686,14 @@ export default function KullaniciProfil() {
             onPress={() => setMesajAcik(!mesajAcik)}
           >
             <Text style={styles.messageButtonText}>
-              {mesajAcik ? "Mesaj Alanini Kapat" : "gY'� Mesaj G�nder"}
+              {mesajAcik ? "Mesaj Alanını Kapat" : "📍 Mesaj Gönder"}
             </Text>
           </Pressable>
 
           {mesajAcik && (
             <View style={styles.messageBox}>
               <Text style={styles.messageTitle}>
-                {adSoyad || kullanici.username} ki�Yisine mesaj g�nder
+                {adSoyad || kullanici.username} kişisine mesaj gönder
               </Text>
 
               <TextInput
@@ -710,7 +717,7 @@ export default function KullaniciProfil() {
                   disabled={mesajYukleniyor || !mesaj.trim()}
                 >
                   <Text style={styles.sendButtonText}>
-                    {mesajYukleniyor ? "G�nderiliyor..." : "G�nder"}
+                    {mesajYukleniyor ? "Gönderiliyor..." : "Gönder"}
                   </Text>
                 </Pressable>
               </View>
@@ -726,7 +733,7 @@ export default function KullaniciProfil() {
           <View style={styles.aboutBox}>
             <Text style={styles.aboutText}>
               {profil?.about ||
-                "Bu kullanici hakkinda hen�z bilgi eklenmemi�Y."}
+                "Bu kullanıcı hakkında henüz bilgi eklenmemiş."}
             </Text>
           </View>
         </View>
@@ -734,17 +741,17 @@ export default function KullaniciProfil() {
         {/* KISISEL BILGILER */}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ki�Yisel Bilgiler</Text>
+          <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
 
           <BilgiKarti
             baslik="Sehir"
-            deger={kullanici.city || "Belirtilmemi�Y"}
+            deger={kullanici.city || "Belirtilmemiş"}
             ikon="📏"
           />
 
           <BilgiKarti
-            baslik="Ya�Y"
-            deger={yas !== null ? `${yas} ya�Yinda` : "Belirtilmemi�Y"}
+            baslik="Yaş"
+            deger={yas !== null ? `${yas} yaşında` : "Belirtilmemiş"}
             ikon="🎂"
           />
 
@@ -755,21 +762,21 @@ export default function KullaniciProfil() {
           />
 
           <BilgiKarti
-            baslik="E�Yitim"
+            baslik="Eğitim"
             deger={enumGoster(profil?.education)}
             ikon="🎓"
           />
 
           <BilgiKarti
             baslik="Boy"
-            deger={profil?.height ? `${profil.height} cm` : "Belirtilmemi�Y"}
+            deger={profil?.height ? `${profil.height} cm` : "Belirtilmemiş"}
             ikon="📏"
           />
 
           <BilgiKarti
             baslik="Kilo"
-            deger={profil?.weight ? `${profil.weight} kg` : "Belirtilmemi�Y"}
-            ikon="�s-?"
+            deger={profil?.weight ? `${profil.weight} kg` : "Belirtilmemiş"}
+            ikon="weight"
           />
 
           <BilgiKarti
@@ -804,24 +811,20 @@ export default function KullaniciProfil() {
                 ))}
             </View>
           ) : (
-            <Text style={styles.emptyText}>Ilgi alani belirtilmemi�Y.</Text>
+            <Text style={styles.emptyText}>İlgi alanı belirtilmemiş.</Text>
           )}
         </View>
 
         {/* DETAYLI PROFIL */}
-
         <View style={styles.section}>
           <Pressable
             style={styles.detailButton}
             onPress={() =>
-              router.push({
-                pathname: "/user/details/[id]",
-                params: { id: String(id) },
+              navigation.navigate("userDetails", {
+                id: String(id),
               })
             }
-          >
-            <Text style={styles.detailButtonText}>�"�️ Detayli Profili G�r</Text>
-          </Pressable>
+          ></Pressable>
         </View>
 
         {/* ALT BUTONLAR */}
@@ -829,16 +832,16 @@ export default function KullaniciProfil() {
         <View style={styles.bottomButtons}>
           <Pressable
             style={styles.bottomBackButton}
-            onPress={() => router.replace("/home")}
+            onPress={() => navigation.replace("home")}
           >
-            <Text style={styles.bottomBackText}>�?� Kullanicilara D�n</Text>
+            <Text style={styles.bottomBackText}>← Kullanıcılara Dön</Text>
           </Pressable>
 
           <Pressable
             style={styles.bottomMessageButton}
-            onPress={() => router.push("/messages")}
+            onPress={() => navigation.navigate("messages")}
           >
-            <Text style={styles.bottomMessageText}>gY'� T�m Mesajlar</Text>
+            <Text style={styles.bottomMessageText}>📍 Tüm Mesajlar</Text>
           </Pressable>
         </View>
       </ScrollView>

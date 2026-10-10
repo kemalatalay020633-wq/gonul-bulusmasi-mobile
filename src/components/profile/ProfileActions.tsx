@@ -1,6 +1,6 @@
 import React from "react";
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { router } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 type ProfileActionsProps = {
@@ -8,12 +8,13 @@ type ProfileActionsProps = {
 };
 
 export default function ProfileActions({ onLogout }: ProfileActionsProps) {
+  const navigation = useNavigation<any>();
   const anaSayfayaGit = () => {
-    router.push("/home");
+    navigation.navigate("home");
   };
 
   const profiliDuzenle = () => {
-    router.push("/profile/edit");
+    navigation.navigate("profileEdit");
   };
 
   const cikisYap = () => {
@@ -39,7 +40,7 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
             if (onLogout) {
               onLogout();
             } else {
-              router.replace("/");
+              navigation.replace("index");
             }
           },
         },

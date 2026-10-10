@@ -1,15 +1,25 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
+
+import InCallManager from "react-native-incall-manager";
+import { createSound } from "react-native-nitro-sound";
 import {
-  RTCPeerConnection,
-  RTCSessionDescription,
-  RTCIceCandidate,
   mediaDevices,
   MediaStream,
+  RTCIceCandidate,
+  RTCPeerConnection,
+  RTCSessionDescription,
 } from "react-native-webrtc";
 import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import InCallManager from "react-native-incall-manager";
-import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
+
 import { Hoparlor } from "./Hoparlor";
+
+type RTCSessionDescriptionInit = {
+  type: "offer" | "answer" | "pranswer" | "rollback";
+  sdp?: string;
+};
+type RTCIceCandidateInit = any;
 
 const SUNUCU_ADRESI = API_BASE_URL;
 
@@ -22,31 +32,45 @@ export type AramaTuru = "SES" | "VIDEO";
 export type AramaMesaji =
   | {
       tip: "CALL_OFFER";
+
       arayanId: number;
+
       arananId: number;
+
       aramaTuru: AramaTuru;
+
       teklif: RTCSessionDescriptionInit;
     }
   | {
       tip: "CALL_ANSWER";
+
       arayanId: number;
+
       arananId: number;
+
       cevap: RTCSessionDescriptionInit;
     }
   | {
       tip: "CALL_ICE";
+
       arayanId: number;
+
       arananId: number;
+
       aday: RTCIceCandidateInit;
     }
   | {
       tip: "CALL_REJECT";
+
       arayanId: number;
+
       arananId: number;
     }
   | {
       tip: "CALL_END";
+
       arayanId: number;
+
       arananId: number;
     };
 
@@ -92,13 +116,21 @@ type AramaOlaylari = {
 
 type BackendAramaSinyali = {
   hedefKullaniciId: number;
+
   tur: string;
+
   tip: string;
+
   sdp?: string | null;
+
   aday?: string | null;
+
   sdpMid?: string | null;
+
   sdpMLineIndex?: number | null;
 };
+
+type AramaOlayCallback = (...args: any[]) => void;
 
 class AramaWebRTC {
   private peerConnection: RTCPeerConnection | null = null;
@@ -111,13 +143,23 @@ class AramaWebRTC {
 
   private arananKullaniciId: number | null = null;
 
-  private aramaTuru: AramaTuru = "SES";
+  private aramaTuru: AramaTuru = "SES"; /*\*
 
-  /**
-   * =========================================================
-   * STOMP CLIENT
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* STOMP CLIENT
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private stompClient: Client | null = null;
 
@@ -128,169 +170,379 @@ class AramaWebRTC {
   private aramaSubscription: StompSubscription | null = null;
 
   private hariciSinyalGonderici:
-    | ((sinyal: BackendAramaSinyali) => void | Promise<void>)
-    | null = null;
+    ((sinyal: BackendAramaSinyali) => void | Promise<void>) | null = null; /*\*
 
-  /**
-   * =========================================================
-   * ICE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ICE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private bekleyenIceAdaylari: RTCIceCandidateInit[] = [];
 
   private remoteDescriptionHazir = false;
 
   private aramaSonlandiriliyor = false;
-  private webRtcBaglandiBildirildi = false;
 
-  // AynÄ± anda iki createOffer Ã§alÄ±ÅŸmasÄ±nÄ± engeller.
-  // Ã–zellikle medya alma ile arama baÅŸlatmanÄ±n yarÄ±ÅŸmasÄ± halinde
-  // SDP m-line sÄ±rasÄ±nÄ±n bozulmasÄ±nÄ± Ã¶nler.
-  private offerOlusturuluyor = false;
+  private webRtcBaglandiBildirildi = false; // Aynı anda iki createOffer çalışmasını engeller.
+  // Özellikle medya alma ile arama başlatmanın yarışması halinde
+  // SDP m-line sırasının bozulmasını önler.
 
-  // AynÄ± arama iÃ§in aramaBaslat() birden fazla kez tetiklenirse
-  // ikinci Ã§aÄŸrÄ± yeni bir createOffer baÅŸlatmaz; ilk Ã§aÄŸrÄ±nÄ±n
-  // Promise'ini bekler. BÃ¶ylece aynÄ± PeerConnection kapanmadan
-  // ikinci offer Ã¼retme yarÄ±ÅŸÄ± oluÅŸmaz.
-  private aramaBaslatPromise: Promise<RTCSessionDescriptionInit> | null = null;
+  private offerOlusturuluyor = false; // Aynı arama için aramaBaslat() birden fazla kez tetiklenirse
+  // ikinci çağrı yeni bir createOffer başlatmaz; ilk çağrının
+  // Promise'ini bekler. Böylece aynı PeerConnection kapanmadan
+  // ikinci offer üretme yarışı oluşmaz.
 
-  /**
-   * =========================================================
-   * ARAMA SESÄ° / ANDROID CALL AUDIO
-   * =========================================================
-   */
+  private aramaBaslatPromise: Promise<RTCSessionDescriptionInit> | null =
+    null; /*\*
+
+
+
+   \* =========================================================
+
+
+
+   \* ARAMA SESİ / ANDROID CALL AUDIO
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private aramaSesiCalisiyor = false;
+
   private aramaAudioOturumuAcik = false;
+
+  private ringbackDonguAktif = false;
+  private ringbackOynatici = createSound();
+  private ringtoneOynatici = createSound();
+  private ringbackDinleyiciHazir = false;
+  private ringtoneDinleyiciHazir = false;
+
+  private ringtoneDonguAktif = false;
+
+  private ringtoneBaslatiliyor = false;
+
+  private sonGelenOfferSdp: string | null = null;
+
+  private cevapIsleniyor = false;
+
+  private ringbackHoparlorOnceAcik = false;
+
+  private gelenAramaAudioOturumuAcik = false;
+
   private hoparlorAcik = false;
 
-  private aramaSesiniBaslat() {
+  private async sesOturumunuHazirla() {
     try {
-      if (this.aramaSesiCalisiyor) {
-        console.log("â­ï¸ Arama ringback sesi zaten Ã§alÄ±ÅŸÄ±yor.");
-        return;
+      InCallManager.start({
+        media: "audio",
+        auto: true,
+      });
+
+      try {
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (hata) {
+        console.warn("Ses oturumu hoparlör yönlendirmesi ayarlanamadı:", hata);
       }
-
-      // GÄ°DEN ARAMA: karÅŸÄ± taraf cevap verene kadar ringback Ã§al.
-      // Incoming arama iÃ§in startRingtone(), outgoing arama iÃ§in
-      // startRingback() kullanÄ±lmalÄ±dÄ±r.
-      InCallManager.startRingback("_DEFAULT_");
-
-      this.aramaSesiCalisiyor = true;
-
-      console.log("ğŸ””ğŸ“ GÄ°DEN ARAMA RINGBACK BAÅLATILDI (_DEFAULT_)");
     } catch (hata) {
-      this.aramaSesiCalisiyor = false;
-      console.warn("âš ï¸ Giden arama ringback baÅŸlatÄ±lamadÄ±:", hata);
+      console.warn("Android ses oturumu hazırlanamadı:", hata);
     }
   }
 
-  private gelenAramaSesiniBaslat() {
+  private async ringbackMp3Baslat() {
+    const uri =
+      "android.resource://com.anonymous.gonulbulusmasimobile/raw/ringback";
+
+    if (!this.ringbackDinleyiciHazir) {
+      this.ringbackOynatici.addPlaybackEndListener(() => {
+        if (this.ringbackDonguAktif) {
+          void this.ringbackOynatici.startPlayer(uri).catch((hata) => {
+            console.warn("Ringback tekrar başlatılamadı:", hata);
+          });
+        }
+      });
+      this.ringbackDinleyiciHazir = true;
+    }
+
+    await this.ringbackOynatici.startPlayer(uri);
+    await this.ringbackOynatici.setVolume(1);
+  }
+
+  private async ringtoneMp3Baslat() {
+    const uri =
+      "android.resource://com.anonymous.gonulbulusmasimobile/raw/ringtone";
+
+    if (!this.ringtoneDinleyiciHazir) {
+      this.ringtoneOynatici.addPlaybackEndListener(() => {
+        if (this.ringtoneDonguAktif) {
+          void this.ringtoneOynatici.startPlayer(uri).catch((hata) => {
+            console.warn("Ringtone tekrar başlatılamadı:", hata);
+          });
+        }
+      });
+      this.ringtoneDinleyiciHazir = true;
+    }
+
+    await this.ringtoneOynatici.startPlayer(uri);
+    await this.ringtoneOynatici.setVolume(1);
+  }
+
+  private ringbackMp3Durdur() {
+    this.ringbackDonguAktif = false;
+
+    if (this.ringbackDinleyiciHazir) {
+      try {
+        this.ringbackOynatici.removePlaybackEndListener();
+      } catch (hata) {
+        console.warn("Ringback dinleyicisi kaldırılamadı:", hata);
+      }
+      this.ringbackDinleyiciHazir = false;
+    }
+
+    void this.ringbackOynatici.stopPlayer().catch(() => {});
+  }
+
+  private ringtoneMp3Durdur() {
+    this.ringtoneDonguAktif = false;
+
+    if (this.ringtoneDinleyiciHazir) {
+      try {
+        this.ringtoneOynatici.removePlaybackEndListener();
+      } catch (hata) {
+        console.warn("Ringtone dinleyicisi kaldırılamadı:", hata);
+      }
+      this.ringtoneDinleyiciHazir = false;
+    }
+
+    void this.ringtoneOynatici.stopPlayer().catch(() => {});
+  }
+
+  private async aramaSesiniBaslat() {
     try {
       if (this.aramaSesiCalisiyor) {
-        console.log("â­ï¸ Gelen arama ringtone zaten Ã§alÄ±ÅŸÄ±yor.");
+        console.log("Arama ringback sesi zaten çalışıyor.");
         return;
       }
 
-      // GELEN ARAMA: kullanÄ±cÄ± cevaplayana/reddedene kadar telefon zili.
-      InCallManager.startRingtone("_DEFAULT_", 1000, "", 1000);
+      this.ringbackHoparlorOnceAcik = this.hoparlorAcik;
 
+      InCallManager.start({
+        media: "audio",
+        auto: true,
+      });
+
+      try {
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (hata) {
+        console.warn("Ringback hoparlör yönlendirmesi ayarlanamadı:", hata);
+      }
+
+      this.ringbackDonguAktif = true;
       this.aramaSesiCalisiyor = true;
 
-      console.log("ğŸ””ğŸ“ GELEN ARAMA RINGTONE BAÅLATILDI");
+      await this.ringbackMp3Baslat();
+
+      console.log("GİDEN ARAMA MP3 RINGBACK BAŞLATILDI");
     } catch (hata) {
+      this.ringbackMp3Durdur();
       this.aramaSesiCalisiyor = false;
-      console.warn("âš ï¸ Gelen arama ringtone baÅŸlatÄ±lamadÄ±:", hata);
+      console.warn("Giden arama ringback başlatılamadı:", hata);
+    }
+  }
+
+  private gelenAramaAudioOturumunuBaslat(): boolean {
+    try {
+      if (this.gelenAramaAudioOturumuAcik) {
+        return true;
+      }
+
+      console.log("GELEN ARAMA ZIL SESI ICIN ANDROID AUDIO OTURUMU ACILIYOR");
+
+      InCallManager.start({
+        media: "audio",
+        auto: true,
+      });
+
+      try {
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (hata) {
+        console.warn("Gelen arama hoparlor yonlendirmesi ayarlanamadi:", hata);
+      }
+
+      this.gelenAramaAudioOturumuAcik = true;
+
+      console.log("GELEN ARAMA ANDROID AUDIO OTURUMU HAZIR");
+
+      return true;
+    } catch (hata) {
+      this.gelenAramaAudioOturumuAcik = false;
+
+      console.warn("Gelen arama Android audio oturumu acilamadi:", hata);
+
+      return false;
+    }
+  }
+
+  private gelenAramaAudioOturumunuKapat() {
+    if (!this.gelenAramaAudioOturumuAcik) {
+      return;
+    }
+
+    try {
+      InCallManager.stop();
+
+      console.log("GELEN ARAMA GECICI AUDIO OTURUMU KAPATILDI");
+    } catch (hata) {
+      console.warn("Gelen arama gecici audio oturumu kapatilamadi:", hata);
+    } finally {
+      this.gelenAramaAudioOturumuAcik = false;
+    }
+  }
+
+  private async gelenAramaSesiniBaslat() {
+    if (this.aramaSesiCalisiyor || this.ringtoneBaslatiliyor) {
+      console.log("Gelen arama ringtone zaten çalışıyor/başlatılıyor.");
+      return;
+    }
+
+    this.ringtoneBaslatiliyor = true;
+
+    try {
+      const audioHazir = this.gelenAramaAudioOturumunuBaslat();
+
+      if (!audioHazir) {
+        console.warn("Gelen arama için Android ses oturumu hazır değil.");
+      }
+
+      try {
+        InCallManager.setForceSpeakerphoneOn(true);
+      } catch (hata) {
+        console.warn("Gelen arama hoparlör yönlendirmesi ayarlanamadı:", hata);
+      }
+
+      this.ringtoneDonguAktif = true;
+      this.aramaSesiCalisiyor = true;
+
+      await this.ringtoneMp3Baslat();
+
+      console.log("GELEN ARAMA MP3 RINGTONE BAŞLATILDI");
+    } catch (hata) {
+      this.ringtoneMp3Durdur();
+      this.aramaSesiCalisiyor = false;
+      console.warn("Gelen arama ringtone başlatılamadı:", hata);
+    } finally {
+      this.ringtoneBaslatiliyor = false;
     }
   }
 
   private aramaSesiniDurdur() {
+    this.ringbackMp3Durdur();
+    this.ringtoneMp3Durdur();
+
     try {
-      if (!this.aramaSesiCalisiyor) {
-        return;
-      }
-
-      try {
-        InCallManager.stopRingback();
-      } catch (hata) {
-        console.warn("âš ï¸ Ringback durdurulamadÄ±:", hata);
-      }
-
-      try {
-        InCallManager.stopRingtone();
-      } catch (hata) {
-        console.warn("âš ï¸ Ringtone durdurulamadÄ±:", hata);
-      }
-
-      this.aramaSesiCalisiyor = false;
-
-      console.log("ğŸ”•ğŸ“ ARAMA ZÄ°L SESÄ° DURDURULDU");
+      InCallManager.stopRingback();
     } catch (hata) {
-      this.aramaSesiCalisiyor = false;
-      console.warn("âš ï¸ Arama zil sesi durdurulamadÄ±:", hata);
+      console.warn("Sistem ringback temizlenemedi:", hata);
     }
+
+    try {
+      InCallManager.stopRingtone();
+    } catch (hata) {
+      console.warn("Sistem ringtone temizlenemedi:", hata);
+    }
+
+    try {
+      InCallManager.setForceSpeakerphoneOn(this.ringbackHoparlorOnceAcik);
+    } catch (hata) {
+      console.warn("Ses yönlendirmesi geri yüklenemedi:", hata);
+    }
+
+    this.aramaSesiCalisiyor = false;
+    console.log("ARAMA MP3 ZİL SESLERİ DURDURULDU");
   }
 
   private aramaSesiniTemizle() {
-    try {
-      try {
-        InCallManager.stopRingback();
-      } catch {}
+    this.ringbackMp3Durdur();
+    this.ringtoneMp3Durdur();
 
-      try {
-        InCallManager.stopRingtone();
-      } catch {}
-    } finally {
-      this.aramaSesiCalisiyor = false;
-    }
+    try {
+      InCallManager.stopRingback();
+    } catch {}
+
+    try {
+      InCallManager.stopRingtone();
+    } catch {}
+
+    this.aramaSesiCalisiyor = false;
+    this.ringbackHoparlorOnceAcik = false;
   }
 
   private aramaAudioOturumunuBaslat(): boolean {
     try {
       if (this.aramaAudioOturumuAcik) {
-        console.log("â­ï¸ CALL AUDIO OTURUMU ZATEN AÃ‡IK");
+        console.log(" CALL AUDIO OTURUMU ZATEN AÇIK");
+
         return true;
       }
 
       const medya = this.aramaTuru === "VIDEO" ? "video" : "audio";
 
       console.log("======================================");
-      console.log("ğŸ§ CALL AUDIO OTURUMU BAÅLATILIYOR");
-      console.log("ğŸ§ Medya:", medya);
+
+      console.log(" CALL AUDIO OTURUMU BAŞLATILIYOR");
+
+      console.log(" Medya:", medya);
+
       console.log("======================================");
 
       const baslatildi = Hoparlor.aramayiBaslat(medya);
 
       if (!baslatildi) {
-        console.warn("âš ï¸ CALL AUDIO OTURUMU BAÅLATILAMADI.");
+        console.warn("  CALL AUDIO OTURUMU BAŞLATILAMADI.");
 
         this.aramaAudioOturumuAcik = false;
+
         this.hoparlorAcik = false;
 
         return false;
-      }
+      } // Görüntülü aramada hoparlör varsayılan olarak AÇIK,
+      // sesli aramada ahize varsayılan olarak AÇIK olsun.
 
-      // GÃ¶rÃ¼ntÃ¼lÃ¼ aramada hoparlÃ¶r varsayÄ±lan olarak AÃ‡IK,
-      // sesli aramada ahize varsayÄ±lan olarak AÃ‡IK olsun.
       this.hoparlorAcik = this.aramaTuru === "VIDEO";
+
       this.aramaAudioOturumuAcik = true;
 
       console.log("======================================");
-      console.log("ğŸ§ğŸ“ CALL AUDIO OTURUMU BAÅLATILDI");
+
+      console.log(" CALL AUDIO OTURUMU BAŞLATILDI");
+
       console.log(
-        this.hoparlorAcik
-          ? "ğŸ”Š VIDEO: HOPARLÃ–R AÃ‡IK"
-          : "ğŸ”ˆ SES: AHÄ°ZE AÃ‡IK",
+        this.hoparlorAcik ? " VIDEO: HOPARLÖR AÇIK" : " SES: AHİZE AÇIK",
       );
+
       console.log("======================================");
 
       return true;
     } catch (hata) {
       this.aramaAudioOturumuAcik = false;
+
       this.hoparlorAcik = false;
 
-      console.warn("âš ï¸ CALL AUDIO OTURUMU BAÅLATILAMADI:", hata);
+      console.warn("  CALL AUDIO OTURUMU BAŞLATILAMADI:", hata);
 
       return false;
     }
@@ -305,12 +557,14 @@ class AramaWebRTC {
       Hoparlor.aramayiBitir();
 
       this.aramaAudioOturumuAcik = false;
+
       this.hoparlorAcik = false;
 
-      console.log("ğŸ§ğŸ“ CALL AUDIO OTURUMU KAPATILDI");
+      console.log(" CALL AUDIO OTURUMU KAPATILDI");
     } catch (hata) {
       this.aramaAudioOturumuAcik = false;
-      console.warn("âš ï¸ Call audio oturumu kapatÄ±lamadÄ±:", hata);
+
+      console.warn("  Call audio oturumu kapatılamadı:", hata);
     }
   }
 
@@ -318,20 +572,33 @@ class AramaWebRTC {
     {
       urls: "stun:stun.l.google.com:19302",
     },
+
     {
       urls: "stun:stun1.l.google.com:19302",
     },
-  ];
+  ]; /*\*
 
-  /**
-   * =========================================================
-   * AYARLA
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* AYARLA
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   ayarla(
     mevcutKullaniciId: number,
+
     arananKullaniciId: number,
+
     aramaTuru: AramaTuru,
   ) {
     this.mevcutKullaniciId = mevcutKullaniciId;
@@ -339,38 +606,99 @@ class AramaWebRTC {
     this.arananKullaniciId = arananKullaniciId;
 
     this.aramaTuru = aramaTuru;
+
     this.aramaSonlandiriliyor = false;
+
     this.webRtcBaglandiBildirildi = false;
+
     this.bekleyenIceAdaylari = [];
+
     this.remoteDescriptionHazir = false;
 
     console.log("======================================");
 
-    console.log("ğŸ“ WEBRTC ARAMA AYARLANDI");
+    console.log(" WEBRTC ARAMA AYARLANDI");
 
-    console.log("ğŸ“ Mevcut kullanÄ±cÄ±:", mevcutKullaniciId);
+    console.log(" Mevcut kullanıcı:", mevcutKullaniciId);
 
-    console.log("ğŸ“ Aranan kullanÄ±cÄ±:", arananKullaniciId);
+    console.log(" Aranan kullanıcı:", arananKullaniciId);
 
-    console.log("ğŸ“ Arama tÃ¼rÃ¼:", aramaTuru);
+    console.log(" Arama türü:", aramaTuru);
 
     console.log("======================================");
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * OLAY DÄ°NLE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* OLAY DİNLE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   olayDinle<K extends keyof AramaOlaylari>(
     olay: K,
+
     callback: AramaOlaylari[K],
-  ) {
-    this.olaylar[olay] = callback;
+  ): () => void {
+    const dinleyici = callback as AramaOlayCallback;
+
+    let dinleyiciler = this.olaylar.get(olay);
+
+    if (!dinleyiciler) {
+      dinleyiciler = [];
+
+      this.olaylar.set(olay, dinleyiciler);
+    }
+
+    dinleyiciler.push(dinleyici);
+
+    return () => {
+      const mevcutDinleyiciler = this.olaylar.get(olay);
+
+      if (!mevcutDinleyiciler) {
+        return;
+      }
+
+      const index = mevcutDinleyiciler.indexOf(dinleyici);
+
+      if (index !== -1) {
+        mevcutDinleyiciler.splice(index, 1);
+      }
+
+      if (mevcutDinleyiciler.length === 0) {
+        this.olaylar.delete(olay);
+      }
+    };
   }
 
-  private olaylar: Partial<AramaOlaylari> = {};
+  private olaylar = new Map<keyof AramaOlaylari, AramaOlayCallback[]>();
+
+  constructor() {}
+
+  private olayCalistir(olay: keyof AramaOlaylari, ...args: any[]): void {
+    const dinleyiciler = this.olaylar.get(olay);
+
+    if (!dinleyiciler || dinleyiciler.length === 0) {
+      return;
+    }
+
+    for (const callback of [...dinleyiciler]) {
+      try {
+        callback(...args);
+      } catch (hata) {
+        console.error(`Arama olayı callback hatası (${String(olay)}):`, hata);
+      }
+    }
+  }
 
   private hoparloruAc() {
     try {
@@ -381,9 +709,8 @@ class AramaWebRTC {
       const basarili = Hoparlor.ac();
 
       if (!basarili) {
-        console.warn(
-          "âš ï¸ HoparlÃ¶r Hoparlor servisi tarafÄ±ndan aÃ§Ä±lamadÄ±.",
-        );
+        console.warn("  Hoparlör Hoparlor servisi tarafından açılamadı.");
+
         return;
       }
 
@@ -391,17 +718,18 @@ class AramaWebRTC {
 
       console.log(
         this.aramaTuru === "VIDEO"
-          ? "ğŸ”ŠğŸ“¹ GÃ¶rÃ¼ntÃ¼lÃ¼ arama: HOPARLÃ–R AÃ‡ILDI"
-          : "ğŸ”ŠğŸ“ Sesli arama: HOPARLÃ–R AÃ‡ILDI",
+          ? " Görüntülü arama: HOPARLÖR AÇILDI"
+          : " Sesli arama: HOPARLÖR AÇILDI",
       );
     } catch (hata) {
-      console.warn("âš ï¸ HoparlÃ¶r aÃ§Ä±lamadÄ±:", hata);
+      console.warn("  Hoparlör açılamadı:", hata);
     }
   }
 
   private sesYonlendirmesiniKapat() {
     this.aramaAudioOturumunuKapat();
-    console.log("ğŸ”Š Ses yÃ¶nlendirmesi kapatÄ±ldÄ±.");
+
+    console.log(" Ses yönlendirmesi kapatıldı.");
   }
 
   public hoparloruDegistir(acik: boolean) {
@@ -413,17 +741,16 @@ class AramaWebRTC {
       const basarili = Hoparlor.hoparloruDegistir(acik);
 
       if (!basarili) {
-        console.warn("âš ï¸ HoparlÃ¶r yÃ¶nlendirmesi deÄŸiÅŸtirilemedi.");
+        console.warn("  Hoparlör yönlendirmesi değiştirilemedi.");
+
         return;
       }
 
       this.hoparlorAcik = acik;
 
-      console.log(
-        acik ? "ğŸ”Š HoparlÃ¶r aÃ§Ä±ldÄ±." : "ğŸ”ˆ Ahizeye geÃ§ildi.",
-      );
+      console.log(acik ? " Hoparlör açıldı." : " Ahizeye geçildi.");
     } catch (hata) {
-      console.warn("âš ï¸ HoparlÃ¶r deÄŸiÅŸtirilemedi:", hata);
+      console.warn("  Hoparlör değiştirilemedi:", hata);
     }
   }
 
@@ -431,58 +758,92 @@ class AramaWebRTC {
     gonderici: ((sinyal: BackendAramaSinyali) => void | Promise<void>) | null,
   ): void {
     this.hariciSinyalGonderici = gonderici;
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * STOMP WEBSOCKET BAÄLANTISI
-   *
-   * Ã–NEMLÄ°:
-   *
-   * brokerURL KULLANMIYORUZ.
-   *
-   * React Native native WebSocket
-   * oluÅŸturuyoruz.
-   *
-   * AyrÄ±ca v12.stomp subprotocol
-   * aÃ§Ä±kÃ§a gÃ¶nderiliyor.
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* STOMP WEBSOCKET BAĞLANTISI
+
+
+
+   \*
+
+
+
+   \* ÖNEMLİ:
+
+
+
+   \*
+
+
+
+   \* brokerURL KULLANMIYORUZ.
+
+
+
+   \*
+
+
+
+   \* React Native native WebSocket
+
+
+
+   \* oluşturuyoruz.
+
+
+
+   \*
+
+
+
+   \* Ayrıca v12.stomp subprotocol
+
+
+
+   \* açıkça gönderiliyor.
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async webSocketBaglantisiAc(): Promise<void> {
-    // Harici STOMP taÅŸÄ±yÄ±cÄ±sÄ± (useMessages) kullanÄ±lÄ±yorsa
-    // AramaWebRTC kendi /ws-native baÄŸlantÄ±sÄ±nÄ± kesinlikle aÃ§maz.
     if (this.hariciSinyalGonderici) {
       console.log("======================================");
-      console.log("ğŸ“¡ HARÄ°CÄ° STOMP TAÅIYICISI AKTÄ°F");
-      console.log("â­ï¸ AramaWebRTC native STOMP baÄŸlantÄ±sÄ± aÃ§Ä±lmayacak.");
+
+      console.log(" HARİCİ STOMP TAŞIYICISI AKTİF");
+
+      console.log(" AramaWebRTC native STOMP bağlantısı açılmayacak.");
+
       console.log("======================================");
+
       return;
     }
 
-    if (this.webSocketBagli && this.stompClient && this.stompClient.connected) {
-      console.log("======================================");
-
-      console.log("ğŸŸ¢ ARAMA STOMP ZATEN BAÄLI");
-
-      console.log("======================================");
+    if (this.webSocketBagli && this.stompClient?.connected) {
+      console.log(" ARAMA STOMP ZATEN BAĞLI");
 
       return;
     }
 
     if (this.webSocketBaglantiPromise) {
-      console.log("======================================");
-
-      console.log("â³ MEVCUT STOMP BAÄLANTISI BEKLENÄ°YOR");
-
-      console.log("======================================");
+      console.log(" MEVCUT STOMP BAĞLANTISI BEKLENİYOR");
 
       return this.webSocketBaglantiPromise;
     }
 
     if (this.mevcutKullaniciId === null) {
       throw new Error(
-        "WebSocket baÄŸlantÄ±sÄ± iÃ§in mevcut kullanÄ±cÄ± ID bulunamadÄ±.",
+        "WebSocket bağlantısı için mevcut kullanıcı ID bulunamadı.",
       );
     }
 
@@ -493,12 +854,6 @@ class AramaWebRTC {
 
       let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
-      /**
-       * =====================================================
-       * TIMEOUT TEMÄ°ZLE
-       * =====================================================
-       */
-
       const temizleTimeout = () => {
         if (timeoutId !== null) {
           clearTimeout(timeoutId);
@@ -507,16 +862,8 @@ class AramaWebRTC {
         }
       };
 
-      /**
-       * =====================================================
-       * BAÅARILI
-       * =====================================================
-       */
-
       const basari = () => {
-        if (tamamlandi) {
-          return;
-        }
+        if (tamamlandi) return;
 
         tamamlandi = true;
 
@@ -529,16 +876,8 @@ class AramaWebRTC {
         resolve();
       };
 
-      /**
-       * =====================================================
-       * HATA
-       * =====================================================
-       */
-
       const hata = (error: Error) => {
-        if (tamamlandi) {
-          return;
-        }
+        if (tamamlandi) return;
 
         tamamlandi = true;
 
@@ -552,47 +891,31 @@ class AramaWebRTC {
       };
 
       try {
-        /**
-         * =================================================
-         * TOKEN
-         * =================================================
-         */
-
         const token = await AsyncStorage.getItem("token");
 
         if (!token) {
-          hata(
-            new Error("WebSocket baÄŸlantÄ±sÄ± iÃ§in JWT token bulunamadÄ±."),
-          );
+          hata(new Error("WebSocket bağlantısı için JWT token bulunamadı."));
 
           return;
         }
 
         console.log("======================================");
 
-        console.log("ğŸ”Œ ARAMA STOMP BAÄLANTISI AÃ‡ILIYOR");
+        console.log(" ARAMA STOMP BAĞLANTISI AÇILIYOR");
 
-        console.log("ğŸ”Œ Adres:", WEBSOCKET_ADRESI);
+        console.log(" Adres:", WEBSOCKET_ADRESI);
 
-        console.log("ğŸ”Œ KullanÄ±cÄ± ID:", kullaniciId);
+        console.log(" Kullanıcı ID:", kullaniciId);
 
-        console.log("ğŸ” JWT bulundu: EVET");
+        console.log(" JWT bulundu: EVET");
 
         console.log("======================================");
 
-        /**
-         * =================================================
-         * ESKÄ° CLIENT KAPAT
-         * =================================================
-         */
-
         if (this.stompClient) {
           try {
-            console.log("ğŸ§¹ Eski STOMP client kapatÄ±lÄ±yor.");
-
             await this.stompClient.deactivate();
           } catch (eskiHata) {
-            console.warn("âš ï¸ Eski STOMP client kapatÄ±lamadÄ±:", eskiHata);
+            console.warn(" Eski STOMP client kapatılamadı:", eskiHata);
           }
 
           this.stompClient = null;
@@ -602,173 +925,75 @@ class AramaWebRTC {
 
         this.webSocketBagli = false;
 
-        /**
-         * =================================================
-         * STOMP CLIENT
-         * =================================================
-         *
-         * BURASI EN Ã–NEMLÄ° KISIM.
-         *
-         * brokerURL YOK.
-         *
-         * webSocketFactory VAR.
-         *
-         * Native WebSocket:
-         *
-         * new WebSocket(
-         *   URL,
-         *   ["v12.stomp"]
-         * )
-         * =================================================
-         */
-
         const client = new Client({
+          /*
+
+
+
+           \* STOMP.js CONNECT frame'ini kendisi üretir.
+
+
+
+           \* Native WebSocket'e manuel STOMP frame gönderilmiyor.
+
+
+
+           */
+
           webSocketFactory: () => {
-            console.log("======================================");
-            console.log("ğŸŒ ARAMA WEBSOCKET FACTORY");
-            console.log("ğŸŒ Adres:", WEBSOCKET_ADRESI);
-            console.log("ğŸŒ Protocol: v12.stomp");
-            console.log("======================================");
+            console.log("📞 ARAMA WEBSOCKET FACTORY");
+
+            console.log("📞 URL:", WEBSOCKET_ADRESI);
 
             const socket = new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
 
-            /**
-             * =========================================
-             * NATIVE WEBSOCKET OPEN
-             * =========================================
-             */
-            socket.onopen = () => {
-              console.log("======================================");
-              console.log("ğŸŸ¢ğŸŸ¢ğŸŸ¢ ARAMA NATIVE WEBSOCKET OPEN");
-              console.log("======================================");
-
-              console.log("ğŸŸ¢ URL:", WEBSOCKET_ADRESI);
-              console.log("ğŸŸ¢ Protocol:", socket.protocol);
-              console.log("ğŸŸ¢ ReadyState:", socket.readyState);
-
-              console.log("======================================");
-            };
-
-            /**
-             * =========================================
-             * NATIVE WEBSOCKET ERROR
-             * =========================================
-             */
-            socket.onerror = (event: Event) => {
-              console.error("======================================");
-              console.error("ğŸ”´ğŸ”´ğŸ”´ ARAMA NATIVE WEBSOCKET ERROR");
-              console.error("======================================");
-
-              console.error(event);
-
-              console.error("======================================");
-            };
-
-            /**
-             * =========================================
-             * NATIVE WEBSOCKET CLOSE
-             * =========================================
-             */
-            socket.onclose = (event: CloseEvent) => {
-              console.log("======================================");
-              console.log("ğŸ”´ğŸ”´ğŸ”´ ARAMA NATIVE WEBSOCKET CLOSE");
-              console.log("======================================");
-
-              console.log("ğŸ”´ Code:", event.code);
-              console.log("ğŸ”´ Reason:", event.reason);
-              console.log("ğŸ”´ Clean:", event.wasClean);
-
-              console.log("======================================");
-            };
-
-            /**
-             * =========================================
-             * NATIVE MESSAGE
-             * =========================================
-             */
-            socket.onmessage = (event: MessageEvent) => {
-              console.log("======================================");
-              console.log("ğŸŸ£ğŸŸ£ğŸŸ£ NATIVE WEBSOCKET MESSAGE GELDÄ°");
-              console.log("======================================");
-
-              /**
-               * GÃ¼venlik nedeniyle mesajÄ±n tamamÄ±nÄ±
-               * burada yazdÄ±rmÄ±yoruz.
-               */
-              if (typeof event.data === "string") {
-                console.log("ğŸŸ£ Gelen mesaj uzunluÄŸu:", event.data.length);
-              } else {
-                console.log("ğŸŸ£ Gelen mesaj tipi:", typeof event.data);
-              }
-
-              console.log("======================================");
-            };
-
-            console.log("ğŸŸ¢ Native WebSocket nesnesi oluÅŸturuldu.");
+            console.log(
+              "📞 Protocol:",
+              (socket as WebSocket & { protocol?: string }).protocol ?? "",
+            );
 
             return socket;
           },
 
-          /**
-           * =================================================
-           * CONNECT HEADERS
-           * =================================================
-           */
           connectHeaders: {
             Authorization: `Bearer ${token}`,
           },
 
-          /**
-           * =================================================
-           * RECONNECT
-           * =================================================
-           */
           reconnectDelay: 0,
 
-          /**
-           * =================================================
-           * HEARTBEAT
-           * =================================================
-           */
           heartbeatIncoming: 0,
+
           heartbeatOutgoing: 0,
 
-          /**
-           * =================================================
-           * DEBUG
-           * =================================================
-           */
           debug: (mesaj: string) => {
-            /**
-             * JWT tokenÄ±n console'a yazÄ±lmasÄ±nÄ± engelle.
-             */
             if (mesaj.includes("Authorization:")) {
               const temizMesaj = mesaj.replace(
                 /Authorization:Bearer\s+[^\s]+/gi,
+
                 "Authorization:Bearer [TOKEN]",
               );
 
-              console.log("ğŸ”µ STOMP DEBUG:", temizMesaj);
+              console.log(" STOMP DEBUG:", temizMesaj);
 
               return;
             }
 
-            console.log("ğŸ”µ STOMP DEBUG:", mesaj);
+            console.log(" STOMP DEBUG:", mesaj);
           },
 
-          /**
-           * =================================================
-           * STOMP CONNECTED
-           * =================================================
-           */
           onConnect: (frame) => {
             try {
               console.log("======================================");
-              console.log("ğŸŸ¢ğŸŸ¢ğŸŸ¢ ARAMA STOMP CONNECTED");
+
+              console.log(" ARAMA STOMP CONNECTED");
+
+              console.log(" STOMP VERSION:", frame.headers["version"]);
+
+              console.log(" SESSION:", frame.headers["session"]);
+
+              console.log(" STOMP connected:", client.connected);
+
               console.log("======================================");
-              console.log("ğŸŸ¢ STOMP VERSION:", frame.headers["version"]);
-              console.log("ğŸŸ¢ SESSION:", frame.headers["session"]);
-              console.log("ğŸŸ¢ STOMP connected:", client.connected);
 
               this.webSocketBagli = true;
 
@@ -779,282 +1004,150 @@ class AramaWebRTC {
                   this.aramaSubscription.unsubscribe();
                 } catch (unsubscribeHatasi) {
                   console.warn(
-                    "âš ï¸ Eski arama subscription kapatÄ±lamadÄ±:",
+                    " Eski arama subscription kapatılamadı:",
+
                     unsubscribeHatasi,
                   );
                 }
+
                 this.aramaSubscription = null;
               }
 
               this.aramaSubscription = client.subscribe(
                 topic,
+
                 (message: IMessage) => {
-                  console.log("======================================");
-                  console.log("ğŸ“¨ğŸ“¨ğŸ“¨ ARAMA STOMP MESSAGE");
-                  console.log("======================================");
-                  console.log("ğŸ“¨ Destination:", message.headers.destination);
-                  console.log("ğŸ“¨ Body length:", message.body?.length ?? 0);
-                  console.log("======================================");
+                  console.log(" ARAMA STOMP MESSAGE");
+
+                  console.log(" Destination:", message.headers.destination);
+
+                  console.log(" Body length:", message.body?.length ?? 0);
 
                   this.gelenAramaSinyaliniIsle(message.body);
                 },
               );
 
-              console.log("ğŸŸ¢ ARAMA TOPIC SUBSCRIBE TAMAM");
-              console.log("ğŸŸ¢ TOPIC:", topic);
-              console.log("======================================");
+              console.log(" ARAMA TOPIC SUBSCRIBE TAMAM:", topic);
 
               basari();
-              this.olaylar.baglandi?.();
+
+              this.olayCalistir("baglandi");
             } catch (connectHatasi) {
               const error =
                 connectHatasi instanceof Error
                   ? connectHatasi
-                  : new Error("STOMP CONNECT iÅŸlemi baÅŸarÄ±sÄ±z.");
+                  : new Error("STOMP CONNECT işlemi başarısız.");
 
-              console.error("âŒ STOMP CONNECT HANDLER HATASI:", error);
+              console.error(" STOMP CONNECT HANDLER HATASI:", error);
 
               this.webSocketBagli = false;
+
               hata(error);
             }
           },
 
-          /**
-           * =================================================
-           * STOMP ERROR
-           * =================================================
-           */
           onStompError: (frame) => {
-            console.error("======================================");
-            console.error("ğŸ”´ğŸ”´ğŸ”´ STOMP ERROR");
-            console.error("======================================");
+            console.error(" STOMP ERROR");
 
-            console.error("ğŸ”´ MESSAGE:", frame.headers["message"]);
+            console.error(" MESSAGE:", frame.headers["message"]);
 
-            /**
-             * Body iÃ§inde JWT varsa tamamÄ±nÄ± basmÄ±yoruz.
-             */
-            console.error("ğŸ”´ BODY LENGTH:", frame.body?.length ?? 0);
+            console.error(" BODY LENGTH:", frame.body?.length ?? 0);
 
-            console.error("======================================");
+            const mesaj =
+              frame.headers?.message || frame.body || "STOMP sunucu hatası.";
+
+            const error = new Error(mesaj);
 
             this.webSocketBagli = false;
+
+            this.olayCalistir("hata", error);
+
+            hata(error);
           },
 
-          /**
-           * =================================================
-           * WEBSOCKET ERROR
-           * =================================================
-           */
           onWebSocketError: (event) => {
-            console.error("======================================");
-            console.error("ğŸ”´ğŸ”´ğŸ”´ STOMP WEBSOCKET ERROR");
-            console.error("======================================");
+            console.error(" STOMP WEBSOCKET ERROR:", event);
 
-            console.error(event);
-
-            console.error("======================================");
+            const error = new Error("Arama WebSocket bağlantı hatası.");
 
             this.webSocketBagli = false;
+
+            this.olayCalistir("hata", error);
+
+            hata(error);
           },
 
-          /**
-           * =================================================
-           * WEBSOCKET CLOSE
-           * =================================================
-           */
           onWebSocketClose: (event) => {
-            console.log("======================================");
-            console.log("ğŸ”´ğŸ”´ğŸ”´ STOMP WEBSOCKET CLOSE");
-            console.log("======================================");
+            console.log(
+              " STOMP WEBSOCKET CLOSE:",
 
-            console.log("ğŸ”´ Code:", event.code);
-            console.log("ğŸ”´ Reason:", event.reason);
-            console.log("ğŸ”´ Clean:", event.wasClean);
+              event.code,
 
-            console.log("======================================");
+              event.reason,
+
+              event.wasClean,
+            );
 
             this.webSocketBagli = false;
+
+            this.aramaSubscription = null;
+
+            if (tamamlandi) {
+              this.olayCalistir("baglantiKoptu");
+            } else {
+              hata(
+                new Error(
+                  `Arama WebSocket bağlantısı kurulmadan kapandı. Kod: ${event.code}`,
+                ),
+              );
+            }
           },
         });
 
         this.stompClient = client;
 
-        /**
-         * =====================================================
-         * STOMP CONNECT HANDLER
-         * =====================================================
-         *
-         * onConnect yalnÄ±zca Client options iÃ§inde tanÄ±mlÄ±dÄ±r.
-         * Sonradan tekrar ezilmez.
-         */
-        /**
-         * =====================================================
-         * STOMP ERROR
-         * =====================================================
-         */
-
-        client.onStompError = (frame) => {
-          console.error("======================================");
-
-          console.error("ğŸ”´ğŸ”´ğŸ”´ STOMP ERROR");
-
-          console.error("======================================");
-
-          console.error("ğŸ”´ Headers:", frame.headers);
-
-          console.error("ğŸ”´ Body:", frame.body);
-
-          console.error("======================================");
-
-          const mesaj =
-            frame.headers?.message || frame.body || "STOMP sunucu hatasÄ±.";
-
-          const error = new Error(mesaj);
-
-          this.webSocketBagli = false;
-
-          this.olaylar.hata?.(error);
-
-          hata(error);
-        };
-
-        /**
-         * =====================================================
-         * WEBSOCKET ERROR
-         * =====================================================
-         */
-
-        client.onWebSocketError = (event) => {
-          console.error("======================================");
-
-          console.error("ğŸ”´ğŸ”´ğŸ”´ STOMP WEBSOCKET ERROR");
-
-          console.error("======================================");
-
-          console.error(event);
-
-          console.error("======================================");
-
-          const error = new Error("Arama WebSocket baÄŸlantÄ± hatasÄ±.");
-
-          this.webSocketBagli = false;
-
-          this.olaylar.hata?.(error);
-
-          hata(error);
-        };
-
-        /**
-         * =====================================================
-         * WEBSOCKET CLOSE
-         * =====================================================
-         */
-
-        client.onWebSocketClose = (event) => {
-          console.log("======================================");
-
-          console.log("ğŸ”´ğŸ”´ğŸ”´ STOMP WEBSOCKET CLOSE");
-
-          console.log("======================================");
-
-          console.log("ğŸ”´ Code:", event.code);
-
-          console.log("ğŸ”´ Reason:", event.reason);
-
-          console.log("ğŸ”´ Clean:", event.wasClean);
-
-          console.log("======================================");
-
-          this.webSocketBagli = false;
-
-          this.aramaSubscription = null;
-
-          if (tamamlandi) {
-            this.olaylar.baglantiKoptu?.();
-          } else {
-            hata(
-              new Error(
-                `Arama WebSocket baÄŸlantÄ±sÄ± kurulmadan kapandÄ±. Kod: ${event.code}`,
-              ),
-            );
-          }
-        };
-
-        /**
-         * =====================================================
-         * TIMEOUT
-         * =====================================================
-         */
-
         timeoutId = setTimeout(() => {
-          if (tamamlandi) {
-            return;
-          }
+          if (tamamlandi) return;
 
-          console.error("======================================");
-
-          console.error("âŒâŒâŒ STOMP CONNECT TIMEOUT âŒâŒâŒ");
-
-          console.error("======================================");
+          console.error(" STOMP CONNECT TIMEOUT");
 
           console.error(
-            `${WEBSOCKET_BAGLANTI_TIMEOUT_MS / 1000} saniye iÃ§inde STOMP CONNECTED alÄ±namadÄ±.`,
+            `${WEBSOCKET_BAGLANTI_TIMEOUT_MS / 1000} saniye içinde STOMP CONNECTED alınamadı.`,
           );
 
           console.error("STOMP connected:", client.connected);
 
           console.error("STOMP active:", client.active);
 
-          console.error("======================================");
-
           const error = new Error(
-            "Arama WebSocket baÄŸlantÄ±sÄ± zaman aÅŸÄ±mÄ±na uÄŸradÄ±. STOMP CONNECTED alÄ±namadÄ±.",
+            "Arama WebSocket bağlantısı zaman aşımına uğradı. STOMP CONNECTED alınamadı.",
           );
 
           this.webSocketBagli = false;
 
-          this.olaylar.hata?.(error);
+          this.olayCalistir("hata", error);
 
           hata(error);
 
           void client.deactivate();
         }, WEBSOCKET_BAGLANTI_TIMEOUT_MS);
 
-        /**
-         * =====================================================
-         * ACTIVATE
-         * =====================================================
-         */
-
-        console.log("======================================");
-
-        console.log("ğŸ“¤ STOMP CLIENT ACTIVATE");
-
-        console.log("======================================");
+        console.log(" STOMP CLIENT ACTIVATE");
 
         client.activate();
 
-        console.log("ğŸŸ¢ STOMP CLIENT ACTIVATE Ã‡AÄRILDI");
+        console.log(" STOMP CLIENT ACTIVATE ÇAĞRILDI");
       } catch (connectHatasi) {
-        console.error("======================================");
-
-        console.error("âŒ STOMP BAÄLANTI BAÅLATMA HATASI");
-
-        console.error("======================================");
-
-        console.error(connectHatasi);
-
-        console.error("======================================");
+        console.error(" STOMP BAĞLANTI BAŞLATMA HATASI:", connectHatasi);
 
         const error =
           connectHatasi instanceof Error
             ? connectHatasi
-            : new Error("Arama WebSocket baÄŸlantÄ±sÄ± kurulamadÄ±.");
+            : new Error("Arama WebSocket bağlantısı kurulamadı.");
 
         this.webSocketBagli = false;
 
-        this.olaylar.hata?.(error);
+        this.olayCalistir("hata", error);
 
         hata(error);
       }
@@ -1065,13 +1158,9 @@ class AramaWebRTC {
     try {
       await promise;
 
-      console.log("======================================");
+      console.log(" ARAMA STOMP HAZIR");
 
-      console.log("ğŸŸ¢ğŸŸ¢ğŸŸ¢ ARAMA STOMP HAZIR");
-
-      console.log("ğŸŸ¢ STOMP baÄŸlÄ±:", this.webSocketBagli);
-
-      console.log("======================================");
+      console.log(" STOMP bağlı:", this.webSocketBagli);
     } catch (hata) {
       this.webSocketBaglantiPromise = null;
 
@@ -1079,77 +1168,128 @@ class AramaWebRTC {
 
       throw hata;
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * GELEN ARAMALARI DÄ°NLEMEYÄ° BAÅLAT
-   * =========================================================
-   *
-   * KullanÄ±cÄ± arama baÅŸlatmadan Ã¶nce de arama topic'ini
-   * dinler. BÃ¶ylece karÅŸÄ± taraf aradÄ±ÄŸÄ±nda CALL_OFFER
-   * doÄŸrudan uygulamaya ulaÅŸÄ±r.
-   */
+
+
+   \* =========================================================
+
+
+
+   \* GELEN ARAMALARI DİNLEMEYİ BAŞLAT
+
+
+
+   \* =========================================================
+
+
+
+   \*
+
+
+
+   \* Kullanıcı arama başlatmadan önce de arama topic'ini
+
+
+
+   \* dinler. Böylece karşı taraf aradığında CALL_OFFER
+
+
+
+   \* doğrudan uygulamaya ulaşır.
+
+
+
+   */
+
   async gelenAramalariDinlemeyeBaslat(kullaniciId: number): Promise<void> {
     if (!Number.isFinite(kullaniciId)) {
-      throw new Error("GeÃ§ersiz kullanÄ±cÄ± ID.");
+      throw new Error("Geçersiz kullanıcı ID.");
     }
 
     this.mevcutKullaniciId = kullaniciId;
 
     console.log("======================================");
-    console.log("ğŸ“ GELEN ARAMA DÄ°NLEME BAÅLATILIYOR");
-    console.log("ğŸ“ KullanÄ±cÄ± ID:", kullaniciId);
-    console.log("ğŸ“ Topic:", `/topic/arama/${kullaniciId}`);
+
+    console.log(" GELEN ARAMA DİNLEME BAŞLATILIYOR");
+
+    console.log(" Kullanıcı ID:", kullaniciId);
+
+    console.log(" Topic:", `/topic/arama/${kullaniciId}`);
+
     console.log("======================================");
 
     if (this.hariciSinyalGonderici) {
-      console.log("ğŸ“¡ Harici STOMP taÅŸÄ±yÄ±cÄ±sÄ± aktif.");
-      console.log(
-        "â­ï¸ Native STOMP baÄŸlantÄ±sÄ± aÃ§Ä±lmadan dinleme hazÄ±r.",
-      );
+      console.log(" Harici STOMP taşıyıcısı aktif.");
+
+      console.log(" Native STOMP bağlantısı açılmadan dinleme hazır.");
     } else {
       await this.webSocketBaglantisiAc();
     }
 
     console.log("======================================");
-    console.log("ğŸŸ¢ GELEN ARAMA DÄ°NLEME HAZIR");
-    console.log("ğŸŸ¢ KullanÄ±cÄ± ID:", kullaniciId);
-    console.log("ğŸŸ¢ Topic:", `/topic/arama/${kullaniciId}`);
-    console.log("======================================");
-  }
 
-  /**
-   * =========================================================
-   * GELEN ARAMA MESAJI
-   * =========================================================
-   */
+    console.log(" GELEN ARAMA DİNLEME HAZIR");
+
+    console.log(" Kullanıcı ID:", kullaniciId);
+
+    console.log(" Topic:", `/topic/arama/${kullaniciId}`);
+
+    console.log("======================================");
+  } /*\*
+
+
+
+   \* =========================================================
+
+
+
+   \* GELEN ARAMA MESAJI
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   public gelenAramaSinyaliniIsle(body: string) {
     try {
       console.log("======================================");
 
-      console.log("ğŸ“©ğŸ“©ğŸ“© ARAMA SÄ°NYALÄ° ALINDI");
+      console.log(" ARAMA SİNYALİ ALINDI");
 
       console.log("======================================");
 
-      console.log("ğŸ“© BODY:", body);
+      console.log(" BODY:", body);
 
-      const sinyal: BackendAramaSinyali = JSON.parse(body);
+      const sinyal: BackendAramaSinyali = JSON.parse(body); /*\*
 
-      /**
-       * Backend'deki hedefKullaniciId
-       * mevcut yapÄ±da sinyalin
-       * gÃ¶nderen kullanÄ±cÄ±sÄ±nÄ±
-       * temsil ediyor.
-       */
+
+
+       \* Backend'deki hedefKullaniciId
+
+
+
+       \* mevcut yapıda sinyalin
+
+
+
+       \* gönderen kullanıcısını
+
+
+
+       \* temsil ediyor.
+
+
+
+       */
 
       const gonderenKullaniciId = sinyal.hedefKullaniciId;
 
       if (!gonderenKullaniciId) {
-        console.warn(
-          "âš ï¸ Gelen arama sinyalinde gÃ¶nderen kullanÄ±cÄ± ID yok.",
-        );
+        console.warn("  Gelen arama sinyalinde gönderen kullanıcı ID yok.");
 
         return;
       }
@@ -1159,10 +1299,22 @@ class AramaWebRTC {
       switch (sinyal.tip) {
         case "CALL_OFFER": {
           if (!sinyal.sdp) {
-            console.warn("âš ï¸ CALL_OFFER SDP iÃ§ermiyor.");
+            console.warn("  CALL_OFFER SDP içermiyor.");
 
             return;
+          } // Duplicate CALL_OFFER aynı SDP ile tekrar geldiyse ikinci kez
+
+          // ringtone ve gelen arama UI oluşturulmasın.
+          if (
+            this.sonGelenOfferSdp === sinyal.sdp &&
+            this.arananKullaniciId === gonderenKullaniciId &&
+            !this.aramaSonlandiriliyor
+          ) {
+            console.warn("⚠️ Aynı CALL_OFFER tekrar geldi, yok sayıldı.");
+            return;
           }
+
+          this.sonGelenOfferSdp = sinyal.sdp;
 
           const mesaj: AramaMesaji = {
             tip: "CALL_OFFER",
@@ -1182,29 +1334,28 @@ class AramaWebRTC {
 
           this.aramaTuru = aramaTuru;
 
-          this.arananKullaniciId = gonderenKullaniciId;
+          this.arananKullaniciId = gonderenKullaniciId; // GELEN ARAMA: karşı taraf cevap verene/reddedene kadar telefon zili çal.
 
-          // GELEN ARAMA: karÅŸÄ± taraf cevap verene/reddedene kadar telefon zili Ã§al.
           void this.gelenAramaSesiniBaslat();
 
           console.log("======================================");
 
-          console.log("ğŸ“ GELEN CALL_OFFER");
+          console.log(" GELEN CALL_OFFER");
 
-          console.log("ğŸ“ Arayan:", gonderenKullaniciId);
+          console.log(" Arayan:", gonderenKullaniciId);
 
-          console.log("ğŸ“ TÃ¼r:", aramaTuru);
+          console.log(" Tür:", aramaTuru);
 
           console.log("======================================");
 
-          this.olaylar.teklif?.(mesaj);
+          this.olayCalistir("teklif", mesaj);
 
           break;
         }
 
         case "CALL_ANSWER": {
           if (!sinyal.sdp) {
-            console.warn("âš ï¸ CALL_ANSWER SDP iÃ§ermiyor.");
+            console.warn("  CALL_ANSWER SDP içermiyor.");
 
             return;
           }
@@ -1223,21 +1374,18 @@ class AramaWebRTC {
             },
           };
 
-          console.log(
-            "ğŸ“ GELEN CALL_ANSWER",
-            "GÃ¶nderen:",
-            gonderenKullaniciId,
-          );
+          console.log(" GELEN CALL_ANSWER", "Gönderen:", gonderenKullaniciId);
 
           this.aramaSesiniDurdur();
-          this.olaylar.cevap?.(mesaj);
+
+          this.olayCalistir("cevap", mesaj);
 
           break;
         }
 
         case "CALL_ICE": {
           if (!sinyal.aday) {
-            console.warn("âš ï¸ CALL_ICE aday iÃ§ermiyor.");
+            console.warn("  CALL_ICE aday içermiyor.");
 
             return;
           }
@@ -1250,7 +1398,7 @@ class AramaWebRTC {
                 ? JSON.parse(sinyal.aday)
                 : (sinyal.aday as any);
           } catch (hata) {
-            console.error("âŒ ICE aday JSON parse edilemedi:", hata);
+            console.error(" ICE aday JSON parse edilemedi:", hata);
 
             return;
           }
@@ -1265,9 +1413,9 @@ class AramaWebRTC {
             aday,
           };
 
-          console.log("ğŸ§Š GELEN CALL_ICE", "GÃ¶nderen:", gonderenKullaniciId);
+          console.log(" GELEN CALL_ICE", "Gönderen:", gonderenKullaniciId);
 
-          this.olaylar.ice?.(mesaj);
+          this.olayCalistir("ice", mesaj);
 
           void this.iceAdayiEkle(aday);
 
@@ -1283,14 +1431,11 @@ class AramaWebRTC {
             arananId: this.mevcutKullaniciId!,
           };
 
-          console.log(
-            "ğŸ“µ GELEN CALL_REJECT",
-            "GÃ¶nderen:",
-            gonderenKullaniciId,
-          );
+          console.log(" GELEN CALL_REJECT", "Gönderen:", gonderenKullaniciId);
 
           this.aramaSesiniDurdur();
-          this.olaylar.reddet?.(mesaj);
+
+          this.olayCalistir("reddet", mesaj);
 
           break;
         }
@@ -1304,70 +1449,91 @@ class AramaWebRTC {
             arananId: this.mevcutKullaniciId!,
           };
 
-          console.log("ğŸ“ GELEN CALL_END", "GÃ¶nderen:", gonderenKullaniciId);
+          console.log(" GELEN CALL_END", "Gönderen:", gonderenKullaniciId);
 
-          this.aramaSesiniDurdur();
+          this.aramaSesiniDurdur(); // Önce UI'ye karşı tarafın aramayı bitirdiğini bildir.
+          // Böylece aranan taraftaki kapatma butonu anında kaybolur.
 
-          // KarÅŸÄ± taraf zaten CALL_END gÃ¶nderdi.
-          // Bu nedenle baÄŸlantÄ±yÄ± kapatÄ±rken tekrar CALL_END gÃ¶ndermiyoruz.
+          this.olayCalistir("bitir", mesaj); // Karşı taraf zaten CALL_END gönderdi.
+          // Bu nedenle bağlantıyı kapatırken tekrar CALL_END göndermiyoruz.
+
           void this.aramayiBitir(true);
-
-          this.olaylar.bitir?.(mesaj);
 
           break;
         }
 
         default:
-          console.warn("âš ï¸ Bilinmeyen arama sinyal tipi:", sinyal.tip);
+          console.warn("  Bilinmeyen arama sinyal tipi:", sinyal.tip);
       }
     } catch (hata) {
-      console.error("âŒ Arama sinyali iÅŸlenemedi:", hata);
+      console.error(" Arama sinyali işlenemedi:", hata);
 
       const error =
-        hata instanceof Error ? hata : new Error("Arama sinyali iÅŸlenemedi.");
+        hata instanceof Error ? hata : new Error("Arama sinyali işlenemedi.");
 
-      this.olaylar.hata?.(error);
+      this.olayCalistir("hata", error);
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * BACKEND'E WEBRTC SIGNALING GÃ–NDER
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* BACKEND'E WEBRTC SIGNALING GÖNDER
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private aramaSinyaliGonder(
     tip: string,
+
     bilgiler: {
       sdp?: string;
+
       aday?: RTCIceCandidateInit;
     } = {},
   ) {
     if (!this.arananKullaniciId) {
-      console.warn(
-        "âš ï¸ Arama sinyali gÃ¶nderilemedi. Hedef kullanÄ±cÄ± yok.",
-      );
+      console.warn("  Arama sinyali gönderilemedi. Hedef kullanıcı yok.");
+
       return;
     }
 
     if (this.hariciSinyalGonderici) {
       const sinyal: BackendAramaSinyali = {
         hedefKullaniciId: this.arananKullaniciId,
+
         tur: this.aramaTuru,
+
         tip,
+
         sdp: bilgiler.sdp ?? null,
+
         aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
+
         sdpMid: bilgiler.aday?.sdpMid ?? null,
+
         sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
       };
+
       void Promise.resolve(this.hariciSinyalGonderici(sinyal)).catch((hata) => {
         const error =
           hata instanceof Error
             ? hata
-            : new Error("Arama sinyali gÃ¶nderilemedi.");
-        console.error("âŒ Harici STOMP arama sinyali hatasÄ±:", error);
-        this.olaylar.hata?.(error);
+            : new Error("Arama sinyali gönderilemedi.");
+
+        console.error(" Harici STOMP arama sinyali hatası:", error);
+
+        this.olayCalistir("hata", error);
       });
+
       return;
     }
 
@@ -1376,14 +1542,13 @@ class AramaWebRTC {
       !this.stompClient.connected ||
       !this.webSocketBagli
     ) {
-      console.warn("âš ï¸ Arama sinyali gÃ¶nderilemedi. STOMP baÄŸlÄ± deÄŸil.");
+      console.warn("  Arama sinyali gönderilemedi. STOMP bağlı değil.");
+
       return;
     }
 
     if (!this.arananKullaniciId) {
-      console.warn(
-        "âš ï¸ Arama sinyali gÃ¶nderilemedi. Hedef kullanÄ±cÄ± yok.",
-      );
+      console.warn("  Arama sinyali gönderilemedi. Hedef kullanıcı yok.");
 
       return;
     }
@@ -1406,13 +1571,13 @@ class AramaWebRTC {
 
     console.log("======================================");
 
-    console.log("ğŸ“¤ ARAMA SÄ°NYALÄ° GÃ–NDERÄ°LÄ°YOR");
+    console.log(" ARAMA SİNYALİ GÖNDERİLİYOR");
 
-    console.log("ğŸ“¤ Tip:", tip);
+    console.log(" Tip:", tip);
 
-    console.log("ğŸ“¤ Hedef:", this.arananKullaniciId);
+    console.log(" Hedef:", this.arananKullaniciId);
 
-    console.log("ğŸ“¤ TÃ¼r:", this.aramaTuru);
+    console.log(" Tür:", this.aramaTuru);
 
     console.log("======================================");
 
@@ -1427,34 +1592,44 @@ class AramaWebRTC {
         body: JSON.stringify(sinyal),
       });
 
-      console.log("âœ… ARAMA SÄ°NYALÄ° BACKEND'E GÃ–NDERÄ°LDÄ°");
+      console.log(" ARAMA SİNYALİ BACKEND'E GÖNDERİLDİ");
     } catch (hata) {
-      console.error("âŒ Arama sinyali gÃ¶nderilemedi:", hata);
+      console.error(" Arama sinyali gönderilemedi:", hata);
 
       const error =
         hata instanceof Error
           ? hata
-          : new Error("Arama sinyali gÃ¶nderilemedi.");
+          : new Error("Arama sinyali gönderilemedi.");
 
-      this.olaylar.hata?.(error);
+      this.olayCalistir("hata", error);
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * KAMERA / MÄ°KROFON
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* KAMERA / MİKROFON
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async medyaAkisiniAl(): Promise<MediaStream> {
     try {
-      console.log("ğŸ™ï¸ğŸ“¹ Mikrofon/kamera eriÅŸimi isteniyor...");
+      console.log(" Mikrofon/kamera erişimi isteniyor...");
 
       const audioOturumuBaslatildi = this.aramaAudioOturumunuBaslat();
 
       if (!audioOturumuBaslatildi) {
         console.warn(
-          "âš ï¸ Android call audio oturumu baÅŸlatÄ±lamadÄ±; WebRTC medya akÄ±ÅŸÄ± yine de alÄ±nacak.",
+          "  Android call audio oturumu başlatılamadı; WebRTC medya akışı yine de alınacak.",
         );
       }
 
@@ -1477,50 +1652,56 @@ class AramaWebRTC {
 
       this.yerelStream = stream;
 
-      console.log("ğŸ™ï¸ğŸ“¹ Yerel medya akÄ±ÅŸÄ± alÄ±ndÄ±.");
+      console.log(" Yerel medya akışı alındı.");
 
-      console.log(
-        "ğŸ™ï¸ Audio track sayÄ±sÄ±:",
-        stream.getAudioTracks().length,
-      );
+      console.log(" Audio track sayısı:", stream.getAudioTracks().length);
 
-      console.log("ğŸ“¹ Video track sayÄ±sÄ±:", stream.getVideoTracks().length);
+      console.log(" Video track sayısı:", stream.getVideoTracks().length);
 
       return stream;
     } catch (hata) {
-      console.error("âŒ Mikrofon/kamera eriÅŸim hatasÄ±:", hata);
+      console.error(" Mikrofon/kamera erişim hatası:", hata);
 
       const error =
         hata instanceof Error
           ? hata
-          : new Error("Mikrofon veya kamera eriÅŸilemedi.");
+          : new Error("Mikrofon veya kamera erişilemedi.");
 
-      this.olaylar.hata?.(error);
+      this.olayCalistir("hata", error);
 
       throw error;
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * PEER CONNECTION
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* PEER CONNECTION
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async baglantiOlustur(): Promise<RTCPeerConnection> {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
-      throw new Error("Arama kullanÄ±cÄ±larÄ± ayarlanmamÄ±ÅŸ.");
+      throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
 
     if (this.peerConnection) {
-      console.log("ğŸ”— Mevcut RTCPeerConnection kullanÄ±lÄ±yor.");
+      console.log(" Mevcut RTCPeerConnection kullanılıyor."); // ÖNEMLİ:
+      // PeerConnection daha önce oluşturulmuş olabilir ancak yerel medya
+      // henüz hazır olmayabilir. Bu durumda doğrudan return etmek,
+      // createOffer()'ın track'ler eklenmeden çalışmasına neden olur.
+      // Sonuç olarak ikinci offer'da m-line sırası değişir ve WebRTC:
+      // "The order of m-lines in subsequent offer..." hatası verir.
 
-      // Ã–NEMLÄ°:
-      // PeerConnection daha Ã¶nce oluÅŸturulmuÅŸ olabilir ancak yerel medya
-      // henÃ¼z hazÄ±r olmayabilir. Bu durumda doÄŸrudan return etmek,
-      // createOffer()'Ä±n track'ler eklenmeden Ã§alÄ±ÅŸmasÄ±na neden olur.
-      // SonuÃ§ olarak ikinci offer'da m-line sÄ±rasÄ± deÄŸiÅŸir ve WebRTC:
-      // "The order of m-lines in subsequent offer..." hatasÄ± verir.
       if (!this.yerelStream) {
         await this.medyaAkisiniAl();
       }
@@ -1534,14 +1715,12 @@ class AramaWebRTC {
           );
 
           if (zatenEklendi) {
-            console.log("â­ï¸ Track zaten PeerConnection'da:", track.kind);
+            console.log(" Track zaten PeerConnection'da:", track.kind);
+
             return;
           }
 
-          console.log(
-            "ğŸ™ï¸ğŸ“¹ Mevcut PeerConnection'a Track ekleniyor:",
-            track.kind,
-          );
+          console.log(" Mevcut PeerConnection'a Track ekleniyor:", track.kind);
 
           this.peerConnection!.addTrack(track, this.yerelStream!);
         });
@@ -1550,7 +1729,7 @@ class AramaWebRTC {
       return this.peerConnection;
     }
 
-    console.log("ğŸ”— RTCPeerConnection oluÅŸturuluyor...");
+    console.log(" RTCPeerConnection oluşturuluyor...");
 
     const peerConnection = new RTCPeerConnection({
       iceServers: this.iceSunucular,
@@ -1559,6 +1738,7 @@ class AramaWebRTC {
     this.peerConnection = peerConnection;
 
     this.remoteDescriptionHazir = false;
+
     this.webRtcBaglandiBildirildi = false;
 
     if (!this.yerelStream) {
@@ -1574,36 +1754,42 @@ class AramaWebRTC {
         );
 
         if (zatenEklendi) {
-          console.log("â­ï¸ Track zaten PeerConnection'da:", track.kind);
+          console.log(" Track zaten PeerConnection'da:", track.kind);
+
           return;
         }
 
-        console.log("ğŸ™ï¸ğŸ“¹ Track PeerConnection'a ekleniyor:", track.kind);
+        console.log(" Track PeerConnection'a ekleniyor:", track.kind);
 
         peerConnection.addTrack(track, this.yerelStream!);
       });
     }
 
     peerConnection.ontrack = (event: any) => {
-      console.log("ğŸ¥ Uzak medya akÄ±ÅŸÄ± geldi.");
+      console.log(" Uzak medya akışı geldi.");
 
       if (event.track) {
         console.log(
-          "ğŸ§ Uzak track:",
+          " Uzak track:",
+
           event.track.kind,
+
           "id:",
+
           event.track.id,
+
           "enabled:",
+
           event.track.enabled,
         );
 
         if (event.track.kind === "audio") {
-          console.log("ğŸ”ŠğŸ”ŠğŸ”Š UZAK SES TRACK'Ä° ALINDI");
+          console.log(" UZAK SES TRACK'İ ALINDI");
 
           try {
             event.track.enabled = true;
           } catch (hata) {
-            console.warn("âš ï¸ Uzak audio track aktif edilemedi:", hata);
+            console.warn("  Uzak audio track aktif edilemedi:", hata);
           }
         }
       }
@@ -1616,43 +1802,45 @@ class AramaWebRTC {
         if (!this.uzakStream) {
           this.uzakStream = new MediaStream();
         }
+
         uzakStream = this.uzakStream;
+
         if (event.track) {
           try {
             uzakStream.addTrack(event.track);
           } catch (hata) {
-            console.warn("âš ï¸ Uzak track stream'e eklenemedi:", hata);
+            console.warn("  Uzak track stream'e eklenemedi:", hata);
           }
         }
       }
 
       if (!uzakStream) {
-        console.warn("âš ï¸ Uzak medya stream'i oluÅŸturulamadÄ±.");
+        console.warn("  Uzak medya stream'i oluşturulamadı.");
+
         return;
       }
 
       this.uzakStream = uzakStream;
 
-      console.log("ğŸ¥ Uzak stream:", uzakStream.id);
-      console.log(
-        "ğŸ™ï¸ Uzak audio track:",
-        uzakStream.getAudioTracks().length,
-      );
-      console.log("ğŸ“¹ Uzak video track:", uzakStream.getVideoTracks().length);
+      console.log(" Uzak stream:", uzakStream.id);
 
-      this.olaylar.uzakStream?.(uzakStream);
+      console.log(" Uzak audio track:", uzakStream.getAudioTracks().length);
+
+      console.log(" Uzak video track:", uzakStream.getVideoTracks().length);
+
+      this.olayCalistir("uzakStream", uzakStream);
     };
 
     peerConnection.onicecandidate = (event: any) => {
       if (!event.candidate) {
-        console.log("ğŸ§Š ICE Candidate Ã¼retimi tamamlandÄ±.");
+        console.log(" ICE Candidate üretimi tamamlandı.");
 
         return;
       }
 
       const aday = event.candidate.toJSON();
 
-      console.log("ğŸ§Š ICE Candidate Ã¼retildi.");
+      console.log(" ICE Candidate üretildi.");
 
       this.iceGonder(aday);
     };
@@ -1660,24 +1848,25 @@ class AramaWebRTC {
     peerConnection.onconnectionstatechange = () => {
       const durum = peerConnection.connectionState;
 
-      console.log("ğŸ“¡ WebRTC baÄŸlantÄ± durumu:", durum);
+      console.log(" WebRTC bağlantı durumu:", durum);
 
       if (durum === "connected") {
-        console.log("ğŸŸ¢ WEBRTC BAÄLANTISI KURULDU!");
+        console.log(" WEBRTC BAĞLANTISI KURULDU!");
+
         if (!this.webRtcBaglandiBildirildi) {
           this.webRtcBaglandiBildirildi = true;
-          this.aramaSesiniDurdur();
 
-          // WebRTC baÄŸlandÄ±ktan sonra ses yÃ¶nlendirmesini deÄŸiÅŸtirme.
-          // BaÅŸlangÄ±Ã§ yÃ¶nlendirmesi arama tÃ¼rÃ¼ne gÃ¶re zaten belirlendi.
-          // KullanÄ±cÄ±nÄ±n manuel hoparlÃ¶r/ahize tercihi korunur.
+          this.aramaSesiniDurdur(); // WebRTC bağlandıktan sonra ses yönlendirmesini değiştirme.
+          // Başlangıç yönlendirmesi arama türüne göre zaten belirlendi.
+          // Kullanıcının manuel hoparlör/ahize tercihi korunur.
+
           console.log(
             this.hoparlorAcik
-              ? "ğŸ”Š BaÄŸlantÄ± kuruldu: HOPARLÃ–R AÃ‡IK"
-              : "ğŸ”ˆ BaÄŸlantÄ± kuruldu: AHÄ°ZE AÃ‡IK",
+              ? " Bağlantı kuruldu: HOPARLÖR AÇIK"
+              : " Bağlantı kuruldu: AHİZE AÇIK",
           );
 
-          this.olaylar.baglandi?.();
+          this.olayCalistir("baglandi");
         }
       }
 
@@ -1686,73 +1875,88 @@ class AramaWebRTC {
         durum === "failed" ||
         durum === "closed"
       ) {
-        console.log("ğŸ”´ WebRTC baÄŸlantÄ±sÄ± koptu:", durum);
+        console.log(" WebRTC bağlantısı koptu:", durum);
+
         if (!this.aramaSonlandiriliyor) {
-          this.olaylar.baglantiKoptu?.();
+          this.olayCalistir("baglantiKoptu");
         }
       }
     };
 
     peerConnection.oniceconnectionstatechange = () => {
       const durum = peerConnection.iceConnectionState;
-      console.log("ğŸ§Š ICE durumu:", durum);
+
+      console.log(" ICE durumu:", durum);
 
       if (durum === "connected" || durum === "completed") {
-        console.log("ğŸŸ¢ğŸ§Š ICE BAÄLANTISI KURULDU:", durum);
+        console.log(" ICE BAĞLANTISI KURULDU:", durum);
       }
 
       if (durum === "failed") {
-        console.error("ğŸ”´ğŸ§Š ICE BAÄLANTISI BAÅARISIZ.");
-        this.olaylar.hata?.(new Error("WebRTC ICE baÄŸlantÄ±sÄ± kurulamadÄ±."));
+        console.error(" ICE BAĞLANTISI BAŞARISIZ.");
+
+        this.olayCalistir(
+          "hata",
+
+          new Error("WebRTC ICE bağlantısı kurulamadı."),
+        );
       }
     };
 
     peerConnection.onicecandidateerror = (event: any) => {
-      console.error("ğŸ”´ğŸ§Š ICE CANDIDATE ERROR:", {
+      console.error(" ICE CANDIDATE ERROR:", {
         errorCode: event?.errorCode,
+
         errorText: event?.errorText,
+
         url: event?.url,
       });
     };
 
     peerConnection.onicegatheringstatechange = () => {
-      console.log(
-        "ğŸ§Š ICE gathering durumu:",
-        peerConnection.iceGatheringState,
-      );
+      console.log(" ICE gathering durumu:", peerConnection.iceGatheringState);
     };
 
     peerConnection.onsignalingstatechange = () => {
-      console.log("ğŸ“¡ Signaling durumu:", peerConnection.signalingState);
+      console.log(" Signaling durumu:", peerConnection.signalingState);
     };
 
     return peerConnection;
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ARAMA BAÅLAT
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ARAMA BAŞLAT
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async aramaBaslat(): Promise<RTCSessionDescriptionInit> {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
-      throw new Error("Arama kullanÄ±cÄ±larÄ± ayarlanmamÄ±ÅŸ.");
-    }
-
-    // AynÄ± arama iÃ§in aramaBaslat() birden fazla kez tetiklenirse
-    // ikinci Ã§aÄŸrÄ± ilk Ã§aÄŸrÄ±nÄ±n sonucunu bekler.
+      throw new Error("Arama kullanıcıları ayarlanmamış.");
+    } // Aynı arama için aramaBaslat() birden fazla kez tetiklenirse
+    // ikinci çağrı ilk çağrının sonucunu bekler.
     //
-    // Ã–NEMLÄ°:
-    // Eski yapÄ±da ikinci Ã§aÄŸrÄ± "offerOlusturuluyor" hatasÄ± fÄ±rlatÄ±yor,
-    // Ã¼st katman da bunu aramayÄ± kapatma sebebi olarak yorumlayabiliyordu.
-    // SonuÃ§ta ilk createOffer tamamlanmadan PeerConnection kapanÄ±yor
+    // ÖNEMLİ:
+    // Eski yapıda ikinci çağrı "offerOlusturuluyor" hatası fırlatıyor,
+    // üst katman da bunu aramayı kapatma sebebi olarak yorumlayabiliyordu.
+    // Sonuçta ilk createOffer tamamlanmadan PeerConnection kapanıyor
     // ve:
     // "Failed to set local offer sdp: Called in wrong state: closed"
-    // hatasÄ± oluÅŸuyordu.
+    // hatası oluşuyordu.
+
     if (this.aramaBaslatPromise) {
       console.warn(
-        "â­ï¸ Arama zaten baÅŸlatÄ±lÄ±yor. Ä°kinci arama baÅŸlatma isteÄŸi ilk iÅŸlemi bekleyecek.",
+        " Arama zaten başlatılıyor. İkinci arama başlatma isteği ilk işlemi bekleyecek.",
       );
 
       return this.aramaBaslatPromise;
@@ -1765,77 +1969,79 @@ class AramaWebRTC {
     try {
       return await baslatmaPromise;
     } finally {
-      // Sadece halen aynÄ± Promise tutuluyorsa temizle.
+      // Sadece halen aynı Promise tutuluyorsa temizle.
+
       if (this.aramaBaslatPromise === baslatmaPromise) {
         this.aramaBaslatPromise = null;
       }
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ARAMA BAÅLAT - ASIL Ä°ÅLEM
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ARAMA BAŞLAT - ASIL İŞLEM
+
+
+
+   \* =========================================================
+
+
+
+   */
+
   private async aramaBaslatInternal(): Promise<RTCSessionDescriptionInit> {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
-      throw new Error("Arama kullanÄ±cÄ±larÄ± ayarlanmamÄ±ÅŸ.");
+      throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
 
     console.log("======================================");
 
     if (this.hariciSinyalGonderici) {
-      console.log("ğŸ“¡ HARÄ°CÄ° STOMP TAÅIYICISI KULLANILIYOR");
+      console.log(" HARİCİ STOMP TAŞIYICISI KULLANILIYOR");
     } else {
-      console.log("ğŸ”Œ ARAMA BAÅLATMADAN Ã–NCE STOMP KONTROLÃœ");
+      console.log(" ARAMA BAŞLATMADAN ÖNCE STOMP KONTROLÜ");
 
-      console.log("ğŸ”Œ STOMP baÄŸlÄ± mÄ±:", this.webSocketBagliMi());
+      console.log(" STOMP bağlı mı:", this.webSocketBagliMi());
 
       console.log("======================================");
 
       await this.webSocketBaglantisiAc();
 
       if (!this.webSocketBagliMi()) {
-        throw new Error("Arama WebSocket baÄŸlantÄ±sÄ± hazÄ±r deÄŸil.");
+        throw new Error("Arama WebSocket bağlantısı hazır değil.");
       }
 
-      console.log("ğŸŸ¢ ARAMA Ä°Ã‡Ä°N STOMP HAZIR");
+      console.log(" ARAMA İÇİN STOMP HAZIR");
 
-      console.log(
-        "ğŸ“¡ Arama topic:",
-        `/topic/arama/${this.mevcutKullaniciId}`,
-      );
+      console.log(" Arama topic:", `/topic/arama/${this.mevcutKullaniciId}`);
     }
 
-    this.aramaSonlandiriliyor = false;
+    this.aramaSonlandiriliyor = false; // Yeni bir arama başlatılıyorsa eski offer kilidi temiz olmalı.
+    // Ancak burada yeni bir createOffer başlatmıyoruz. Sadece durum
+    // tutarlılığını sağlıyoruz.
 
-    // Yeni bir arama baÅŸlatÄ±lÄ±yorsa eski offer kilidi temiz olmalÄ±.
-    // Ancak burada yeni bir createOffer baÅŸlatmÄ±yoruz. Sadece durum
-    // tutarlÄ±lÄ±ÄŸÄ±nÄ± saÄŸlÄ±yoruz.
-    this.offerOlusturuluyor = false;
+    this.offerOlusturuluyor = false; // Giden arama başlarken Android call-audio oturumunu aç.
+    // SES: ahize, VIDEO: hoparlör.
 
-    // Arama baÅŸlar baÅŸlamaz Android call-audio oturumunu aÃ§.
-    // SES: ahize, VIDEO: hoparlÃ¶r.
-    this.aramaAudioOturumunuBaslat();
+    this.aramaAudioOturumunuBaslat(); // Karşı taraf cevap verene kadar giden arama için ringback sesi çal.
 
-    // KarÅŸÄ± taraf cevap verene kadar giden arama sesi Ã§al.
-    void this.aramaSesiniBaslat();
+    await this.aramaSesiniBaslat();
 
-    const peerConnection = await this.baglantiOlustur();
+    const peerConnection = await this.baglantiOlustur(); // PeerConnection cleanup sırasında kapandıysa yeni offer üretmeye
+    // çalışmayalım. Bu kontrol "closed" hatasını daha anlaşılır hale getirir.
 
-    // PeerConnection cleanup sÄ±rasÄ±nda kapandÄ±ysa yeni offer Ã¼retmeye
-    // Ã§alÄ±ÅŸmayalÄ±m. Bu kontrol "closed" hatasÄ±nÄ± daha anlaÅŸÄ±lÄ±r hale getirir.
     if ((peerConnection.signalingState as string) === "closed") {
-      throw new Error(
-        "WebRTC PeerConnection arama baÅŸlamadan Ã¶nce kapandÄ±.",
-      );
-    }
+      throw new Error("WebRTC PeerConnection arama başlamadan önce kapandı.");
+    } // Aynı Promise koruması nedeniyle normal şartlarda buraya ikinci
+    // createOffer çağrısı ulaşmaz. Yine de güvenlik kontrolü bırakıyoruz.
 
-    // AynÄ± Promise korumasÄ± nedeniyle normal ÅŸartlarda buraya ikinci
-    // createOffer Ã§aÄŸrÄ±sÄ± ulaÅŸmaz. Yine de gÃ¼venlik kontrolÃ¼ bÄ±rakÄ±yoruz.
     if (this.offerOlusturuluyor) {
       console.warn(
-        "â­ï¸ WebRTC Offer halen oluÅŸturuluyor. Mevcut arama iÅŸlemi korunuyor.",
+        " WebRTC Offer halen oluşturuluyor. Mevcut arama işlemi korunuyor.",
       );
 
       if (
@@ -1844,24 +2050,25 @@ class AramaWebRTC {
       ) {
         return {
           type: peerConnection.localDescription.type,
+
           sdp: peerConnection.localDescription.sdp,
         };
       }
 
-      throw new Error("WebRTC Offer halen oluÅŸturuluyor.");
-    }
+      throw new Error("WebRTC Offer halen oluşturuluyor.");
+    } // Arayan tarafta yeni offer üretilecekse signaling state stable olmalı.
 
-    // Arayan tarafta yeni offer Ã¼retilecekse signaling state stable olmalÄ±.
     if (peerConnection.signalingState !== "stable") {
       const mevcutOffer = peerConnection.localDescription;
 
       if (mevcutOffer?.type === "offer" && mevcutOffer.sdp) {
         console.warn(
-          "âš ï¸ PeerConnection zaten local offer iÃ§eriyor. Mevcut offer tekrar gÃ¶nderiliyor.",
+          "  PeerConnection zaten local offer içeriyor. Mevcut offer tekrar gönderiliyor.",
         );
 
         const mevcutTeklif: RTCSessionDescriptionInit = {
           type: mevcutOffer.type,
+
           sdp: mevcutOffer.sdp,
         };
 
@@ -1873,99 +2080,110 @@ class AramaWebRTC {
       }
 
       throw new Error(
-        `WebRTC Offer oluÅŸturulamadÄ±. Signaling durumu: ${peerConnection.signalingState}`,
+        `WebRTC Offer oluşturulamadı. Signaling durumu: ${peerConnection.signalingState}`,
       );
     }
 
     this.offerOlusturuluyor = true;
 
     try {
-      console.log("ğŸ“¤ WebRTC Offer oluÅŸturuluyor...");
+      console.log(" WebRTC Offer oluşturuluyor..."); // Offer oluşturulurken PeerConnection'ın kapatılmadığından emin ol.
 
-      // Offer oluÅŸturulurken PeerConnection'Ä±n kapatÄ±lmadÄ±ÄŸÄ±ndan emin ol.
       if ((peerConnection.signalingState as string) === "closed") {
         throw new Error(
-          "WebRTC PeerConnection kapalÄ± olduÄŸu iÃ§in Offer oluÅŸturulamadÄ±.",
+          "WebRTC PeerConnection kapalı olduğu için Offer oluşturulamadı.",
         );
       }
 
       const offer = await peerConnection.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: this.aramaTuru === "VIDEO",
-      });
 
-      // createOffer tamamlandÄ±ktan sonra arama kapatÄ±lmÄ±ÅŸ olabilir.
-      // KapalÄ± PeerConnection'a setLocalDescription gÃ¶ndermiyoruz.
+        offerToReceiveVideo: this.aramaTuru === "VIDEO",
+      }); // createOffer tamamlandıktan sonra arama kapatılmış olabilir.
+      // Kapalı PeerConnection'a setLocalDescription göndermiyoruz.
+
       if (
         (peerConnection.signalingState as string) === "closed" ||
         this.peerConnection !== peerConnection ||
         this.aramaSonlandiriliyor
       ) {
         throw new Error(
-          "Arama Offer oluÅŸturulurken sonlandÄ±rÄ±ldÄ±; LocalDescription ayarlanmadÄ±.",
+          "Arama Offer oluşturulurken sonlandırıldı; LocalDescription ayarlanmadı.",
         );
       }
 
       await peerConnection.setLocalDescription(offer);
 
-      console.log("ğŸ“¤ WebRTC Offer oluÅŸturuldu.");
-      console.log("ğŸ“¤ LocalDescription ayarlandÄ±.");
-      console.log("ğŸ“¤ Offer signaling state:", peerConnection.signalingState);
+      console.log(" WebRTC Offer oluşturuldu.");
+
+      console.log(" LocalDescription ayarlandı.");
+
+      console.log(" Offer signaling state:", peerConnection.signalingState);
 
       const teklif = {
         type: offer.type,
-        sdp: offer.sdp,
-      };
 
-      // CALL_OFFER yalnÄ±zca local description ayarlandÄ±ktan sonra gÃ¶nderilir.
+        sdp: offer.sdp,
+      }; // CALL_OFFER yalnızca local description ayarlandıktan sonra gönderilir.
+
       this.aramaSinyaliGonder("CALL_OFFER", {
         sdp: offer.sdp ?? undefined,
       });
 
-      console.log("ğŸ“¤ CALL_OFFER karÅŸÄ± tarafa gÃ¶nderildi.");
+      console.log(" CALL_OFFER karşı tarafa gönderildi.");
 
       return teklif;
     } finally {
       this.offerOlusturuluyor = false;
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * GELEN OFFER'I KABUL ET
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* GELEN OFFER'I KABUL ET
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async teklifiKabulEt(
     teklif: RTCSessionDescriptionInit,
   ): Promise<RTCSessionDescriptionInit> {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
-      throw new Error("Arama kullanÄ±cÄ±larÄ± ayarlanmamÄ±ÅŸ.");
+      throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
 
-    console.log("ğŸ“ Gelen teklif kabul ediliyor.");
+    console.log(" Gelen teklif kabul ediliyor.");
 
     if (!this.hariciSinyalGonderici) {
       await this.webSocketBaglantisiAc();
 
       if (!this.webSocketBagliMi()) {
-        throw new Error("Arama WebSocket baÄŸlantÄ±sÄ± hazÄ±r deÄŸil.");
+        throw new Error("Arama WebSocket bağlantısı hazır değil.");
       }
     }
 
-    this.aramaSonlandiriliyor = false;
+    this.aramaSonlandiriliyor = false; // Gelen aramanın zilini durdur.
 
-    // Gelen aramanÄ±n zilini durdur.
-    this.aramaSesiniDurdur();
+    this.aramaSesiniDurdur(); // Cevapsız arama için açılmış geçici ses oturumunu kapat.
+    // Ardından normal WebRTC çağrı ses oturumunu temiz bir şekilde aç.
 
-    // Arama kabul edildiÄŸi anda Android call-audio oturumunu aÃ§.
-    // VarsayÄ±lan olarak hoparlÃ¶r ve mikrofon aktif olur.
+    this.gelenAramaAudioOturumunuKapat();
+
     this.aramaAudioOturumunuBaslat();
 
     const peerConnection = await this.baglantiOlustur();
 
     if (!teklif.sdp) {
-      throw new Error("Teklif SDP bilgisi bulunamadÄ±.");
+      throw new Error("Teklif SDP bilgisi bulunamadı.");
     }
 
     const remoteDescription = new RTCSessionDescription({
@@ -1974,23 +2192,23 @@ class AramaWebRTC {
       sdp: teklif.sdp,
     });
 
-    console.log("ğŸ“¥ RemoteDescription ayarlanÄ±yor...");
+    console.log(" RemoteDescription ayarlanıyor...");
 
     await peerConnection.setRemoteDescription(remoteDescription);
 
     this.remoteDescriptionHazir = true;
 
-    console.log("ğŸŸ¢ RemoteDescription hazÄ±r.");
+    console.log(" RemoteDescription hazır.");
 
     await this.bekleyenIceAdaylariniEkle();
 
-    console.log("ğŸ“¤ WebRTC Answer oluÅŸturuluyor...");
+    console.log(" WebRTC Answer oluşturuluyor...");
 
     const answer = await peerConnection.createAnswer();
 
     await peerConnection.setLocalDescription(answer);
 
-    console.log("ğŸ“¤ WebRTC Answer oluÅŸturuldu.");
+    console.log(" WebRTC Answer oluşturuldu.");
 
     this.aramaSinyaliGonder("CALL_ANSWER", {
       sdp: answer.sdp ?? undefined,
@@ -2001,49 +2219,94 @@ class AramaWebRTC {
 
       sdp: answer.sdp,
     };
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ANSWER Ä°ÅLE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ANSWER İŞLE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async cevabiIsle(cevap: RTCSessionDescriptionInit) {
     if (!this.peerConnection) {
-      throw new Error("PeerConnection bulunamadÄ±.");
+      throw new Error("PeerConnection bulunamadı.");
     }
 
     if (!cevap.sdp) {
-      throw new Error("Cevap SDP bilgisi bulunamadÄ±.");
+      throw new Error("Cevap SDP bilgisi bulunamadı.");
     }
 
-    console.log("ğŸ“¥ WebRTC Answer iÅŸleniyor...");
+    if (this.cevapIsleniyor) {
+      console.warn(
+        "⚠️ WebRTC Answer zaten işleniyor, ikinci cevap yok sayıldı.",
+      );
+      return;
+    }
 
-    const remoteDescription = new RTCSessionDescription({
-      type: cevap.type,
+    if (this.peerConnection.signalingState !== "have-local-offer") {
+      const mevcutRemote = this.peerConnection.remoteDescription;
 
-      sdp: cevap.sdp,
-    });
+      if (mevcutRemote?.type === "answer") {
+        console.warn(
+          "⚠️ WebRTC Answer zaten işlendi, ikinci cevap yok sayıldı.",
+        );
+        this.remoteDescriptionHazir = true;
+        await this.bekleyenIceAdaylariniEkle();
+      } else {
+        console.warn(
+          "⚠️ WebRTC Answer beklenen signalingState'te değil:",
+          this.peerConnection.signalingState,
+        );
+      }
 
-    await this.peerConnection.setRemoteDescription(remoteDescription);
+      return;
+    }
 
-    this.remoteDescriptionHazir = true;
+    this.cevapIsleniyor = true;
 
-    console.log("ğŸ“¥ WebRTC Answer iÅŸlendi.");
+    try {
+      const peerConnection = this.peerConnection;
 
-    await this.bekleyenIceAdaylariniEkle();
+      console.log("WebRTC Answer işleniyor...");
+      console.log("Answer signaling state:", peerConnection.signalingState);
+
+      const remoteDescription = new RTCSessionDescription({
+        type: cevap.type,
+        sdp: cevap.sdp,
+      });
+
+      await peerConnection.setRemoteDescription(remoteDescription);
+
+      this.remoteDescriptionHazir = true;
+
+      console.log("WebRTC Answer işlendi.");
+      console.log(
+        "Answer sonrası signaling state:",
+        peerConnection.signalingState,
+      );
+
+      await this.bekleyenIceAdaylariniEkle();
+    } catch (hata) {
+      console.error("❌ WebRTC Answer işlenemedi:", hata);
+      throw hata;
+    } finally {
+      this.cevapIsleniyor = false;
+    }
   }
-
-  /**
-   * =========================================================
-   * ICE EKLE
-   * =========================================================
-   */
 
   async iceAdayiEkle(aday: RTCIceCandidateInit) {
     if (!this.peerConnection) {
-      console.warn("âš ï¸ PeerConnection hazÄ±r deÄŸil. ICE bekletiliyor.");
+      console.warn("  PeerConnection hazır değil. ICE bekletiliyor.");
 
       this.bekleyenIceAdaylari.push(aday);
 
@@ -2051,7 +2314,7 @@ class AramaWebRTC {
     }
 
     if (!this.remoteDescriptionHazir) {
-      console.log("â³ RemoteDescription hazÄ±r deÄŸil. ICE bekletiliyor.");
+      console.log(" RemoteDescription hazır değil. ICE bekletiliyor.");
 
       this.bekleyenIceAdaylari.push(aday);
 
@@ -2063,17 +2326,27 @@ class AramaWebRTC {
 
       await this.peerConnection.addIceCandidate(candidate);
 
-      console.log("ğŸ§Š ICE Candidate eklendi.");
+      console.log(" ICE Candidate eklendi.");
     } catch (hata) {
-      console.error("âŒ ICE Candidate eklenemedi:", hata);
+      console.error(" ICE Candidate eklenemedi:", hata);
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * BEKLEYEN ICE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* BEKLEYEN ICE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private async bekleyenIceAdaylariniEkle() {
     if (!this.peerConnection || !this.remoteDescriptionHazir) {
@@ -2085,7 +2358,8 @@ class AramaWebRTC {
     }
 
     console.log(
-      "ğŸ§Š Bekleyen ICE adaylarÄ± ekleniyor:",
+      " Bekleyen ICE adayları ekleniyor:",
+
       this.bekleyenIceAdaylari.length,
     );
 
@@ -2099,55 +2373,87 @@ class AramaWebRTC {
 
         await this.peerConnection.addIceCandidate(candidate);
 
-        console.log("ğŸ§Š Bekleyen ICE eklendi.");
+        console.log(" Bekleyen ICE eklendi.");
       } catch (hata) {
-        console.error("âŒ Bekleyen ICE eklenemedi:", hata);
+        console.error(" Bekleyen ICE eklenemedi:", hata);
       }
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ICE GÃ–NDER
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ICE GÖNDER
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   private iceGonder(aday: RTCIceCandidateInit) {
     this.aramaSinyaliGonder("CALL_ICE", {
       aday,
     });
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ARAMAYI REDDET
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ARAMAYI REDDET
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   aramayiReddet() {
     if (!this.arananKullaniciId) {
       return;
     }
 
-    console.log("ğŸ“µ Arama reddediliyor.");
+    console.log(" Arama reddediliyor.");
 
     this.aramaSesiniDurdur();
+
+    this.gelenAramaAudioOturumunuKapat();
+
     this.aramaAudioOturumunuKapat();
 
     this.aramaSinyaliGonder("CALL_REJECT");
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * ARAMAYI BÄ°TÄ°R
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* ARAMAYI BİTİR
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async aramayiBitir(karsiTarafBitirdi = false) {
     if (this.aramaSonlandiriliyor) {
-      console.log(
-        "â­ï¸ Arama zaten sonlandÄ±rÄ±lÄ±yor. Ä°kinci cleanup atlandÄ±.",
-      );
+      console.log(" Arama zaten sonlandırılıyor. İkinci cleanup atlandı.");
+
       return;
     }
 
@@ -2155,10 +2461,12 @@ class AramaWebRTC {
 
     this.aramaSesiniDurdur();
 
+    this.gelenAramaAudioOturumunuKapat();
+
     console.log(
       karsiTarafBitirdi
-        ? "ğŸ“ KarÅŸÄ± taraf aramayÄ± bitirdi. WebRTC baÄŸlantÄ±sÄ± kapatÄ±lÄ±yor."
-        : "ğŸ“ WebRTC gÃ¶rÃ¼ÅŸmesi sonlandÄ±rÄ±lÄ±yor.",
+        ? " Karşı taraf aramayı bitirdi. WebRTC bağlantısı kapatılıyor."
+        : " WebRTC görüşmesi sonlandırılıyor.",
     );
 
     if (
@@ -2167,12 +2475,11 @@ class AramaWebRTC {
       (this.hariciSinyalGonderici ||
         (this.stompClient && this.stompClient.connected && this.webSocketBagli))
     ) {
-      console.log(
-        "ğŸ“¤ KullanÄ±cÄ± aramayÄ± kapattÄ±. CALL_END gÃ¶nderiliyor.",
-      );
+      console.log(" Kullanıcı aramayı kapattı. CALL_END gönderiliyor.");
+
       this.aramaSinyaliGonder("CALL_END");
     } else if (karsiTarafBitirdi) {
-      console.log("â›” Gelen CALL_END iÃ§in tekrar CALL_END gÃ¶nderilmiyor.");
+      console.log(" Gelen CALL_END için tekrar CALL_END gönderilmiyor.");
     }
 
     this.sesYonlendirmesiniKapat();
@@ -2182,80 +2489,117 @@ class AramaWebRTC {
         try {
           track.stop();
         } catch (hata) {
-          console.warn("âš ï¸ Yerel track kapatma hatasÄ±:", hata);
+          console.warn("  Yerel track kapatma hatası:", hata);
         }
       });
+
       this.yerelStream = null;
     }
 
     if (this.peerConnection) {
       try {
         this.peerConnection.ontrack = null;
+
         this.peerConnection.onicecandidate = null;
+
         this.peerConnection.onconnectionstatechange = null;
+
         this.peerConnection.oniceconnectionstatechange = null;
+
         this.peerConnection.onicegatheringstatechange = null;
+
         this.peerConnection.onsignalingstatechange = null;
+
         this.peerConnection.close();
       } catch (hata) {
-        console.warn("PeerConnection kapatma hatasÄ±:", hata);
+        console.warn("PeerConnection kapatma hatası:", hata);
       }
+
       this.peerConnection = null;
     }
 
     this.uzakStream = null;
-    this.bekleyenIceAdaylari = [];
-    this.remoteDescriptionHazir = false;
-    this.webRtcBaglandiBildirildi = false;
-    this.offerOlusturuluyor = false;
 
-    // Cleanup sonrasÄ±nda yeni arama baÅŸlayabilsin.
-    // Devam eden eski Promise varsa kendi finally bloÄŸunda zaten temizlenir.
+    this.bekleyenIceAdaylari = [];
+
+    this.remoteDescriptionHazir = false;
+    this.sonGelenOfferSdp = null;
+    this.cevapIsleniyor = false;
+    this.ringtoneBaslatiliyor = false;
+
+    this.webRtcBaglandiBildirildi = false;
+
+    this.offerOlusturuluyor = false; // Cleanup sonrasında yeni arama başlayabilsin.
+    // Devam eden eski Promise varsa kendi finally bloğunda zaten temizlenir.
+
     this.aramaBaslatPromise = null;
 
     if (!karsiTarafBitirdi) {
-      this.olaylar.baglantiKoptu?.();
-    }
-  }
+      this.olayCalistir("baglantiKoptu");
+      this.aramaSonlandiriliyor = false;
 
-  /**
-   * =========================================================
-   * STOMP BAÄLANTISINI KAPAT
-   * =========================================================
-   */
+      console.log("✅ Arama temizliği tamamlandı, sonlandırma kilidi açıldı.");
+    }
+  } /*\*
+
+
+
+   \* =========================================================
+
+
+
+   \* STOMP BAĞLANTISINI KAPAT
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async webSocketBaglantisiniKapat() {
     if (this.hariciSinyalGonderici && !this.stompClient) {
-      console.log("ğŸ“¡ Harici STOMP taÅŸÄ±yÄ±cÄ±sÄ± kullanÄ±lÄ±yor.");
-      console.log(
-        "â­ï¸ AramaWebRTC native STOMP baÄŸlantÄ±sÄ± kapatÄ±lmayacak.",
-      );
+      console.log(" Harici STOMP taşıyıcısı kullanılıyor.");
+
+      console.log(" AramaWebRTC native STOMP bağlantısı kapatılmayacak.");
+
       this.webSocketBagli = false;
+
       this.webSocketBaglantiPromise = null;
+
       return;
     }
 
-    console.log("ğŸ”Œ Arama STOMP baÄŸlantÄ±sÄ± kapatÄ±lÄ±yor.");
+    console.log(" Arama STOMP bağlantısı kapatılıyor."); /*\*
 
-    /**
-     * Subscription kapat
-     */
+
+
+     \* Subscription kapat
+
+
+
+     */
 
     if (this.aramaSubscription) {
       try {
         this.aramaSubscription.unsubscribe();
 
-        console.log("ğŸ“¡ Arama subscription kapatÄ±ldÄ±.");
+        console.log(" Arama subscription kapatıldı.");
       } catch (hata) {
-        console.warn("âš ï¸ Arama subscription kapatma hatasÄ±:", hata);
+        console.warn("  Arama subscription kapatma hatası:", hata);
       }
 
       this.aramaSubscription = null;
-    }
+    } /*\*
 
-    /**
-     * STOMP client kapat
-     */
+
+
+     \* STOMP client kapat
+
+
+
+     */
 
     const client = this.stompClient;
 
@@ -2268,23 +2612,33 @@ class AramaWebRTC {
     if (client) {
       try {
         if (client.active || client.connected) {
-          console.log("ğŸ“¤ STOMP client deactivate Ã§aÄŸrÄ±lÄ±yor.");
+          console.log(" STOMP client deactivate çağrılıyor.");
 
           await client.deactivate();
         }
       } catch (hata) {
-        console.warn("âš ï¸ STOMP client kapatma hatasÄ±:", hata);
+        console.warn("  STOMP client kapatma hatası:", hata);
       }
     }
 
-    console.log("ğŸ”Œ Arama STOMP baÄŸlantÄ±sÄ± kapatÄ±ldÄ±.");
-  }
+    console.log(" Arama STOMP bağlantısı kapatıldı.");
+  } /*\*
 
-  /**
-   * =========================================================
-   * MÄ°KROFON
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* MİKROFON
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   mikrofonuDegistir(acik: boolean) {
     if (!this.yerelStream) {
@@ -2295,16 +2649,24 @@ class AramaWebRTC {
       track.enabled = acik;
     });
 
-    console.log(
-      acik ? "ğŸ™ï¸ Mikrofon aÃ§Ä±ldÄ±." : "ğŸ”‡ Mikrofon kapatÄ±ldÄ±.",
-    );
-  }
+    console.log(acik ? " Mikrofon açıldı." : " Mikrofon kapatıldı.");
+  } /*\*
 
-  /**
-   * =========================================================
-   * KAMERA
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* KAMERA
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   kamerayiDegistir(acik: boolean) {
     if (!this.yerelStream) {
@@ -2315,14 +2677,24 @@ class AramaWebRTC {
       track.enabled = acik;
     });
 
-    console.log(acik ? "ğŸ“¹ Kamera aÃ§Ä±ldÄ±." : "ğŸš« Kamera kapatÄ±ldÄ±.");
-  }
+    console.log(acik ? " Kamera açıldı." : " Kamera kapatıldı.");
+  } /*\*
 
-  /**
-   * =========================================================
-   * KAMERA DEÄÄ°ÅTÄ°R
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* KAMERA DEĞİŞTİR
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   kamerayiCevir() {
     if (!this.yerelStream) {
@@ -2342,17 +2714,27 @@ class AramaWebRTC {
     if (typeof kameraTrack._switchCamera === "function") {
       kameraTrack._switchCamera();
 
-      console.log("ğŸ”„ Kamera deÄŸiÅŸtirildi.");
+      console.log(" Kamera değiştirildi.");
     } else {
-      console.warn("âš ï¸ Bu cihazda kamera deÄŸiÅŸtirme desteklenmiyor.");
+      console.warn("  Bu cihazda kamera değiştirme desteklenmiyor.");
     }
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * STREAM GETTER
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* STREAM GETTER
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   getYerelStream(): MediaStream | null {
     return this.yerelStream;
@@ -2364,25 +2746,45 @@ class AramaWebRTC {
 
   getPeerConnection(): RTCPeerConnection | null {
     return this.peerConnection;
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * STOMP BAÄLI MI
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* STOMP BAĞLI MI
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   webSocketBagliMi(): boolean {
     const client = this.stompClient;
 
     return this.webSocketBagli && client !== null && client.connected;
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * MÄ°KROFON KISA METOTLARI
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* MİKROFON KISA METOTLARI
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   mikrofonKapat() {
     this.mikrofonuDegistir(false);
@@ -2390,13 +2792,23 @@ class AramaWebRTC {
 
   mikrofonAc() {
     this.mikrofonuDegistir(true);
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * KAMERA KISA METOTLARI
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* KAMERA KISA METOTLARI
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   kameraKapat() {
     this.kamerayiDegistir(false);
@@ -2404,23 +2816,43 @@ class AramaWebRTC {
 
   kameraAc() {
     this.kamerayiDegistir(true);
-  }
+  } /*\*
 
-  /**
-   * =========================================================
-   * OLAYLARI TEMÄ°ZLE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* OLAYLARI TEMİZLE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   olaylariTemizle() {
-    this.olaylar = {};
-  }
+    this.olaylar.clear();
+  } /*\*
 
-  /**
-   * =========================================================
-   * TAM TEMÄ°ZLE
-   * =========================================================
-   */
+
+
+   \* =========================================================
+
+
+
+   \* TAM TEMİZLE
+
+
+
+   \* =========================================================
+
+
+
+   */
 
   async temizle() {
     try {
@@ -2428,29 +2860,27 @@ class AramaWebRTC {
         await this.aramayiBitir();
       }
     } catch (hata) {
-      console.warn("Arama temizleme hatasÄ±:", hata);
+      console.warn("Arama temizleme hatası:", hata);
     }
 
     try {
       await this.webSocketBaglantisiniKapat();
     } catch (hata) {
-      console.warn("STOMP temizleme hatasÄ±:", hata);
+      console.warn("STOMP temizleme hatası:", hata);
     }
 
     this.aramaSesiniTemizle();
 
-    this.mevcutKullaniciId = null;
-
-    this.arananKullaniciId = null;
-
-    this.aramaTuru = "SES";
-    this.aramaAudioOturumuAcik = false;
-    this.hoparlorAcik = false;
     this.aramaSonlandiriliyor = false;
+
     this.webRtcBaglandiBildirildi = false;
+
     this.aramaBaslatPromise = null;
+
     this.uzakStream = null;
+
     this.bekleyenIceAdaylari = [];
+
     this.remoteDescriptionHazir = false;
 
     this.olaylariTemizle();

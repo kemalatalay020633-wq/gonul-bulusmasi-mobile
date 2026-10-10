@@ -1,34 +1,33 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   FlatList,
   Image,
-  Linking,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import * as RNFS from "react-native-fs";
+import Video from "react-native-video";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system/legacy";
-import { VideoView, useVideoPlayer } from "expo-video";
 import { RTCView } from "react-native-webrtc";
-
-import aramaWebRTC, {
-  type AramaMesaji,
-  type AramaTuru,
-} from "../../services/AramaWebRTC";
-import { Hoparlor } from "../../services/Hoparlor";
+import aramaWebRTC, { type AramaTuru } from "../../services/AramaWebRTC";
 
 import type { MessageDto } from "../../types/message";
 import type { MessageMediaDto } from "../../types/messageMedia";
 
+import { Hoparlor } from "../../services/Hoparlor";
 import MessageInput from "./MessageInput";
 
 type MediaType = "image" | "video" | "audio" | "file";
+
+type RTCSessionDescriptionInit = {
+  type: "offer" | "answer" | "pranswer" | "rollback";
+  sdp?: string;
+};
 
 type AramaDurumu = "YOK" | "ARAMA_YAPILIYOR" | "GELEN_ARAMA" | "BAGLANDI";
 
@@ -82,6 +81,12 @@ type ConversationPanelProps = {
   onSesliArama: () => void;
 
   onGoruntuluArama: () => void;
+
+  aramaIzniAktif: boolean;
+
+  aramaIzniYukleniyor: boolean;
+
+  onAramaIzniDegistir: () => void;
 };
 
 type VideoPlayerModalProps = {
@@ -114,24 +119,29 @@ function VideoPlayerContent({
   onClose,
 }: {
   uri: string;
-
   onClose: () => void;
 }) {
-  const player = useVideoPlayer(uri, (oynatici) => {
-    oynatici.play();
-  });
-
   return (
     <View style={styles.videoModalContainer}>
       <Pressable style={styles.videoCloseButton} onPress={onClose}>
         <Text style={styles.videoCloseButtonText}>✕</Text>
       </Pressable>
 
-      <VideoView
-        player={player}
+      <Video
+        source={{
+          uri: uri,
+        }}
         style={styles.videoPlayer}
-        contentFit="contain"
-        nativeControls
+        resizeMode="contain"
+        controls={true}
+        paused={false}
+        repeat={false}
+        playInBackground={false}
+        playWhenInactive={false}
+        ignoreSilentSwitch="ignore"
+        onError={(error) => {
+          console.error("❌ VİDEO OYNATMA HATASI:", error);
+        }}
       />
     </View>
   );
@@ -187,6 +197,12 @@ function ConversationPanel({
   onSesliArama,
 
   onGoruntuluArama,
+
+  aramaIzniAktif,
+
+  aramaIzniYukleniyor,
+
+  onAramaIzniDegistir,
 }: ConversationPanelProps) {
   const listeRef = useRef<FlatList<MessageDto>>(null);
 
@@ -208,9 +224,16 @@ function ConversationPanel({
   const [uzakStreamUrl, setUzakStreamUrl] = useState<string | null>(null);
   const [aramaSuresi, setAramaSuresi] = useState(0);
   const [hoparlorAcik, setHoparlorAcik] = useState(false);
+  const [aramaSonuMesaji, setAramaSonuMesaji] = useState("");
+  const [aramaSonuGorunur, setAramaSonuGorunur] = useState(false);
+  const aramaSonuZamanlayiciRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  const aramaSonlandirmaRef = useRef(false);
   const uzakStreamKontrolRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
+  const aramaListenerTemizleyicilerRef = useRef<Array<() => void>>([]);
 
   /*
    * ============================================================
@@ -268,154 +291,346 @@ function ConversationPanel({
   }, []);
 
   const aramaTemizle = useCallback(async () => {
+    console.log("🧹 ARAMA TEMİZLE BAŞLADI");
+
+    // Kapat butonuna basıldığında karşı tarafa açıkça CALL_END gönder.
+    // Ekranı kapatma işlemi sinyal gönderimi hata verse bile çalışmalı.
+    aramaSonlandirmaRef.current = true;
+
+    if (aramaSonuZamanlayiciRef.current) {
+      clearTimeout(aramaSonuZamanlayiciRef.current);
+      aramaSonuZamanlayiciRef.current = null;
+    }
+
     if (uzakStreamKontrolRef.current) {
       clearInterval(uzakStreamKontrolRef.current);
       uzakStreamKontrolRef.current = null;
     }
 
     try {
-      await aramaWebRTC.aramayiBitir();
+      console.log("📴 Kapat butonu: karşı tarafa CALL_END gönderiliyor...");
+      await aramaWebRTC.aramayiBitir(false);
+      console.log("✅ CALL_END gönderildi, WebRTC temizlendi");
     } catch (error) {
-      console.error("ARAMA KAPATMA HATASI:", error);
+      console.error("❌ CALL_END / ARAMA KAPATMA HATASI:", error);
+    } finally {
+      setAramaSonuGorunur(false);
+      setAramaSonuMesaji("");
+      setAramaGorunur(false);
+      setAramaDurumu("YOK");
+      setAramaArayanId(null);
+      setGelenTeklif(null);
+      setYerelStreamUrl(null);
+      setUzakStreamUrl(null);
+      setAramaSuresi(0);
+      setHoparlorAcik(false);
+      console.log("🧹 ARAMA EKRANI KAPATILDI");
     }
+  }, []);
 
+  const aramaSonlandirmayiGoster = useCallback((mesaj: string) => {
+    // UI her durumda kapanmalı. Kilit yalnızca WebRTC cleanup işleminin
+    // tekrar çalışmasını engeller; ekranın kapanmasını engellememelidir.
+    const zatenSonlandiriliyor = aramaSonlandirmaRef.current;
+    aramaSonlandirmaRef.current = true;
+
+    console.log("📴 ARAMA SONLANDI:", mesaj);
+
+    setAramaSonuGorunur(false);
+    setAramaSonuMesaji(mesaj);
     setAramaGorunur(false);
     setAramaDurumu("YOK");
-    setAramaArayanId(null);
     setGelenTeklif(null);
+    setAramaArayanId(null);
     setYerelStreamUrl(null);
     setUzakStreamUrl(null);
     setAramaSuresi(0);
+    setHoparlorAcik(false);
 
-    try {
-      Hoparlor.aramayiBitir();
-    } catch (error) {
-      console.warn("⚠️ Arama ses modu normale alınamadı:", error);
+    if (zatenSonlandiriliyor) {
+      console.log("⛔ WebRTC zaten temizleniyor; yalnızca UI kapatıldı.");
+      return;
     }
 
-    // Yeni sesli arama ahizeden başlasın.
-    setHoparlorAcik(false);
+    void aramaWebRTC.aramayiBitir(true).catch((hata) => {
+      console.error("❌ KARŞI TARAF SONLANDIRMA TEMİZLİĞİ HATASI:", hata);
+    });
   }, []);
-
   const aramaOlaylariniKur = useCallback(() => {
-    aramaWebRTC.olayDinle("teklif", (mesaj) => {
-      console.log("📲 GELEN ARAMA:", mesaj);
-
-      aramaWebRTC.ayarla(currentUserId!, mesaj.arayanId, mesaj.aramaTuru);
-
-      setAramaTuru(mesaj.aramaTuru);
-      // Gelen görüntülü arama hoparlör açık,
-      // gelen sesli arama ahize ile başlar.
-      setHoparlorAcik(mesaj.aramaTuru === "VIDEO");
-      setAramaArayanId(mesaj.arayanId);
-      setGelenTeklif(mesaj.teklif);
-      setAramaDurumu("GELEN_ARAMA");
-      setAramaGorunur(true);
-    });
-
-    aramaWebRTC.olayDinle("cevap", async (mesaj) => {
+    // ConversationPanel kendi listener'larını yönetir.
+    // Singleton AramaWebRTC üzerindeki diğer listener'lara dokunulmaz.
+    aramaListenerTemizleyicilerRef.current.forEach((temizle) => {
       try {
-        await aramaWebRTC.cevabiIsle(mesaj.cevap);
-        yerelStreamiGoster();
-        aramaAkisiniGuncelle();
-        setAramaDurumu("BAGLANDI");
-      } catch (error) {
-        console.error("ARAMA CEVAP İŞLEME HATASI:", error);
+        temizle();
+      } catch (hata) {
+        console.warn("⚠️ WEBRTC LISTENER TEMİZLEME HATASI:", hata);
       }
     });
+    aramaListenerTemizleyicilerRef.current = [];
 
-    aramaWebRTC.olayDinle("ice", (mesaj) => {
-      console.log("🧊 GELEN ICE CALLBACK:", mesaj.aday);
-    });
+    console.log("======================================");
+    console.log("📞 WEBRTC EVENT LISTENER'LARI KURULUYOR");
+    console.log("📞 Kullanıcı:", currentUserId);
+    console.log("📞 Karşı kullanıcı:", selectedUserId);
+    console.log("======================================");
 
-    aramaWebRTC.olayDinle("reddet", () => {
-      Alert.alert("Arama reddedildi", `${selectedUserName} aramayı reddetti.`);
-      void aramaTemizle();
-    });
+    /*
+     * ============================================================
+     * GELEN TEKLİF
+     * ============================================================
+     */
 
-    aramaWebRTC.olayDinle("bitir", () => {
-      Alert.alert("Arama sona erdi", "Karşı taraf görüşmeyi sonlandırdı.");
-      void aramaTemizle();
-    });
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("teklif", (mesaj) => {
+        console.log("======================================");
+        console.log("📲 GELEN ARAMA EVENT");
+        console.log("📲 Mesaj:", mesaj);
+        console.log("======================================");
 
-    aramaWebRTC.olayDinle("uzakStream", (stream) => {
-      console.log("🎥 UZAK STREAM GELDİ");
-
-      try {
-        const url = stream.toURL();
-
-        console.log("🎥 UZAK STREAM URL:", url);
-
-        if (url) {
-          setUzakStreamUrl(url);
-          setAramaGorunur(true);
+        if (currentUserId === null) {
+          console.error("❌ currentUserId NULL");
+          return;
         }
-      } catch (error) {
-        console.error("❌ UZAK STREAM URL HATASI:", error);
-      }
-    });
 
-    aramaWebRTC.olayDinle("baglandi", () => {
-      console.log("🟢 ARAMA BAĞLANDI");
+        // Önceki aramadan kalan UI kilidini yeni arama için sıfırla.
+        aramaSonlandirmaRef.current = false;
 
-      // Özellikle arayan tarafta modalın açılmış olduğundan
-      // bağımsız olarak görüntülü arama ekranını garanti ediyoruz.
-      setAramaGorunur(true);
+        console.log("🔓 Yeni gelen arama için sonlandırma kilidi sıfırlandı.");
 
-      const yerel = aramaWebRTC.getYerelStream();
-      const uzak = aramaWebRTC.getUzakStream();
+        // Gelen aramanın WebRTC oturum bilgilerini ayarla.
+        aramaWebRTC.ayarla(currentUserId, mesaj.arayanId, mesaj.aramaTuru);
 
-      console.log("🎥 BAĞLANTI SONRASI STREAM DURUMU:", {
-        yerelVar: !!yerel,
-        uzakVar: !!uzak,
-      });
+        setAramaTuru(mesaj.aramaTuru);
+        setHoparlorAcik(mesaj.aramaTuru === "VIDEO");
+        setAramaArayanId(mesaj.arayanId);
+        setGelenTeklif(mesaj.teklif);
+        setAramaDurumu("GELEN_ARAMA");
+        setAramaGorunur(true);
 
-      if (yerel) {
+        console.log("✅ Gelen arama ekranı açıldı.");
+        console.log("📞 Arayan kullanıcı:", mesaj.arayanId);
+        console.log("📞 Arama türü:", mesaj.aramaTuru);
+      }),
+    );
+
+    /*
+     * ============================================================
+     * CEVAP
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("cevap", async (mesaj) => {
+        console.log("======================================");
+        console.log("📞 CEVAP EVENT GELDİ");
+        console.log("📞 Mesaj:", mesaj);
+        console.log("======================================");
+
         try {
-          setYerelStreamUrl(yerel.toURL());
+          await aramaWebRTC.cevabiIsle(mesaj.cevap);
+
+          console.log("📞 CEVAP BAŞARIYLA İŞLENDİ");
+
+          yerelStreamiGoster();
+          aramaAkisiniGuncelle();
+
+          setAramaDurumu("BAGLANDI");
+
+          console.log("🟢 ARAMA DURUMU: BAGLANDI");
         } catch (error) {
-          console.error("❌ YEREL STREAM URL HATASI:", error);
+          console.error("❌ ARAMA CEVAP İŞLEME HATASI:", error);
         }
-      }
+      }),
+    );
 
-      if (uzak) {
+    /*
+     * ============================================================
+     * ICE
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("ice", (mesaj) => {
+        console.log("🧊 GELEN ICE CALLBACK:", mesaj.aday);
+      }),
+    );
+
+    /*
+     * ============================================================
+     * REDDET
+     * ============================================================
+     *
+     * BURASI KRİTİK.
+     *
+     * Karşı taraf reddettiğinde burası çalışmalı.
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("reddet", () => {
+        console.log("======================================");
+        console.log("🚨🚨🚨 REDDET CALLBACK GELDİ 🚨🚨🚨");
+        console.log("🚨 KARŞI TARAF ARAMAYI REDDETTİ");
+        console.log("🚨 ARAYAN TARAF UI SONLANDIRILIYOR");
+        console.log("======================================");
+
+        void aramaSonlandirmayiGoster(`${selectedUserName} aramayı reddetti.`);
+      }),
+    );
+
+    /*
+     * ============================================================
+     * KARŞI TARAF ÇAĞRIYI BİTİRDİ
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("bitir", () => {
+        console.log("======================================");
+        console.log("📴 BITIR CALLBACK GELDİ");
+        console.log("📴 KARŞI TARAF ARAMAYI SONLANDIRDI");
+        console.log("======================================");
+
+        void aramaSonlandirmayiGoster("Karşı taraf görüşmeyi sonlandırdı.");
+      }),
+    );
+
+    /*
+     * ============================================================
+     * UZAK STREAM
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("uzakStream", (stream) => {
+        console.log("🎥 UZAK STREAM EVENT GELDİ");
+
         try {
-          setUzakStreamUrl(uzak.toURL());
+          const url = stream.toURL();
+
+          console.log("🎥 UZAK STREAM URL:", url);
+
+          if (url) {
+            setUzakStreamUrl(url);
+
+            if (!aramaSonlandirmaRef.current) {
+              setAramaGorunur(true);
+            }
+          }
         } catch (error) {
           console.error("❌ UZAK STREAM URL HATASI:", error);
         }
-      }
+      }),
+    );
 
-      setAramaDurumu("BAGLANDI");
+    /*
+     * ============================================================
+     * BAĞLANDI
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("baglandi", () => {
+        console.log("======================================");
+        console.log("🟢 BAGLANDI CALLBACK GELDİ");
+        console.log("======================================");
 
-      if (aramaTuru === "VIDEO") {
-        try {
-          Hoparlor.ac();
-          setHoparlorAcik(true);
-          console.log("🔊📹 Görüntülü arama: HOPARLÖR AÇILDI");
-        } catch (error) {
-          console.warn("⚠️ Görüntülü aramada hoparlör açılamadı:", error);
+        /*
+         * Eğer çağrı sonlandırılıyorsa modal tekrar açılmasın.
+         */
+        if (aramaSonlandirmaRef.current) {
+          console.log(
+            "⛔ ARAMA SONLANDIRMA BEKLENİYOR, MODAL YENİDEN AÇILMIYOR",
+          );
+          return;
         }
-      }
-    });
 
-    aramaWebRTC.olayDinle("baglantiKoptu", () => {
-      console.log("🔴 ARAMA BAĞLANTISI KOPTU");
+        setAramaGorunur(true);
 
-      setAramaDurumu("YOK");
-      setYerelStreamUrl(null);
-      setUzakStreamUrl(null);
-    });
+        const yerel = aramaWebRTC.getYerelStream();
+        const uzak = aramaWebRTC.getUzakStream();
 
-    aramaWebRTC.olayDinle("hata", (hata) => {
-      console.error("❌ ARAMA HATASI:", hata);
-      Alert.alert("Arama hatası", hata.message);
-      void aramaTemizle();
-    });
+        console.log("🎥 BAĞLANTI SONRASI STREAM DURUMU:", {
+          yerelVar: !!yerel,
+          uzakVar: !!uzak,
+        });
+
+        if (yerel) {
+          try {
+            const url = yerel.toURL();
+
+            console.log("🎥 BAĞLANTI SONRASI YEREL URL:", url);
+
+            setYerelStreamUrl(url);
+          } catch (error) {
+            console.error("❌ YEREL STREAM URL HATASI:", error);
+          }
+        }
+
+        if (uzak) {
+          try {
+            const url = uzak.toURL();
+
+            console.log("🎥 BAĞLANTI SONRASI UZAK URL:", url);
+
+            setUzakStreamUrl(url);
+          } catch (error) {
+            console.error("❌ UZAK STREAM URL HATASI:", error);
+          }
+        }
+
+        setAramaDurumu("BAGLANDI");
+      }),
+    );
+
+    /*
+     * ============================================================
+     * BAĞLANTI KOPTU
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("baglantiKoptu", () => {
+        console.log("======================================");
+        console.log("🔴 BAĞLANTI KOPTU CALLBACK GELDİ");
+        console.log("======================================");
+
+        /*
+         * Eğer zaten reddetme/bitirme callback'i çalıştıysa
+         * onun UI akışını bozma.
+         */
+        if (aramaSonlandirmaRef.current) {
+          console.log(
+            "⛔ SONLANDIRMA DEVAM EDİYOR, BAGLANTI_KOPTU UI'YA MÜDAHALE ETMİYOR",
+          );
+          return;
+        }
+
+        setAramaDurumu("YOK");
+        setYerelStreamUrl(null);
+        setUzakStreamUrl(null);
+      }),
+    );
+
+    /*
+     * ============================================================
+     * HATA
+     * ============================================================
+     */
+    aramaListenerTemizleyicilerRef.current.push(
+      aramaWebRTC.olayDinle("hata", (hata) => {
+        console.error("======================================");
+        console.error("❌ WEBRTC HATA CALLBACK");
+        console.error("❌ HATA:", hata);
+        console.error("======================================");
+
+        Alert.alert("Arama hatası", hata.message);
+
+        void aramaTemizle();
+      }),
+    );
+
+    console.log("======================================");
+    console.log("✅ WEBRTC EVENT LISTENER'LARI KURULDU");
+    console.log("======================================");
   }, [
     aramaAkisiniGuncelle,
+    aramaSonlandirmayiGoster,
     aramaTemizle,
     currentUserId,
+    selectedUserId,
     selectedUserName,
     yerelStreamiGoster,
   ]);
@@ -438,7 +653,15 @@ function ConversationPanel({
     return () => {
       console.log("🧹 ARAMA OLAYLARI TEMİZLENİYOR");
 
-      aramaWebRTC.olaylariTemizle();
+      aramaListenerTemizleyicilerRef.current.forEach((temizle) => {
+        try {
+          temizle();
+        } catch (hata) {
+          console.warn("⚠️ WEBRTC LISTENER TEMİZLEME HATASI:", hata);
+        }
+      });
+
+      aramaListenerTemizleyicilerRef.current = [];
     };
   }, [currentUserId, selectedUserId, aramaOlaylariniKur]);
   useEffect(() => {
@@ -471,6 +694,15 @@ function ConversationPanel({
     return () => clearInterval(zamanlayici);
   }, [aramaDurumu]);
 
+  useEffect(() => {
+    return () => {
+      if (aramaSonuZamanlayiciRef.current) {
+        clearTimeout(aramaSonuZamanlayiciRef.current);
+        aramaSonuZamanlayiciRef.current = null;
+      }
+    };
+  }, []);
+
   const aramaBaslat = async (tur: AramaTuru) => {
     if (currentUserId === null || selectedUserId === null) {
       Alert.alert("Arama yapılamadı", "Önce bir kullanıcı seçmelisiniz.");
@@ -478,14 +710,14 @@ function ConversationPanel({
     }
 
     try {
-      if (tur === "SES") {
-        onSesliArama();
-      } else {
-        onGoruntuluArama();
+      if (!aramaIzniAktif) {
+        Alert.alert("Arama yapılamadı", "Karşı taraf arama izni vermemiş.");
+        return;
       }
 
+      // Önceki görüşmeden kalan sonlandırma kilidini yeni çağrı için sıfırla.
+      aramaSonlandirmaRef.current = false;
       setAramaTuru(tur);
-      // Görüntülü arama hoparlör açık, sesli arama ahize ile başlar.
       setHoparlorAcik(tur === "VIDEO");
       setAramaDurumu("ARAMA_YAPILIYOR");
       setAramaGorunur(true);
@@ -493,7 +725,6 @@ function ConversationPanel({
 
       aramaWebRTC.ayarla(currentUserId, selectedUserId, tur);
 
-      await aramaWebRTC.webSocketBaglantisiAc();
       await aramaWebRTC.aramaBaslat();
 
       // Arayan tarafın kendi kamera görüntüsünü hemen ekrana al.
@@ -519,11 +750,13 @@ function ConversationPanel({
     }
 
     try {
+      // Önceki görüşmeden kalan kilit gelen çağrının kabulünü engellemesin.
+      aramaSonlandirmaRef.current = false;
       aramaWebRTC.ayarla(currentUserId, aramaArayanId, aramaTuru);
 
+      setHoparlorAcik(aramaTuru === "VIDEO");
       setAramaDurumu("ARAMA_YAPILIYOR");
 
-      await aramaWebRTC.webSocketBaglantisiAc();
       await aramaWebRTC.teklifiKabulEt(gelenTeklif);
 
       // Aranan tarafın kendi kamera görüntüsünü de garanti et.
@@ -540,15 +773,41 @@ function ConversationPanel({
     }
   };
 
-  const gelenAramayiReddet = () => {
+  const gelenAramayiReddet = async () => {
+    if (aramaSonlandirmaRef.current) {
+      console.log("⛔ Arama zaten sonlandırılıyor.");
+      return;
+    }
+
+    console.log("📵 GELEN ARAMA REDDEDİLİYOR");
+
+    // Geç gelen WebRTC olaylarının ekranı yeniden açmasını engelle.
+    aramaSonlandirmaRef.current = true;
+
+    // Önce kullanıcı arayüzünü hemen kapat.
+    setGelenTeklif(null);
+    setAramaGorunur(false);
+    setAramaSonuGorunur(false);
+    setAramaSonuMesaji("");
+    setAramaDurumu("YOK");
+    setAramaArayanId(null);
+    setYerelStreamUrl(null);
+    setUzakStreamUrl(null);
+    setAramaSuresi(0);
+    setHoparlorAcik(false);
+
     try {
+      // Reddetme sinyalini gönder.
       aramaWebRTC.aramayiReddet();
-    } finally {
-      setGelenTeklif(null);
-      void aramaTemizle();
+
+      // CALL_END göndermeden yerel WebRTC kaynaklarını temizle.
+      await aramaWebRTC.aramayiBitir(true);
+
+      console.log("✅ Arama reddedildi ve kaynaklar temizlendi");
+    } catch (hata) {
+      console.error("❌ GELEN ARAMA REDDETME HATASI:", hata);
     }
   };
-
   const aramaSuresiniFormatla = (toplamSaniye: number) => {
     const dakika = Math.floor(toplamSaniye / 60);
     const saniye = toplamSaniye % 60;
@@ -788,7 +1047,7 @@ function ConversationPanel({
             ? temizDosyaAdi
             : `medya_${media.id}${uzanti}`;
 
-          const cacheDirectory = FileSystem.cacheDirectory;
+          const cacheDirectory = RNFS.CachesDirectoryPath;
 
           if (!cacheDirectory) {
             console.error("CACHE DIRECTORY BULUNAMADI:", media.id);
@@ -798,11 +1057,10 @@ function ConversationPanel({
             return;
           }
 
-          const dosyaUri = `${cacheDirectory}${Date.now()}_${dosyaAdi}`;
+          const dosyaYolu = `${cacheDirectory}/${Date.now()}_${dosyaAdi}`;
+          const dosyaUri = `file://${dosyaYolu}`;
 
-          await FileSystem.writeAsStringAsync(dosyaUri, base64, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          await RNFS.writeFile(dosyaYolu, base64, "base64");
 
           console.log("MEDYA LOCAL DOSYAYA YAZILDI:", {
             mediaId: media.id,
@@ -839,14 +1097,12 @@ function ConversationPanel({
            * ====================================================
            */
 
-          const contentUri = await FileSystem.getContentUriAsync(dosyaUri);
-
-          console.log("MEDYA CONTENT URI OLUŞTURULDU:", {
+          console.log("MEDYA LOCAL DOSYA URI HAZIR:", {
             mediaId: media.id,
 
             fileName: dosyaAdi,
 
-            contentUri,
+            localUri: dosyaUri,
 
             mimeType: media.mimeType || "application/octet-stream",
           });
@@ -1501,11 +1757,37 @@ function ConversationPanel({
             )}
           </View>
 
-          {selectedUserActive && (
-            <View style={styles.activeBadge}>
-              <Text style={styles.activeBadgeText}>Aktif</Text>
-            </View>
-          )}
+          <View style={styles.headerActions}>
+            {selectedUserActive && (
+              <View style={styles.activeBadge}>
+                <Text style={styles.activeBadgeText}>Aktif</Text>
+              </View>
+            )}
+
+            <Pressable
+              style={[
+                styles.aramaIzniButonu,
+                aramaIzniAktif
+                  ? styles.aramaIzniButonuAktif
+                  : styles.aramaIzniButonuPasif,
+                aramaIzniYukleniyor && styles.aramaIzniButonuDevreDisi,
+              ]}
+              onPress={onAramaIzniDegistir}
+              disabled={aramaIzniYukleniyor}
+            >
+              <Text style={styles.aramaIzniButonuIkon}>
+                {aramaIzniAktif ? "📵" : "📞"}
+              </Text>
+
+              <Text style={styles.aramaIzniButonuMetni} numberOfLines={1}>
+                {aramaIzniYukleniyor
+                  ? "Kontrol..."
+                  : aramaIzniAktif
+                    ? "İzni Geri Al"
+                    : "Arama İzni Ver"}
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* =====================================================
@@ -1716,24 +1998,11 @@ function ConversationPanel({
                 onPress={() => void gelenAramayiKabulEt()}
               >
                 <Text style={styles.aramaKontrolIkon}>✓</Text>
-                <Text style={styles.aramaKontrolMetni}>Kabul Et</Text>
+                <Text style={styles.aramaKontrolMetni}>Kabul Et2</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.aramaKontrolleri}>
-              <Pressable
-                style={styles.aramaKontrolButonu}
-                onPress={() => aramaWebRTC.mikrofonuDegistir(false)}
-              >
-                <Text style={styles.aramaKontrolIkon}>🎙️</Text>
-                <Text style={styles.aramaKontrolMetni}>Mikrofon</Text>
-              </Pressable>
-
-              {/* HOPARLÖR / AHİZE
-                  Sesli ve görüntülü aramada her zaman görünür.
-                  SES: başlangıçta ahize
-                  VIDEO: başlangıçta hoparlör
-              */}
               <Pressable
                 style={[
                   styles.aramaKontrolButonu,
@@ -1743,9 +2012,7 @@ function ConversationPanel({
                   const yeniDurum = !hoparlorAcik;
 
                   try {
-                    const basarili = yeniDurum
-                      ? Hoparlor.ac()
-                      : Hoparlor.kapat();
+                    const basarili = Hoparlor.hoparloruDegistir(yeniDurum);
 
                     if (basarili) {
                       setHoparlorAcik(yeniDurum);
@@ -1755,7 +2022,9 @@ function ConversationPanel({
                           : "🔈 Ahizeye geçildi.",
                       );
                     } else {
-                      console.warn("⚠️ Hoparlör native modülü kullanılamadı.");
+                      console.error(
+                        "❌ Hoparlör durumu değiştirilemedi. Aktif ses oturumu yok.",
+                      );
                     }
                   } catch (error) {
                     console.error("❌ Hoparlör değiştirilemedi:", error);
@@ -1795,8 +2064,19 @@ function ConversationPanel({
                 onPress={() => void aramaTemizle()}
               >
                 <Text style={styles.aramaKontrolIkon}>🔴</Text>
-                <Text style={styles.aramaKontrolMetni}>Kapat</Text>
+                <Text style={styles.aramaKontrolMetni}>Kapat2</Text>
               </Pressable>
+            </View>
+          )}
+
+          {aramaSonuGorunur && (
+            <View style={styles.aramaSonuBildirim}>
+              <Text style={styles.aramaSonuBildirimBaslik}>
+                Arama sona erdi
+              </Text>
+              <Text style={styles.aramaSonuBildirimMetin}>
+                {aramaSonuMesaji}
+              </Text>
             </View>
           )}
         </View>
@@ -1968,6 +2248,76 @@ const styles = StyleSheet.create({
     minWidth: 0,
 
     justifyContent: "center",
+  },
+
+  headerActions: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "flex-end",
+
+    marginLeft: 6,
+
+    gap: 5,
+
+    maxWidth: 150,
+  },
+
+  aramaIzniButonu: {
+    minHeight: 38,
+
+    maxWidth: 105,
+
+    paddingHorizontal: 8,
+
+    paddingVertical: 5,
+
+    borderRadius: 11,
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    borderWidth: 1,
+  },
+
+  aramaIzniButonuAktif: {
+    backgroundColor: "#fff1f2",
+
+    borderColor: "#f0b4ba",
+  },
+
+  aramaIzniButonuPasif: {
+    backgroundColor: "#eeeaff",
+
+    borderColor: "#d8cff8",
+  },
+
+  aramaIzniButonuDevreDisi: {
+    opacity: 0.55,
+  },
+
+  aramaIzniButonuIkon: {
+    fontSize: 13,
+
+    marginRight: 4,
+  },
+
+  aramaIzniButonuMetni: {
+    color: "#4d35a8",
+
+    fontSize: 9,
+
+    lineHeight: 11,
+
+    fontWeight: "800",
+
+    flexShrink: 1,
+
+    textAlign: "center",
   },
 
   headerName: {
@@ -2584,13 +2934,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
   },
 
-  aramaKontrolButonuAktif: {
-    backgroundColor: "#5b3cc4",
-    borderWidth: 2,
-    borderColor: "#ffffff",
-    transform: [{ scale: 1.05 }],
-  },
-
   aramaKontrolIkon: {
     color: "#ffffff",
     fontSize: 22,
@@ -2613,6 +2956,37 @@ const styles = StyleSheet.create({
 
   aramaKabulButonu: {
     backgroundColor: "#2e9d55",
+  },
+
+  aramaKontrolButonuAktif: {
+    backgroundColor: "#5b3cc4",
+  },
+
+  aramaSonuBildirim: {
+    position: "absolute",
+    left: 20,
+    right: 20,
+    bottom: 105,
+    zIndex: 999,
+    elevation: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: "rgba(42, 35, 58, 0.96)",
+  },
+
+  aramaSonuBildirimBaslik: {
+    color: "#ffffff",
+    fontSize: 15,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+
+  aramaSonuBildirimMetin: {
+    color: "#eeeeee",
+    fontSize: 12,
+    marginTop: 4,
+    textAlign: "center",
   },
 
   /*

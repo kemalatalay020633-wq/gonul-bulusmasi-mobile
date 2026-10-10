@@ -1,4 +1,9 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+import { useNavigation } from "@react-navigation/native";
+
 import { useCallback, useEffect, useState } from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -13,116 +18,178 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as ImagePicker from "expo-image-picker";
+import { launchImageLibrary } from "react-native-image-picker";
 import ProfileQuestions from "../../components/profile/ProfileQuestions";
+
 // src/app/home.tsx
+
 // src/app/profile/edit.tsx
+
 import { API_BASE_URL } from "../../config/api";
+
 const API_ADRESI = API_BASE_URL + "/api";
 
 const SUNUCU_ADRESI = API_BASE_URL;
 
 type Kullanici = {
   id: number;
+
   username: string;
+
   email: string;
+
   firstName: string;
+
   lastName: string;
+
   birthDate?: string;
+
   phoneNumber?: string | null;
+
   city?: string | null;
+
   active?: boolean;
+
   emailVerified?: boolean;
+
   phoneVerified?: boolean;
 };
 
 type Profil = {
   id?: number;
+
   userId?: number;
+
   about?: string | null;
+
   profession?: number | string | null;
+
   education?: number | string | null;
+
   height?: number | null;
+
   weight?: number | null;
+
   maritalStatus?: number | string | null;
+
   religion?: number | string | null;
+
   interests?: string | number | null;
+
   profilePhoto?: string | null;
+
   profileVerified?: boolean;
 };
 
 type EnumSecenegi = {
   kod: number | string;
+
   aciklama: string;
 };
 
 type ProfilSorusu = {
   id: number;
+
   question: string;
+
   category: string | null;
+
   type: string | null;
+
   required: boolean;
+
   active: boolean;
+
   options: string | null;
 };
 
 type ProfilCevabi = {
   id: number;
+
   profileId: number;
+
   questionId: number;
+
   answer: string;
 };
 
 export default function ProfilGuncelle() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   const [kullanici, setKullanici] = useState<Kullanici | null>(null);
 
   const [profil, setProfil] = useState<Profil | null>(null);
 
   /*
+
    * =====================================================
+
    * KISISEL BILGILER
+
    * =====================================================
+
    */
 
   const [firstName, setFirstName] = useState("");
+
   const [lastName, setLastName] = useState("");
+
   const [phoneNumber, setPhoneNumber] = useState("");
+
   const [city, setCity] = useState("");
 
   /*
+
    * =====================================================
+
    * PROFIL BILGILERI
+
    * =====================================================
+
    */
 
   const [about, setAbout] = useState("");
+
   const [profession, setProfession] = useState("");
+
   const [education, setEducation] = useState("");
+
   const [height, setHeight] = useState("");
+
   const [weight, setWeight] = useState("");
+
   const [maritalStatus, setMaritalStatus] = useState("");
+
   const [religion, setReligion] = useState("");
+
   const [interests, setInterests] = useState<string[]>([]);
 
   /*
+
    * =====================================================
+
    * PROFIL SORULARI / CEVAPLARI
+
    * =====================================================
+
    */
 
   const [sorular, setSorular] = useState<ProfilSorusu[]>([]);
+
   const [cevaplar, setCevaplar] = useState<Record<number, string[]>>({});
+
   const [soruCevapKaydediliyor, setSoruCevapKaydediliyor] = useState(false);
+
   const [soruCevapHatasi, setSoruCevapHatasi] = useState("");
 
   /*
+
    * =====================================================
+
    * ENUM LISTELERI
+
    * =====================================================
+
    */
 
   const [meslekler, setMeslekler] = useState<EnumSecenegi[]>([]);
@@ -136,9 +203,13 @@ export default function ProfilGuncelle() {
   const [ilgiAlanlari, setIlgiAlanlari] = useState<EnumSecenegi[]>([]);
 
   /*
+
    * =====================================================
+
    * FOTOGRAF
+
    * =====================================================
+
    */
 
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
@@ -146,9 +217,13 @@ export default function ProfilGuncelle() {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   /*
+
    * =====================================================
+
    * DURUM
+
    * =====================================================
+
    */
 
   const [loading, setLoading] = useState(true);
@@ -160,9 +235,13 @@ export default function ProfilGuncelle() {
   const [basari, setBasari] = useState("");
 
   /*
+
    * =====================================================
+
    * TOKEN
+
    * =====================================================
+
    */
 
   const tokenGetir = async () => {
@@ -170,9 +249,13 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * FOTOGRAF URL
+
    * =====================================================
+
    */
 
   const fotoUrlOlustur = (foto?: string | null) => {
@@ -192,9 +275,13 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * ENUM VERISI
+
    * =====================================================
+
    */
 
   const enumVerisiniGetir = async (
@@ -208,8 +295,10 @@ export default function ProfilGuncelle() {
 
     const response = await fetch(`${API_ADRESI}${endpoint}`, {
       method: "GET",
+
       headers: {
         Authorization: `Bearer ${token}`,
+
         Accept: "application/json",
       },
     });
@@ -232,18 +321,26 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * ENUM'LARI GETIR
+
    * =====================================================
+
    */
 
   const enumlariGetir = useCallback(async () => {
     try {
       const [
         meslekSonuc,
+
         egitimSonuc,
+
         medeniDurumSonuc,
+
         mezhepSonuc,
+
         ilgiAlaniSonuc,
       ] = await Promise.all([
         enumVerisiniGetir("/enums/meslekler"),
@@ -277,20 +374,24 @@ export default function ProfilGuncelle() {
 
       console.log("ILGI ALANLARI:", ilgiAlaniSonuc);
     } catch (error) {
-      console.log("ENUM Y�oKLEME HATASI:", error);
+      console.log("ENUM YÜKLEME HATASI:", error);
 
       if (error instanceof Error) {
         setHata(error.message);
       } else {
-        setHata("Se�enekler y�klenirken hata olu�Ytu.");
+        setHata("Seçenekler yüklenirken hata oluştu.");
       }
     }
   }, []);
 
   /*
+
    * =====================================================
+
    * PROFIL SORULARINI VE MEVCUT CEVAPLARI GETIR
+
    * =====================================================
+
    */
 
   const profilSorulariniGetir = async (token: string, profileId: number) => {
@@ -299,10 +400,13 @@ export default function ProfilGuncelle() {
 
       const soruResponse = await fetch(
         `${API_ADRESI}/profile-questions/active`,
+
         {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         },
@@ -328,10 +432,13 @@ export default function ProfilGuncelle() {
 
       const cevapResponse = await fetch(
         `${API_ADRESI}/profile-answers/profile/${profileId}`,
+
         {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         },
@@ -363,8 +470,11 @@ export default function ProfilGuncelle() {
           cevap.answer.trim() !== ""
         ) {
           cevapMap[cevap.questionId] = cevap.answer
+
             .split(",")
+
             .map((item) => item.trim())
+
             .filter(Boolean);
         }
       });
@@ -372,7 +482,9 @@ export default function ProfilGuncelle() {
       setCevaplar(cevapMap);
 
       console.log("EDIT PROFIL SORULARI:", soruListesi);
+
       console.log("EDIT PROFIL CEVAPLARI:", cevapListesi);
+
       console.log("EDIT CEVAP MAP:", cevapMap);
     } catch (error) {
       console.log("PROFIL SORU/CEVAP GETIRME HATASI:", error);
@@ -381,47 +493,61 @@ export default function ProfilGuncelle() {
         setSoruCevapHatasi(error.message);
       } else {
         setSoruCevapHatasi(
-          "Profil sorulari ve cevaplari y�klenirken hata olu�Ytu.",
+          "Profil soruları ve cevapları yüklenirken hata oluştu.",
         );
       }
 
       setSorular([]);
+
       setCevaplar({});
     }
   };
 
   /*
+
    * =====================================================
-   * PROFILI Y�oKLE
+
+   * PROFİLİ YÜKLE
+
    * =====================================================
+
    */
 
   const profilYukle = useCallback(async () => {
     try {
       setLoading(true);
+
       setHata("");
 
       const token = await tokenGetir();
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
+
         return;
       }
 
       const headers = {
         Authorization: `Bearer ${token}`,
+
         "Content-Type": "application/json",
+
         Accept: "application/json",
       };
 
       /*
+
        * =================================================
+
        * 1. KULLANICI
+
        * =================================================
+
        */
 
       const userResponse = await fetch(`${API_ADRESI}/users/me`, {
         method: "GET",
+
         headers,
       });
 
@@ -450,13 +576,18 @@ export default function ProfilGuncelle() {
       setCity(userData.city || "");
 
       /*
+
        * =================================================
+
        * 2. PROFIL
+
        * =================================================
+
        */
 
       const profileResponse = await fetch(`${API_ADRESI}/profiles/me`, {
         method: "GET",
+
         headers,
       });
 
@@ -473,6 +604,7 @@ export default function ProfilGuncelle() {
           await profilSorulariniGetir(token, profileData.id);
         } else {
           setSorular([]);
+
           setCevaplar({});
         }
 
@@ -524,7 +656,9 @@ export default function ProfilGuncelle() {
           setInterests(
             String(profileData.interests)
               .split(",")
+
               .map((deger) => deger.trim())
+
               .filter(Boolean),
           );
         } else {
@@ -533,7 +667,7 @@ export default function ProfilGuncelle() {
 
         setProfilePhoto(profileData.profilePhoto || null);
       } else if (profileResponse.status === 404) {
-        console.log("Hen�z profil olu�Yturulmamı�Y.");
+        console.log("Henüz profil oluşturulmamış.");
 
         setProfil(null);
       } else {
@@ -544,58 +678,81 @@ export default function ProfilGuncelle() {
         );
       }
     } catch (error) {
-      console.log("PROFIL Y�oKLEME HATASI:", error);
+      console.log("PROFİL YÜKLEME HATASI:", error);
 
       if (error instanceof Error) {
         setHata(error.message);
       } else {
-        setHata("Profil bilgileri alinirken hata olu�Ytu.");
+        setHata("Profil bilgileri alınırken hata oluştu.");
       }
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [navigation]);
 
   /*
+
    * =====================================================
-   * SAYFA A�?ILISI
+
+   * SAYFA AÇILIŞI
+
    * =====================================================
+
    */
 
   useEffect(() => {
     void profilYukle();
+
     void enumlariGetir();
   }, [profilYukle, enumlariGetir]);
 
   /*
+
    * =====================================================
-   * FOTOGRAF SE�?
+
+   * FOTOĞRAF SEÇ
+
    * =====================================================
+
    */
 
   const fotoSec = async () => {
     try {
       setHata("");
 
-      const izin = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const sonuc = await launchImageLibrary({
+        mediaType: "photo",
+        selectionLimit: 1,
+        includeBase64: false,
+      });
 
-      if (!izin.granted) {
-        Alert.alert(
-          "Izin Gerekli",
-          "Profil foto�Yrafi se�ebilmek i�in galeri izni vermelisiniz.",
-        );
-
+      if (sonuc.didCancel) {
         return;
       }
 
-      const sonuc = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ["images"],
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.85,
-      });
+      if (sonuc.errorCode) {
+        console.log(
+          "FOTOGRAF SEÇME HATASI:",
 
-      if (sonuc.canceled) {
+          sonuc.errorCode,
+
+          sonuc.errorMessage,
+        );
+
+        if (sonuc.errorCode === "permission") {
+          Alert.alert(
+            "İzin Gerekli",
+
+            "Profil fotoğrafı seçebilmek için galeri izni vermelisiniz.",
+          );
+        } else {
+          Alert.alert(
+            "Hata",
+
+            sonuc.errorMessage || "Fotoğraf seçilirken bir hata oluştu.",
+          );
+        }
+
         return;
       }
 
@@ -605,29 +762,41 @@ export default function ProfilGuncelle() {
         return;
       }
 
+      if (!asset.uri) {
+        Alert.alert("Hata", "Seçilen fotoğrafın adresi alınamadı.");
+
+        return;
+      }
+
       /*
-       * 10 MB KONTROL�o
+
+       * 10 MB KONTROLÜ
+
        */
 
       if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
         Alert.alert(
-          "Dosya �?ok B�y�k",
-          "Foto�Yraf boyutu en fazla 10 MB olabilir.",
+          "Dosya Çok Büyük",
+
+          "Fotoğraf boyutu en fazla 10 MB olabilir.",
         );
 
         return;
       }
 
       /*
-       * MIME KONTROL�o
+
+       * MIME KONTROLÜ
+
        */
 
-      const mimeType = asset.mimeType || "image/jpeg";
+      const mimeType = asset.type || "image/jpeg";
 
       if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
         Alert.alert(
-          "Ge�ersiz Foto�Yraf",
-          "Sadece JPG, PNG veya WEBP formatindaki foto�Yraflari se�ebilirsiniz.",
+          "Geçersiz Fotoğraf",
+
+          "Sadece JPG, PNG veya WEBP formatındaki fotoğrafları seçebilirsiniz.",
         );
 
         return;
@@ -635,28 +804,36 @@ export default function ProfilGuncelle() {
 
       setPhotoPreview(asset.uri);
 
-      console.log("SE�?ILEN PROFIL FOTOGRAFI:", asset.uri);
+      console.log("SEÇİLEN PROFİL FOTOĞRAFI:", asset.uri);
     } catch (error) {
-      console.log("FOTOGRAF SE�?ME HATASI:", error);
+      console.log("FOTOGRAF SEÇME HATASI:", error);
 
-      Alert.alert("Hata", "Foto�Yraf se�ilirken bir hata olu�Ytu.");
+      Alert.alert("Hata", "Fotoğraf seçilirken bir hata oluştu.");
     }
   };
 
   /*
+
    * =====================================================
-   * KULLANICI BILGILERINI G�oNCELLE
+
+   * KULLANICI BİLGİLERİNİ GÜNCELLE
+
    * =====================================================
+
    */
 
   const kullaniciBilgileriniGuncelle = async (token: string) => {
     const response = await fetch(`${API_ADRESI}/users/me`, {
       method: "PUT",
+
       headers: {
         Authorization: `Bearer ${token}`,
+
         "Content-Type": "application/json",
+
         Accept: "application/json",
       },
+
       body: JSON.stringify({
         firstName: firstName.trim(),
 
@@ -674,15 +851,19 @@ export default function ProfilGuncelle() {
       const text = await response.text();
 
       throw new Error(
-        text || `Kullanici g�ncellenemedi. HTTP ${response.status}`,
+        text || `Kullanıcı güncellenemedi. HTTP ${response.status}`,
       );
     }
   };
 
   /*
+
    * =====================================================
-   * FOTOGRAF Y�oKLE
+
+   * FOTOĞRAF YÜKLE
+
    * =====================================================
+
    */
 
   const fotografiYukle = async (token: string): Promise<string | null> => {
@@ -691,7 +872,9 @@ export default function ProfilGuncelle() {
     }
 
     /*
-     * AYNI FOTOGRAFSA TEKRAR Y�oKLEME
+
+     * AYNI FOTOĞRAFSA TEKRAR YÜKLEME
+
      */
 
     if (profilePhoto && photoPreview === fotoUrlOlustur(profilePhoto)) {
@@ -699,20 +882,26 @@ export default function ProfilGuncelle() {
     }
 
     /*
+
      * DOSYA ADI
+
      */
 
     const dosyaAdi =
       photoPreview.split("/").pop() || `profil-${Date.now()}.jpg`;
 
     /*
+
      * UZANTI
+
      */
 
     const uzanti = dosyaAdi.split(".").pop()?.toLowerCase() || "jpg";
 
     /*
+
      * MIME
+
      */
 
     let mimeType = "image/jpeg";
@@ -724,27 +913,36 @@ export default function ProfilGuncelle() {
     }
 
     /*
+
      * FORMDATA
+
      */
 
     const formData = new FormData();
 
     formData.append("file", {
       uri: photoPreview,
+
       name: dosyaAdi,
+
       type: mimeType,
     } as any);
 
     /*
+
      * UPLOAD
+
      */
 
     const response = await fetch(`${API_ADRESI}/users/me/photo`, {
       method: "POST",
+
       headers: {
         Authorization: `Bearer ${token}`,
+
         Accept: "application/json",
       },
+
       body: formData,
     });
 
@@ -754,12 +952,14 @@ export default function ProfilGuncelle() {
 
     if (!response.ok) {
       throw new Error(
-        text || `Profil foto�Yrafi y�klenemedi. HTTP ${response.status}`,
+        text || `Profil fotoğrafı yüklenemedi. HTTP ${response.status}`,
       );
     }
 
     /*
+
      * RESPONSE BOSSA
+
      */
 
     if (!text.trim()) {
@@ -767,7 +967,9 @@ export default function ProfilGuncelle() {
     }
 
     /*
+
      * JSON RESPONSE
+
      */
 
     try {
@@ -780,22 +982,31 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * RADIO CEVABI DEGISTIR
+
    * =====================================================
+
    */
 
   const radioCevapDegistir = (questionId: number, value: string) => {
     setCevaplar((mevcut) => ({
       ...mevcut,
+
       [questionId]: [value],
     }));
   };
 
   /*
+
    * =====================================================
+
    * CHECKBOX CEVABI DEGISTIR
+
    * =====================================================
+
    */
 
   const checkboxCevapDegistir = (questionId: number, value: string) => {
@@ -805,34 +1016,44 @@ export default function ProfilGuncelle() {
       if (secili.includes(value)) {
         return {
           ...mevcut,
+
           [questionId]: secili.filter((item) => item !== value),
         };
       }
 
       return {
         ...mevcut,
+
         [questionId]: [...secili, value],
       };
     });
   };
 
   /*
+
    * =====================================================
+
    * PROFIL CEVAPLARINI KAYDET
+
    * =====================================================
+
    */
 
   const profilCevaplariniKaydet = async (token: string, profileId: number) => {
     try {
       setSoruCevapKaydediliyor(true);
+
       setSoruCevapHatasi("");
 
       const mevcutCevapResponse = await fetch(
         `${API_ADRESI}/profile-answers/profile/${profileId}`,
+
         {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         },
@@ -868,17 +1089,25 @@ export default function ProfilGuncelle() {
           if (mevcutCevap) {
             const updateResponse = await fetch(
               `${API_ADRESI}/profile-answers/${mevcutCevap.id}`,
+
               {
                 method: "PUT",
+
                 headers: {
                   Authorization: `Bearer ${token}`,
+
                   "Content-Type": "application/json",
+
                   Accept: "application/json",
                 },
+
                 body: JSON.stringify({
                   id: mevcutCevap.id,
+
                   profileId,
+
                   questionId: soru.id,
+
                   answer,
                 }),
               },
@@ -889,22 +1118,29 @@ export default function ProfilGuncelle() {
 
               throw new Error(
                 text ||
-                  `Profil cevabi g�ncellenemedi. HTTP ${updateResponse.status}`,
+                  `Profil cevabı güncellenemedi. HTTP ${updateResponse.status}`,
               );
             }
           } else {
             const createResponse = await fetch(
               `${API_ADRESI}/profile-answers`,
+
               {
                 method: "POST",
+
                 headers: {
                   Authorization: `Bearer ${token}`,
+
                   "Content-Type": "application/json",
+
                   Accept: "application/json",
                 },
+
                 body: JSON.stringify({
                   profileId,
+
                   questionId: soru.id,
+
                   answer,
                 }),
               },
@@ -922,10 +1158,13 @@ export default function ProfilGuncelle() {
         } else if (mevcutCevap) {
           const deleteResponse = await fetch(
             `${API_ADRESI}/profile-answers/profile/${profileId}/question/${soru.id}`,
+
             {
               method: "DELETE",
+
               headers: {
                 Authorization: `Bearer ${token}`,
+
                 Accept: "application/json",
               },
             },
@@ -948,7 +1187,7 @@ export default function ProfilGuncelle() {
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil cevaplari kaydedilirken hata olu�Ytu.";
+          : "Profil cevapları kaydedilirken hata oluştu.";
 
       setSoruCevapHatasi(mesaj);
 
@@ -959,9 +1198,13 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * PROFIL CEVAP KAYDET BUTONU
+
    * =====================================================
+
    */
 
   const profilCevaplariniKaydetButonu = async () => {
@@ -969,18 +1212,20 @@ export default function ProfilGuncelle() {
       const token = await tokenGetir();
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
+
         return;
       }
 
       if (!profil?.id) {
-        Alert.alert("Profil Gerekli", "�-nce profil bilgilerinizi kaydediniz.");
+        Alert.alert("Profil Gerekli", "Önce profil bilgilerinizi kaydediniz.");
+
         return;
       }
 
       await profilCevaplariniKaydet(token, profil.id);
 
-      Alert.alert("Ba�Yarili", "Profil cevaplariniz kaydedildi.");
+      Alert.alert("Başarılı", "Profil cevaplarınız kaydedildi.");
     } catch (error) {
       const mesaj =
         error instanceof Error
@@ -992,14 +1237,20 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * PROFIL KAYDET
+
    * =====================================================
+
    */
 
   const profilKaydet = async () => {
     /*
-     * AD KONTROL�o
+
+     * AD KONTROLÜ
+
      */
 
     if (!firstName.trim()) {
@@ -1009,7 +1260,9 @@ export default function ProfilGuncelle() {
     }
 
     /*
-     * SOYAD KONTROL�o
+
+     * SOYAD KONTROLÜ
+
      */
 
     if (!lastName.trim()) {
@@ -1019,49 +1272,64 @@ export default function ProfilGuncelle() {
     }
 
     /*
-     * BOY KONTROL�o
+
+     * BOY KONTROLÜ
+
      */
 
     if (height && (Number(height) < 100 || Number(height) > 250)) {
-      Alert.alert("Ge�ersiz Boy", "Boy 100 ile 250 cm arasinda olmalidir.");
+      Alert.alert("Geçersiz Boy", "Boy 100 ile 250 cm arasında olmalıdır.");
 
       return;
     }
 
     /*
-     * KILO KONTROL�o
+
+     * KİLO KONTROLÜ
+
      */
 
     if (weight && (Number(weight) < 30 || Number(weight) > 300)) {
-      Alert.alert("Ge�ersiz Kilo", "Kilo 30 ile 300 kg arasinda olmalidir.");
+      Alert.alert("Geçersiz Kilo", "Kilo 30 ile 300 kg arasında olmalıdır.");
 
       return;
     }
 
     try {
       setSaving(true);
+
       setHata("");
+
       setBasari("");
 
       const token = await tokenGetir();
 
       if (!token) {
-        router.replace("/");
+        navigation.replace("index");
+
         return;
       }
 
       /*
+
        * =================================================
+
        * 1. KULLANICI
+
        * =================================================
+
        */
 
       await kullaniciBilgileriniGuncelle(token);
 
       /*
+
        * =================================================
+
        * 2. FOTOGRAF
+
        * =================================================
+
        */
 
       let uploadedPhotoPath = profilePhoto;
@@ -1071,9 +1339,13 @@ export default function ProfilGuncelle() {
       }
 
       /*
+
        * =================================================
+
        * 3. PROFIL PAYLOAD
+
        * =================================================
+
        */
 
       const profilePayload = {
@@ -1097,9 +1369,13 @@ export default function ProfilGuncelle() {
       console.log("PROFIL UPDATE PAYLOAD:", profilePayload);
 
       /*
+
        * =================================================
+
        * 4. PROFIL KAYDET
+
        * =================================================
+
        */
 
       const profileResponse = await fetch(`${API_ADRESI}/profiles/me`, {
@@ -1107,7 +1383,9 @@ export default function ProfilGuncelle() {
 
         headers: {
           Authorization: `Bearer ${token}`,
+
           "Content-Type": "application/json",
+
           Accept: "application/json",
         },
 
@@ -1126,9 +1404,13 @@ export default function ProfilGuncelle() {
       }
 
       /*
+
        * =================================================
+
        * 5. RESPONSE PROFIL
+
        * =================================================
+
        */
 
       if (responseText.trim()) {
@@ -1189,44 +1471,51 @@ export default function ProfilGuncelle() {
             setInterests(
               String(kaydedilenProfil.interests)
                 .split(",")
+
                 .map((item) => item.trim())
+
                 .filter(Boolean),
             );
           } else {
             setInterests([]);
           }
         } catch {
-          console.log("Profil response JSON de�Yil.");
+          console.log("Profil response JSON değil.");
         }
       }
 
       /*
+
        * FOTOGRAF PREVIEW TEMIZLE
+
        */
 
       setPhotoPreview(null);
 
       /*
+
        * BASARI
+
        */
 
-      setBasari("Profil ba�Yariyla g�ncellendi.");
+      setBasari("Profil başarıyla güncellendi.");
 
-      Alert.alert("Ba�Yarili", "Profil bilgileriniz g�ncellendi.", [
+      Alert.alert("Başarılı", "Profil bilgileriniz güncellendi.", [
         {
           text: "Tamam",
+
           onPress: () => {
-            router.replace("/profile");
+            navigation.replace("profile");
           },
         },
       ]);
     } catch (error) {
-      console.log("PROFIL G�oNCELLEME HATASI:", error);
+      console.log("PROFİL GÜNCELLEME HATASI:", error);
 
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil g�ncellenirken bir hata olu�Ytu.";
+          : "Profil güncellenirken bir hata oluştu.";
 
       setHata(mesaj);
 
@@ -1237,19 +1526,27 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
-   * GERI D�-N
+
+   * GERİ DÖN
+
    * =====================================================
+
    */
 
   const geriDon = () => {
-    router.replace("/profile");
+    navigation.replace("profile");
   };
 
   /*
+
    * =====================================================
-   * ILGI ALANI SE�?
+
+   * İLGİ ALANI SEÇ
+
    * =====================================================
+
    */
 
   const ilgiAlaniSec = (kod: string) => {
@@ -1263,9 +1560,13 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
-   * SE�?ILI MI?
+
+   * SEÇİLİ Mİ?
+
    * =====================================================
+
    */
 
   const seciliMu = (kod: number | string) => {
@@ -1273,9 +1574,13 @@ export default function ProfilGuncelle() {
   };
 
   /*
+
    * =====================================================
+
    * LOADING
+
    * =====================================================
+
    */
 
   if (loading) {
@@ -1284,42 +1589,52 @@ export default function ProfilGuncelle() {
         <View style={styles.yukleniyorContainer}>
           <ActivityIndicator size="large" color="#d63384" />
 
-          <Text style={styles.yukleniyorText}>Profil y�kleniyor...</Text>
+          <Text style={styles.yukleniyorText}>Profil yükleniyor...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
   /*
+
    * =====================================================
+
    * EKRAN
+
    * =====================================================
+
    */
 
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.flex}
+
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           style={styles.scroll}
+
           contentContainerStyle={styles.scrollContainer}
+
           keyboardShouldPersistTaps="handled"
+
           showsVerticalScrollIndicator={false}
         >
           {/* ============================================
-              �oST BAR
+
+              ÜST BAR
+
               ============================================ */}
 
           <View style={styles.ustBar}>
             <Pressable style={styles.geri} onPress={geriDon}>
-              <Text style={styles.geriIcon}>�?�</Text>
+              <Text style={styles.geriIcon}>←</Text>
 
               <Text style={styles.geriText}>Profil</Text>
             </Pressable>
 
-            <Text style={styles.ustBaslik}>Profili D�zenle</Text>
+            <Text style={styles.ustBaslik}>Profili Düzenle</Text>
 
             <View
               style={{
@@ -1329,7 +1644,9 @@ export default function ProfilGuncelle() {
           </View>
 
           {/* ============================================
+
               HATA
+
               ============================================ */}
 
           {hata ? (
@@ -1345,21 +1662,25 @@ export default function ProfilGuncelle() {
           ) : null}
 
           {/* ============================================
+
               BASARI
+
               ============================================ */}
 
           {basari ? (
             <View style={styles.basariKutusu}>
-              <Text style={styles.basariText}>�o" {basari}</Text>
+              <Text style={styles.basariText}>✓ {basari}</Text>
             </View>
           ) : null}
 
           {/* ============================================
+
               PROFIL FOTOGRAFI
+
               ============================================ */}
 
           <View style={styles.fotoBolumu}>
-            <Text style={styles.bolumBaslik}>Profil Foto�Yrafi</Text>
+            <Text style={styles.bolumBaslik}>Profil Fotoğrafı</Text>
 
             <View style={styles.fotoOnizlemeContainer}>
               {photoPreview || profilePhoto ? (
@@ -1367,13 +1688,16 @@ export default function ProfilGuncelle() {
                   source={{
                     uri: photoPreview || fotoUrlOlustur(profilePhoto),
                   }}
+
                   style={styles.fotoOnizleme}
                 />
               ) : (
                 <View style={styles.fotoYok}>
                   <Text style={styles.fotoYokText}>
                     {(`${firstName} ${lastName}`.trim() || "?")
+
                       .charAt(0)
+
                       .toUpperCase()}
                   </Text>
                 </View>
@@ -1381,7 +1705,7 @@ export default function ProfilGuncelle() {
             </View>
 
             <Pressable style={styles.fotoSecButonu} onPress={fotoSec}>
-              <Text style={styles.fotoSecText}>gY"� Profil Foto�Yrafi Se�</Text>
+              <Text style={styles.fotoSecText}>📷 Profil Fotoğrafı Seç</Text>
             </Pressable>
 
             <Text style={styles.fotoBilgi}>
@@ -1391,19 +1715,25 @@ export default function ProfilGuncelle() {
           </View>
 
           {/* ============================================
+
               KISISEL BILGILER
+
               ============================================ */}
 
           <View style={styles.bolum}>
-            <Text style={styles.bolumBaslik}>Ki�Yisel Bilgiler</Text>
+            <Text style={styles.bolumBaslik}>Kişisel Bilgiler</Text>
 
             <Text style={styles.inputLabel}>Ad</Text>
 
             <TextInput
               style={styles.input}
+
               value={firstName}
+
               onChangeText={setFirstName}
+
               placeholder="Adiniz"
+
               maxLength={100}
             />
 
@@ -1411,9 +1741,13 @@ export default function ProfilGuncelle() {
 
             <TextInput
               style={styles.input}
+
               value={lastName}
+
               onChangeText={setLastName}
+
               placeholder="Soyadiniz"
+
               maxLength={100}
             />
 
@@ -1421,9 +1755,13 @@ export default function ProfilGuncelle() {
 
             <TextInput
               style={styles.input}
+
               value={phoneNumber}
+
               onChangeText={setPhoneNumber}
+
               placeholder="Telefon numaraniz"
+
               keyboardType="phone-pad"
             />
 
@@ -1431,14 +1769,19 @@ export default function ProfilGuncelle() {
 
             <TextInput
               style={styles.input}
+
               value={city}
+
               onChangeText={setCity}
+
               placeholder="Iliniz"
             />
           </View>
 
           {/* ============================================
+
               PROFIL BILGILERI
+
               ============================================ */}
 
           <View style={styles.bolum}>
@@ -1450,12 +1793,19 @@ export default function ProfilGuncelle() {
 
             <TextInput
               style={[styles.input, styles.textArea]}
+
               value={about}
+
               onChangeText={setAbout}
+
               placeholder="Kendinizden bahsedin"
+
               multiline
+
               numberOfLines={5}
+
               maxLength={1000}
+
               textAlignVertical="top"
             />
 
@@ -1466,10 +1816,12 @@ export default function ProfilGuncelle() {
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
+
                 onPress={() => {
-                  Alert.alert("Meslek Se�iniz", "", [
+                  Alert.alert("Meslek Seçiniz", "", [
                     {
-                      text: "Vazge�",
+                      text: "Vazgeç",
+
                       style: "cancel",
                     },
 
@@ -1483,24 +1835,26 @@ export default function ProfilGuncelle() {
               >
                 <Text style={styles.secimSeciliText}>
                   {meslekler.find((item) => String(item.kod) === profession)
-                    ?.aciklama || "Meslek se�iniz"}
+                    ?.aciklama || "Meslek seçiniz"}
                 </Text>
 
-                <Text style={styles.secimOk}>�-�</Text>
+                <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
 
             {/* EGITIM */}
 
-            <Text style={styles.inputLabel}>E�Yitim</Text>
+            <Text style={styles.inputLabel}>Eğitim</Text>
 
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
+
                 onPress={() => {
-                  Alert.alert("E�Yitim Se�iniz", "", [
+                  Alert.alert("Eğitim Seçiniz", "", [
                     {
-                      text: "Vazge�",
+                      text: "Vazgeç",
+
                       style: "cancel",
                     },
 
@@ -1514,10 +1868,10 @@ export default function ProfilGuncelle() {
               >
                 <Text style={styles.secimSeciliText}>
                   {egitimler.find((item) => String(item.kod) === education)
-                    ?.aciklama || "E�Yitim se�iniz"}
+                    ?.aciklama || "Eğitim seçiniz"}
                 </Text>
 
-                <Text style={styles.secimOk}>�-�</Text>
+                <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
 
@@ -1529,9 +1883,13 @@ export default function ProfilGuncelle() {
 
                 <TextInput
                   style={styles.input}
+
                   value={height}
+
                   onChangeText={setHeight}
+
                   placeholder="cm"
+
                   keyboardType="numeric"
                 />
               </View>
@@ -1541,9 +1899,13 @@ export default function ProfilGuncelle() {
 
                 <TextInput
                   style={styles.input}
+
                   value={weight}
+
                   onChangeText={setWeight}
+
                   placeholder="kg"
+
                   keyboardType="numeric"
                 />
               </View>
@@ -1556,10 +1918,12 @@ export default function ProfilGuncelle() {
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
+
                 onPress={() => {
-                  Alert.alert("Medeni Durum Se�iniz", "", [
+                  Alert.alert("Medeni Durum Seçiniz", "", [
                     {
-                      text: "Vazge�",
+                      text: "Vazgeç",
+
                       style: "cancel",
                     },
 
@@ -1574,10 +1938,10 @@ export default function ProfilGuncelle() {
                 <Text style={styles.secimSeciliText}>
                   {medeniDurumlar.find(
                     (item) => String(item.kod) === maritalStatus,
-                  )?.aciklama || "Medeni durum se�iniz"}
+                  )?.aciklama || "Medeni durum seçiniz"}
                 </Text>
 
-                <Text style={styles.secimOk}>�-�</Text>
+                <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
 
@@ -1588,10 +1952,12 @@ export default function ProfilGuncelle() {
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
+
                 onPress={() => {
-                  Alert.alert("Mezhep Se�iniz", "", [
+                  Alert.alert("Mezhep Seçiniz", "", [
                     {
-                      text: "Vazge�",
+                      text: "Vazgeç",
+
                       style: "cancel",
                     },
 
@@ -1605,10 +1971,10 @@ export default function ProfilGuncelle() {
               >
                 <Text style={styles.secimSeciliText}>
                   {mezhepler.find((item) => String(item.kod) === religion)
-                    ?.aciklama || "Mezhep se�iniz"}
+                    ?.aciklama || "Mezhep seçiniz"}
                 </Text>
 
-                <Text style={styles.secimOk}>�-�</Text>
+                <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
 
@@ -1619,7 +1985,7 @@ export default function ProfilGuncelle() {
             <View style={styles.ilgiAlanlariContainer}>
               {ilgiAlanlari.length === 0 ? (
                 <Text style={styles.secenekYok}>
-                  Ilgi alanlari y�kleniyor...
+                  İlgi alanları yükleniyor...
                 </Text>
               ) : (
                 ilgiAlanlari.map((item) => {
@@ -1630,16 +1996,20 @@ export default function ProfilGuncelle() {
                   return (
                     <Pressable
                       key={kod}
+
                       style={[styles.ilgiChip, secili && styles.ilgiChipSecili]}
+
                       onPress={() => ilgiAlaniSec(kod)}
                     >
                       <Text
                         style={[
                           styles.ilgiChipText,
+
                           secili && styles.ilgiChipTextSecili,
                         ]}
                       >
-                        {secili ? "�o" : ""}
+                        {secili ? "✓" : ""}
+
                         {item.aciklama}
                       </Text>
                     </Pressable>
@@ -1650,13 +2020,15 @@ export default function ProfilGuncelle() {
 
             {interests.length > 0 && (
               <Text style={styles.seciliBilgi}>
-                {interests.length} ilgi alani se�ildi
+                {interests.length} ilgi alanı seçildi
               </Text>
             )}
           </View>
 
           {/* ============================================
+
               PROFIL SORULARI
+
               ============================================ */}
 
           {profil?.id && (
@@ -1672,11 +2044,17 @@ export default function ProfilGuncelle() {
               {sorular.length > 0 ? (
                 <ProfileQuestions
                   questions={sorular}
+
                   answers={cevaplar}
+
                   saving={soruCevapKaydediliyor}
+
                   error={soruCevapHatasi}
+
                   onRadioChange={radioCevapDegistir}
+
                   onCheckboxChange={checkboxCevapDegistir}
+
                   onSave={profilCevaplariniKaydetButonu}
                 />
               ) : (
@@ -1684,7 +2062,7 @@ export default function ProfilGuncelle() {
                   <ActivityIndicator size="small" color="#8b5cf6" />
 
                   <Text style={styles.soruBosText}>
-                    Profil sorulari y�kleniyor...
+                    Profil soruları yükleniyor...
                   </Text>
                 </View>
               )}
@@ -1692,12 +2070,16 @@ export default function ProfilGuncelle() {
           )}
 
           {/* ============================================
+
               KAYDET
+
               ============================================ */}
 
           <Pressable
             style={[styles.kaydetButonu, saving && styles.kaydetButonuPasif]}
+
             onPress={profilKaydet}
+
             disabled={saving}
           >
             {saving ? (
@@ -1707,20 +2089,24 @@ export default function ProfilGuncelle() {
                 <Text style={styles.kaydetText}>Kaydediliyor...</Text>
               </>
             ) : (
-              <Text style={styles.kaydetText}>�o" De�Yi�Yiklikleri Kaydet</Text>
+              <Text style={styles.kaydetText}>✓ Değişiklikleri Kaydet</Text>
             )}
           </Pressable>
 
           {/* ============================================
-              VAZGE�?
+
+              VAZGEÇ
+
               ============================================ */}
 
           <Pressable
             style={styles.vazgecButonu}
+
             onPress={geriDon}
+
             disabled={saving}
           >
-            <Text style={styles.vazgecText}>Vazge�</Text>
+            <Text style={styles.vazgecText}>Vazgeç</Text>
           </Pressable>
 
           <View style={styles.altBosluk} />
@@ -1731,9 +2117,13 @@ export default function ProfilGuncelle() {
 }
 
 /*
+
  * =========================================================
+
  * STYLES
+
  * =========================================================
+
  */
 
 const styles = StyleSheet.create({
@@ -1743,6 +2133,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
+
     backgroundColor: "#ffffff",
   },
 
@@ -1755,56 +2146,82 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * �oST BAR
+
+   * ÜST BAR
+
    */
 
   ustBar: {
     height: 60,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
+
     paddingHorizontal: 18,
+
     borderBottomWidth: 1,
+
     borderBottomColor: "#eeeeee",
+
     backgroundColor: "#ffffff",
   },
 
   geri: {
     width: 60,
+
     flexDirection: "row",
+
     alignItems: "center",
   },
 
   geriIcon: {
     fontSize: 36,
+
     lineHeight: 36,
+
     marginRight: 3,
+
     color: "#d63384",
   },
 
   geriText: {
     fontSize: 16,
+
     color: "#d63384",
+
     fontWeight: "600",
   },
 
   ustBaslik: {
     fontSize: 20,
+
     fontWeight: "700",
+
     color: "#222222",
   },
 
   /*
+
    * FOTOGRAF
+
    */
 
   fotoBolumu: {
     margin: 16,
+
     padding: 20,
+
     borderRadius: 18,
+
     alignItems: "center",
+
     backgroundColor: "#faf7ff",
+
     borderWidth: 1,
+
     borderColor: "#e9d5ff",
   },
 
@@ -1814,113 +2231,171 @@ const styles = StyleSheet.create({
 
   fotoOnizleme: {
     width: 150,
+
     height: 150,
+
     borderRadius: 75,
+
     backgroundColor: "#eeeeee",
+
     borderWidth: 5,
+
     borderColor: "#8b5cf6",
   },
 
   fotoYok: {
     width: 150,
+
     height: 150,
+
     borderRadius: 75,
+
     backgroundColor: "#f3d1e1",
+
     borderWidth: 5,
+
     borderColor: "#8b5cf6",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   fotoYokText: {
     fontSize: 56,
+
     fontWeight: "700",
+
     color: "#d63384",
   },
 
   fotoSecButonu: {
     minHeight: 48,
+
     paddingHorizontal: 20,
+
     paddingVertical: 12,
+
     borderRadius: 12,
+
     borderWidth: 1,
+
     borderColor: "#8b5cf6",
+
     justifyContent: "center",
+
     alignItems: "center",
   },
 
   fotoSecText: {
     color: "#7c3aed",
+
     fontSize: 15,
+
     fontWeight: "700",
   },
 
   fotoBilgi: {
     marginTop: 10,
+
     color: "#777777",
+
     fontSize: 13,
+
     textAlign: "center",
+
     lineHeight: 19,
   },
 
   /*
-   * B�-L�oM
+
+   * BÖLÜM
+
    */
 
   bolum: {
     marginHorizontal: 16,
+
     marginBottom: 16,
+
     padding: 18,
+
     borderRadius: 18,
+
     backgroundColor: "#fafafa",
+
     borderWidth: 1,
+
     borderColor: "#eeeeee",
   },
 
   bolumBaslik: {
     fontSize: 20,
+
     fontWeight: "700",
+
     color: "#5b21b6",
+
     marginBottom: 18,
   },
 
   /*
+
    * INPUT
+
    */
 
   inputLabel: {
     fontSize: 14,
+
     color: "#555555",
+
     fontWeight: "600",
+
     marginBottom: 7,
+
     marginTop: 5,
   },
 
   input: {
     width: "100%",
+
     minHeight: 50,
+
     borderWidth: 1,
+
     borderColor: "#dddddd",
+
     borderRadius: 12,
+
     paddingHorizontal: 14,
+
     paddingVertical: 12,
+
     backgroundColor: "#ffffff",
+
     color: "#222222",
+
     fontSize: 16,
+
     marginBottom: 15,
   },
 
   textArea: {
     minHeight: 130,
+
     paddingTop: 14,
   },
 
   /*
+
    * IKI KOLON
+
    */
 
   ikiKolon: {
     flexDirection: "row",
+
     gap: 10,
   },
 
@@ -1929,7 +2404,9 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * SE�?IM
+
+   * SEÇİM
+
    */
 
   secimContainer: {
@@ -1938,182 +2415,265 @@ const styles = StyleSheet.create({
 
   secimSecili: {
     minHeight: 52,
+
     borderWidth: 1,
+
     borderColor: "#dddddd",
+
     borderRadius: 12,
+
     backgroundColor: "#ffffff",
+
     paddingHorizontal: 14,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
   },
 
   secimSeciliText: {
     flex: 1,
+
     fontSize: 15,
+
     color: "#333333",
+
     marginRight: 10,
   },
 
   secimOk: {
     color: "#7c3aed",
+
     fontSize: 14,
+
     fontWeight: "700",
   },
 
   /*
+
    * ILGI ALANLARI
+
    */
 
   ilgiAlanlariContainer: {
     flexDirection: "row",
+
     flexWrap: "wrap",
+
     gap: 8,
   },
 
   ilgiChip: {
     paddingHorizontal: 12,
+
     paddingVertical: 9,
+
     borderRadius: 20,
+
     borderWidth: 1,
+
     borderColor: "#d8d0e8",
+
     backgroundColor: "#ffffff",
   },
 
   ilgiChipSecili: {
     backgroundColor: "#8b5cf6",
+
     borderColor: "#8b5cf6",
   },
 
   ilgiChipText: {
     fontSize: 13,
+
     color: "#555555",
+
     fontWeight: "500",
   },
 
   ilgiChipTextSecili: {
     color: "#ffffff",
+
     fontWeight: "700",
   },
 
   seciliBilgi: {
     marginTop: 12,
+
     fontSize: 13,
+
     color: "#7c3aed",
+
     fontWeight: "600",
   },
 
   secenekYok: {
     color: "#888888",
+
     fontSize: 14,
   },
 
   /*
+
    * PROFIL SORULARI
+
    */
 
   soruHataKutusu: {
     marginBottom: 14,
+
     padding: 12,
+
     borderRadius: 10,
+
     backgroundColor: "#fff1f2",
+
     borderWidth: 1,
+
     borderColor: "#fecdd3",
   },
 
   soruHataText: {
     color: "#be123c",
+
     fontSize: 13,
+
     lineHeight: 19,
   },
 
   soruBosKutusu: {
     paddingVertical: 20,
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   soruBosText: {
     marginTop: 8,
+
     color: "#777777",
+
     fontSize: 14,
+
     textAlign: "center",
   },
 
   /*
+
    * HATA
+
    */
 
   hataKutusu: {
     marginHorizontal: 16,
+
     marginTop: 16,
+
     padding: 16,
+
     borderRadius: 14,
+
     backgroundColor: "#fff1f2",
+
     borderWidth: 1,
+
     borderColor: "#fecdd3",
   },
 
   hataBaslik: {
     fontSize: 17,
+
     fontWeight: "700",
+
     color: "#be123c",
+
     marginBottom: 6,
   },
 
   hataText: {
     color: "#9f1239",
+
     fontSize: 14,
+
     lineHeight: 21,
   },
 
   hataKapat: {
     alignSelf: "flex-start",
+
     marginTop: 10,
+
     paddingHorizontal: 12,
+
     paddingVertical: 7,
+
     borderRadius: 8,
+
     backgroundColor: "#be123c",
   },
 
   hataKapatText: {
     color: "#ffffff",
+
     fontWeight: "700",
   },
 
   /*
+
    * BASARI
+
    */
 
   basariKutusu: {
     marginHorizontal: 16,
+
     marginTop: 16,
+
     padding: 15,
+
     borderRadius: 14,
+
     backgroundColor: "#ecfdf5",
+
     borderWidth: 1,
+
     borderColor: "#a7f3d0",
   },
 
   basariText: {
     color: "#047857",
+
     fontSize: 14,
+
     fontWeight: "700",
   },
 
   /*
+
    * KAYDET
+
    */
 
   kaydetButonu: {
     marginHorizontal: 16,
+
     minHeight: 54,
+
     borderRadius: 14,
+
     backgroundColor: "#8b5cf6",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     flexDirection: "row",
+
     gap: 8,
+
     paddingHorizontal: 20,
   },
 
@@ -2123,50 +2683,72 @@ const styles = StyleSheet.create({
 
   kaydetText: {
     color: "#ffffff",
+
     fontSize: 16,
+
     fontWeight: "700",
   },
 
   /*
-   * VAZGE�?
+
+   * VAZGEÇ
+
    */
 
   vazgecButonu: {
     marginHorizontal: 16,
+
     marginTop: 12,
+
     minHeight: 50,
+
     borderRadius: 14,
+
     borderWidth: 1,
+
     borderColor: "#d63384",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   vazgecText: {
     color: "#d63384",
+
     fontSize: 16,
+
     fontWeight: "700",
   },
 
   /*
+
    * LOADING
+
    */
 
   yukleniyorContainer: {
     flex: 1,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     paddingHorizontal: 30,
   },
 
   yukleniyorText: {
     marginTop: 12,
+
     fontSize: 16,
+
     color: "#666666",
   },
 
   /*
+
    * ALT BOSLUK
+
    */
 
   altBosluk: {

@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useNavigation } from "@react-navigation/native";
 // src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -100,7 +100,7 @@ type FavoriyeEkleyenKullanici = {
  */
 
 export default function FavorilerimeEkleyenler() {
-  const router = useRouter();
+  const navigation = useNavigation<any>();
 
   /*
    * =======================================================
@@ -228,7 +228,7 @@ export default function FavorilerimeEkleyenler() {
 
       /*
        * Taninmayan sayiysa
-       * rakam g�sterme.
+       * rakam gösterme.
        */
 
       if (!Number.isNaN(Number(deger))) {
@@ -359,8 +359,8 @@ export default function FavorilerimeEkleyenler() {
        * GIRIS YAPAN KULLANICI
        *
        * Bu bilgi daha sonra kullanilabilir.
-       * Endpoint kullaniciyi JWT'den aldı�Yi i�in
-       * URL'ye userId g�ndermiyoruz.
+       * Endpoint kullaniciyi JWT'den aldığı için
+       * URL'ye userId göndermiyoruz.
        */
 
       const kayitliUserId = await AsyncStorage.getItem("userId");
@@ -381,7 +381,7 @@ export default function FavorilerimeEkleyenler() {
        * GET /api/favorites/beni-favorilerine-ekleyenler
        *
        * Kullanici ID URL'den alinmiyor.
-       * JWT �zerinden mevcut kullanici bulunuyor.
+       * JWT üzerinden mevcut kullanıcı bulunuyor.
        * =====================================================
        */
 
@@ -501,7 +501,7 @@ export default function FavorilerimeEkleyenler() {
 
   /*
    * =======================================================
-   * SAYFA A�?ILINCA
+   * SAYFA AÇILINCA
    * =======================================================
    */
 
@@ -516,22 +516,22 @@ export default function FavorilerimeEkleyenler() {
    */
 
   const profileGit = (kullaniciId: number) => {
-    router.push(`/user/${kullaniciId}`);
+    navigation.navigate("user", { id: String(kullaniciId) });
   };
 
   /*
    * =======================================================
-   * GERI D�-N
+   * GERİ DÖN
    * =======================================================
    */
 
   const geriDon = () => {
-    router.back();
+    navigation.goBack();
   };
 
   /*
    * =======================================================
-   * Y�oKLENIYOR
+   * YÜKLENİYOR
    * =======================================================
    */
 
@@ -542,7 +542,7 @@ export default function FavorilerimeEkleyenler() {
           <ActivityIndicator size="large" color="#f59e0b" />
 
           <Text style={styles.yukleniyorText}>
-            Favorilerine ekleyenler y�kleniyor...
+            Favorilerine ekleyenler yükleniyor...
           </Text>
         </View>
       </SafeAreaView>
@@ -565,13 +565,13 @@ export default function FavorilerimeEkleyenler() {
         ================================================= */
         <View style={styles.ustBar}>
           <Pressable style={styles.geriButonu} onPress={geriDon}>
-            <Text style={styles.geriIcon}>�?�</Text>
+            <Text style={styles.geriIcon}>←</Text>
 
             <Text style={styles.geriText}>Geri</Text>
           </Pressable>
 
           <View style={styles.baslikAlani}>
-            <Text style={styles.baslikIcon}>�~.</Text>
+            <Text style={styles.baslikIcon}>☆</Text>
 
             <Text style={styles.baslik}>Favorilerime Ekleyenler</Text>
           </View>
@@ -582,7 +582,7 @@ export default function FavorilerimeEkleyenler() {
         ================================================= */
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata olu�Ytu</Text>
+            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
@@ -595,14 +595,14 @@ export default function FavorilerimeEkleyenler() {
         ================================================= */
         {!hata && kullanicilar.length === 0 ? (
           <View style={styles.bosKart}>
-            <Text style={styles.bosYildiz}>�~.</Text>
+            <Text style={styles.bosYildiz}>☆</Text>
 
             <Text style={styles.bosBaslik}>
-              Hen�z seni favorilerine ekleyen yok
+              Henüz seni favorilerine ekleyen yok
             </Text>
 
             <Text style={styles.bosText}>
-              Seni favorilerine ekleyen kullanicilar burada g�r�necek.
+              Seni favorilerine ekleyen kullanıcılar burada görünecek.
             </Text>
           </View>
         ) : null}
@@ -675,9 +675,9 @@ export default function FavorilerimeEkleyenler() {
 
                     {yas !== null || kullanici.city ? (
                       <Text style={styles.detay} numberOfLines={1}>
-                        {yas !== null ? `${yas} ya�Y` : ""}
+                        {yas !== null ? `${yas} yaş` : ""}
 
-                        {yas !== null && kullanici.city ? " � " : ""}
+                        {yas !== null && kullanici.city ? " · " : ""}
 
                         {kullanici.city || ""}
                       </Text>
@@ -700,12 +700,12 @@ export default function FavorilerimeEkleyenler() {
                     </Text>
                   </View>
                 </View>
-                /* * PROFILI G�-R */
+                /* * PROFİLİ GÖR */
                 <Pressable
                   style={styles.profilButonu}
                   onPress={() => profileGit(kullanici.id)}
                 >
-                  <Text style={styles.profilButonuText}>gY'� Profili G�r</Text>
+                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
                 </Pressable>
               </View>
             );
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * Y�oKLENIYOR
+   * YÜKLENİYOR
    */
 
   yukleniyorContainer: {
@@ -752,7 +752,7 @@ const styles = StyleSheet.create({
   },
 
   /*
-   * �oST BAR
+   * ÜST BAR
    */
 
   ustBar: {
