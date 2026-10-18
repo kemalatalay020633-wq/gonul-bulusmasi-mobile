@@ -635,7 +635,7 @@ export default function ProfilDetay() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   scrollContent: {
@@ -648,13 +648,13 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   yukleniyorText: {
     marginTop: 14,
     fontSize: 15,
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   hataContainer: {
@@ -665,23 +665,23 @@ const styles = StyleSheet.create({
   },
 
   hataCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderRadius: 18,
     padding: 24,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   hataBaslik: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 12,
   },
 
   hataText: {
     fontSize: 15,
-    color: "#dc2626",
+    color: "#B72F4B",
     lineHeight: 22,
     marginBottom: 22,
   },
@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
 
   backText: {
     fontSize: 25,
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "700",
   },
 
@@ -716,12 +716,12 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: 24,
     fontWeight: "900",
-    color: "#5b21b6",
+    color: "#7A263C",
   },
 
   topSubtitle: {
     fontSize: 13,
-    color: "#6b7280",
+    color: "#80666D",
     marginTop: 3,
   },
 
@@ -732,7 +732,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 21,
     fontWeight: "900",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 12,
   },
 
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#faf5ff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 16,
   },
 
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "700",
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   value: {
@@ -763,20 +763,20 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontSize: 15,
     fontWeight: "800",
-    color: "#374151",
+    color: "#694650",
   },
 
   aboutBox: {
     backgroundColor: "#faf5ff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 18,
   },
 
   aboutText: {
     fontSize: 15,
-    color: "#374151",
+    color: "#694650",
     lineHeight: 25,
   },
 
@@ -791,7 +791,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#faf5ff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 16,
     marginBottom: 12,
   },
@@ -799,14 +799,14 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#7c3aed",
+    color: "#8F2942",
     marginBottom: 6,
   },
 
   infoValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#374151",
+    color: "#694650",
   },
 
   questionHeader: {
@@ -821,8 +821,8 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     textAlign: "center",
     textAlignVertical: "center",
-    backgroundColor: "#ede9fe",
-    color: "#7c3aed",
+    backgroundColor: "#F5DCE3",
+    color: "#8F2942",
     fontSize: 19,
     fontWeight: "900",
     marginRight: 8,
@@ -832,7 +832,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#faf5ff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 18,
     marginBottom: 12,
   },
@@ -847,14 +847,14 @@ const styles = StyleSheet.create({
   questionText: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#5b21b6",
+    color: "#7A263C",
     lineHeight: 23,
     marginBottom: 10,
   },
 
   answerText: {
     fontSize: 15,
-    color: "#374151",
+    color: "#694650",
     lineHeight: 24,
   },
 
@@ -862,7 +862,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#faf5ff",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 24,
     alignItems: "center",
   },
@@ -871,7 +871,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 14,
     fontWeight: "600",
-    color: "#6b7280",
+    color: "#80666D",
     lineHeight: 22,
   },
 
@@ -885,14 +885,14 @@ const styles = StyleSheet.create({
   },
 
   outlineButtonText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 15,
     fontWeight: "800",
   },
 
   bottomArea: {
     borderTopWidth: 1,
-    borderTopColor: "#ede9fe",
+    borderTopColor: "#F5DCE3",
     paddingTop: 20,
     gap: 12,
   },
@@ -907,7 +907,7 @@ const styles = StyleSheet.create({
   },
 
   bottomOutlineText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -915,13 +915,13 @@ const styles = StyleSheet.create({
   bottomPrimaryButton: {
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: "#6d28d9",
+    backgroundColor: "#A12E4A",
     alignItems: "center",
     justifyContent: "center",
   },
 
   bottomPrimaryText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "800",
   },

@@ -11,106 +11,171 @@ import {
 } from "react-native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
 import { useNavigation } from "@react-navigation/native";
+
 // src/app/home.tsx
-import ProfileActions from "../components/profile/ProfileActions";
+
 import ProfileError from "../components/profile/ProfileError";
+
 import ProfileHeader from "../components/profile/ProfileHeader";
+
 import ProfileInfo from "../components/profile/ProfileInfo";
+
 import ProfileLoading from "../components/profile/ProfileLoading";
+
 import ProfileQuestions from "../components/profile/ProfileQuestions";
+
 import UserInfo from "../components/profile/UserInfo";
+
 import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = API_BASE_URL + "/api";
 
 const SUNUCU_ADRESI = API_BASE_URL;
+
 /*
+
  * =========================================================
+
  * KULLANICI
+
  * =========================================================
+
  */
 
 type Kullanici = {
   id: number;
+
   username: string;
+
   email?: string;
+
   firstName?: string;
+
   lastName?: string;
+
   birthDate?: string;
+
   phoneNumber?: string;
+
   city?: string;
+
   active?: boolean;
+
   online?: boolean;
+
   emailVerified?: boolean;
+
   phoneVerified?: boolean;
 };
 
 /*
+
  * =========================================================
+
  * PROFIL
+
  * =========================================================
+
  */
 
 type Profil = {
   id: number;
+
   userId: number;
+
   about?: string;
+
   profession?: string | number;
+
   education?: string | number;
+
   height?: number;
+
   weight?: number;
+
   maritalStatus?: string | number;
+
   religion?: string | number;
+
   interests?: string | number;
+
   profilePhoto?: string;
+
   profileVerified?: boolean;
 };
 
 /*
+
  * =========================================================
+
  * ENUM
+
  * =========================================================
+
  */
 
 type EnumSecenegi = {
   kod: number;
+
   aciklama: string;
 };
 
 /*
+
  * =========================================================
+
  * PROFIL SORUSU
+
  * =========================================================
+
  */
 
 type ProfilSorusu = {
   id: number;
+
   question: string;
+
   category: string | null;
+
   type: string | null;
+
   required: boolean;
+
   active: boolean;
+
   options: string | null;
 };
 
 /*
+
  * =========================================================
+
  * PROFIL CEVABI
+
  * =========================================================
+
  */
 
 type ProfilCevabi = {
   id: number;
+
   profileId?: number;
+
   questionId?: number;
+
   answer: string;
 };
 
 /*
+
  * =========================================================
+
  * ANA COMPONENT
+
  * =========================================================
+
  */
 
 export default function Profil() {
@@ -125,9 +190,13 @@ export default function Profil() {
   const [hata, setHata] = useState("");
 
   /*
+
    * =======================================================
+
    * ENUM LISTELERI
+
    * =======================================================
+
    */
 
   const [meslekler, setMeslekler] = useState<EnumSecenegi[]>([]);
@@ -141,9 +210,13 @@ export default function Profil() {
   const [ilgiAlanlari, setIlgiAlanlari] = useState<EnumSecenegi[]>([]);
 
   /*
+
    * =======================================================
+
    * SORU CEVAP
+
    * =======================================================
+
    */
 
   const [sorular, setSorular] = useState<ProfilSorusu[]>([]);
@@ -159,47 +232,61 @@ export default function Profil() {
   const [soruCevapHatasi, setSoruCevapHatasi] = useState("");
 
   /*
+
    * =======================================================
+
    * ENUM GETIR
+
    * =======================================================
+
    */
 
   const enumlariGetir = useCallback(async (token: string) => {
     try {
       const headers = {
         Authorization: `Bearer ${token}`,
+
         Accept: "application/json",
       };
 
       const [
         meslekResponse,
+
         egitimResponse,
+
         medeniResponse,
+
         mezhepResponse,
+
         ilgiResponse,
       ] = await Promise.all([
         fetch(`${API_ADRESI}/enums/meslekler`, {
           method: "GET",
+
           headers,
         }),
 
         fetch(`${API_ADRESI}/enums/egitimler`, {
           method: "GET",
+
           headers,
         }),
 
         fetch(`${API_ADRESI}/enums/medeni-durumlar`, {
           method: "GET",
+
           headers,
         }),
 
         fetch(`${API_ADRESI}/enums/mezhepler`, {
           method: "GET",
+
           headers,
         }),
 
         fetch(`${API_ADRESI}/enums/ilgi-alanlari`, {
           method: "GET",
+
           headers,
         }),
       ]);
@@ -249,9 +336,13 @@ export default function Profil() {
   }, []);
 
   /*
+
    * =======================================================
+
    * SORU VE CEVAPLARI GETIR
+
    * =======================================================
+
    */
 
   const soruCevaplariGetir = useCallback(
@@ -261,17 +352,22 @@ export default function Profil() {
 
         const headers = {
           Authorization: `Bearer ${token}`,
+
           Accept: "application/json",
         };
 
         /*
+
          * AKTIF SORULAR
+
          */
 
         const soruResponse = await fetch(
           `${API_ADRESI}/profile-questions/active`,
+
           {
             method: "GET",
+
             headers,
           },
         );
@@ -283,13 +379,17 @@ export default function Profil() {
         const soruVerisi = await soruResponse.json();
 
         /*
+
          * PROFIL CEVAPLARI
+
          */
 
         const cevapResponse = await fetch(
           `${API_ADRESI}/profile-answers/profile/${profileId}`,
+
           {
             method: "GET",
+
             headers,
           },
         );
@@ -301,7 +401,9 @@ export default function Profil() {
         const cevapVerisi = await cevapResponse.json();
 
         /*
+
          * SORULAR
+
          */
 
         if (Array.isArray(soruVerisi)) {
@@ -313,7 +415,9 @@ export default function Profil() {
         }
 
         /*
+
          * CEVAPLAR
+
          */
 
         let gelenCevaplar: ProfilCevabi[] = [];
@@ -337,36 +441,47 @@ export default function Profil() {
           }
 
           const parcalar = cevap.answer
+
             .split(",")
+
             .map((item) => item.trim())
+
             .filter(Boolean);
 
           seciliCevaplar[Number(cevap.questionId)] = parcalar;
         });
 
         setSoruCevaplari(seciliCevaplar);
+
         setSoruCevapHatasi("");
       } catch (error) {
         console.log("SORU CEVAP GETİRME HATASI:", error);
 
         setSorular([]);
+
         setSoruCevaplari({});
       } finally {
         setSoruCevapYukleniyor(false);
       }
     },
+
     [],
   );
 
   /*
+
    * =======================================================
+
    * RADIO CEVAP DEGISTIR
+
    * =======================================================
+
    */
 
   const radioCevapDegistir = (questionId: number, value: string) => {
     setSoruCevaplari((mevcut) => ({
       ...mevcut,
+
       [questionId]: [value],
     }));
 
@@ -374,9 +489,13 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * CHECKBOX CEVAP DEGISTIR
+
    * =======================================================
+
    */
 
   const checkboxCevapDegistir = (questionId: number, value: string) => {
@@ -389,6 +508,7 @@ export default function Profil() {
 
       return {
         ...mevcut,
+
         [questionId]: yeniSecili,
       };
     });
@@ -397,44 +517,60 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * PROFIL CEVAPLARINI KAYDET
+
    * =======================================================
+
    */
 
   const soruCevaplariniKaydet = async () => {
     if (!profil?.id) {
       setSoruCevapHatasi("Önce profil bilgilerinizi oluşturmanız gerekiyor.");
+
       return;
     }
 
     try {
       setSoruCevapKaydediliyor(true);
+
       setSoruCevapHatasi("");
 
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
         navigation.replace("index");
+
         return;
       }
 
       const headers = {
         Authorization: `Bearer ${token}`,
+
         "Content-Type": "application/json",
+
         Accept: "application/json",
       };
 
       /*
+
        * Backend'deki mevcut cevaplari tekrar aliyoruz.
+
        * Böylece kayıt sırasında eski cevap ID'leri güncel kalır.
+
        */
+
       const mevcutResponse = await fetch(
         `${API_ADRESI}/profile-answers/profile/${profil.id}`,
+
         {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             Accept: "application/json",
           },
         },
@@ -457,15 +593,24 @@ export default function Profil() {
       }
 
       /*
+
        * Her aktif soru için:
+
        * - Yeni cevap varsa POST
+
        * - Mevcut cevap değişmişse PUT
+
        * - Cevap tamamen kaldırılmışsa DELETE
+
        */
+
       for (const soru of sorular) {
         const questionId = Number(soru.id);
+
         const secili = (soruCevaplari[questionId] || [])
+
           .map((item) => item.trim())
+
           .filter(Boolean);
 
         const yeniCevap = secili.join(",");
@@ -478,16 +623,21 @@ export default function Profil() {
           if (!mevcutCevap) {
             const response = await fetch(`${API_ADRESI}/profile-answers`, {
               method: "POST",
+
               headers,
+
               body: JSON.stringify({
                 profileId: profil.id,
+
                 questionId,
+
                 answer: yeniCevap,
               }),
             });
 
             if (!response.ok) {
               const hataMetni = await response.text();
+
               throw new Error(
                 hataMetni || `Cevap kaydedilemedi. HTTP ${response.status}`,
               );
@@ -495,12 +645,17 @@ export default function Profil() {
           } else if (String(mevcutCevap.answer || "").trim() !== yeniCevap) {
             const response = await fetch(
               `${API_ADRESI}/profile-answers/${mevcutCevap.id}`,
+
               {
                 method: "PUT",
+
                 headers,
+
                 body: JSON.stringify({
                   profileId: profil.id,
+
                   questionId,
+
                   answer: yeniCevap,
                 }),
               },
@@ -508,6 +663,7 @@ export default function Profil() {
 
             if (!response.ok) {
               const hataMetni = await response.text();
+
               throw new Error(
                 hataMetni || `Cevap güncellenemedi. HTTP ${response.status}`,
               );
@@ -516,10 +672,13 @@ export default function Profil() {
         } else if (mevcutCevap) {
           const response = await fetch(
             `${API_ADRESI}/profile-answers/profile/${profil.id}/question/${questionId}`,
+
             {
               method: "DELETE",
+
               headers: {
                 Authorization: `Bearer ${token}`,
+
                 Accept: "application/json",
               },
             },
@@ -527,6 +686,7 @@ export default function Profil() {
 
           if (!response.ok && response.status !== 404) {
             const hataMetni = await response.text();
+
             throw new Error(
               hataMetni || `Cevap silinemedi. HTTP ${response.status}`,
             );
@@ -535,8 +695,11 @@ export default function Profil() {
       }
 
       /*
+
        * Kayıt sonrası backend'deki son durumu tekrar çekiyoruz.
+
        */
+
       await soruCevaplariGetir(token, profil.id);
 
       Alert.alert("Başarılı", "Profil cevaplarınız başarıyla kaydedildi.");
@@ -555,14 +718,19 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * PROFILI GETIR
+
    * =======================================================
+
    */
 
   const profilGetir = useCallback(async () => {
     try {
       setYukleniyor(true);
+
       setHata("");
 
       const token = await AsyncStorage.getItem("token");
@@ -574,16 +742,21 @@ export default function Profil() {
       console.log("KENDİ PROFİL USER ID:", kayitliUserId);
 
       /*
+
        * TOKEN YOK
+
        */
 
       if (!token) {
         navigation.replace("index");
+
         return;
       }
 
       /*
+
        * USER ID YOK
+
        */
 
       if (!kayitliUserId) {
@@ -595,7 +768,9 @@ export default function Profil() {
       const userId = Number(kayitliUserId);
 
       /*
+
        * USER ID GEÇERSİZ
+
        */
 
       if (!Number.isFinite(userId) || userId <= 0) {
@@ -605,37 +780,51 @@ export default function Profil() {
       }
 
       /*
+
        * USER + PROFILE
+
        */
 
       const [kullaniciResponse, profilResponse] = await Promise.all([
         fetch(`${API_ADRESI}/users/${userId}`, {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             "Content-Type": "application/json",
+
             Accept: "application/json",
           },
         }),
 
         // Kendi profilimizi doğrudan /profiles/me üzerinden alıyoruz.
+
         // /profiles listesinde başka bir kullanıcının profili gelebileceği
+
         // için burada userId ile liste içinde arama yapmıyoruz.
+
         fetch(`${API_ADRESI}/profiles/me`, {
           method: "GET",
+
           headers: {
             Authorization: `Bearer ${token}`,
+
             "Content-Type": "application/json",
+
             Accept: "application/json",
           },
         }),
       ]);
 
       console.log("KENDİ PROFİL USER STATUS:", kullaniciResponse.status);
+
       console.log("KENDİ PROFİL PROFILE/ME STATUS:", profilResponse.status);
 
       /*
+
        * USER HATASI
+
        */
 
       if (!kullaniciResponse.ok) {
@@ -645,7 +834,9 @@ export default function Profil() {
       }
 
       /*
+
        * PROFILE HATASI
+
        */
 
       if (!profilResponse.ok) {
@@ -655,38 +846,50 @@ export default function Profil() {
       }
 
       /*
+
        * JSON
+
        */
 
       const kullaniciVerisi = await kullaniciResponse.json();
+
       const profilVerisi = await profilResponse.json();
 
       console.log("KENDİ PROFİL KULLANICI:", kullaniciVerisi);
+
       console.log("KENDİ PROFİL VERİSİ:", profilVerisi);
 
       /*
+
        * KENDI PROFILINI DOGRUDAN SET ET
+
        */
 
       const bulunanProfil: Profil = profilVerisi;
 
       setKullanici(kullaniciVerisi);
+
       setProfil(bulunanProfil || null);
 
       /*
+
        * ENUM'LARI GETIR
+
        */
 
       await enumlariGetir(token);
 
       /*
+
        * SORU CEVAPLARI
+
        */
 
       if (bulunanProfil?.id) {
         await soruCevaplariGetir(token, Number(bulunanProfil.id));
       } else {
         setSorular([]);
+
         setSoruCevaplari({});
       }
     } catch (error) {
@@ -704,9 +907,13 @@ export default function Profil() {
   }, [navigation, enumlariGetir, soruCevaplariGetir]);
 
   /*
+
    * =======================================================
+
    * SAYFA AÇILINCA PROFİL GETİR
+
    * =======================================================
+
    */
 
   useEffect(() => {
@@ -714,9 +921,13 @@ export default function Profil() {
   }, [profilGetir]);
 
   /*
+
    * =======================================================
+
    * FOTOGRAF URL
+
    * =======================================================
+
    */
 
   const fotoUrlOlustur = (foto?: string) => {
@@ -736,9 +947,13 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * GERİ DÖN
+
    * =======================================================
+
    */
 
   const geriDon = () => {
@@ -746,21 +961,31 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * PROFİL GÜNCELLE
+
    * =======================================================
+
    */
 
   const profilGuncelle = () => {
     navigation.navigate("profileEdit");
   };
+
   const ayarlaraGit = () => {
     navigation.navigate("settings");
   };
+
   /*
+
    * =======================================================
+
    * YÜKLENİYOR
+
    * =======================================================
+
    */
 
   if (yukleniyor) {
@@ -768,9 +993,13 @@ export default function Profil() {
   }
 
   /*
+
    * =======================================================
+
    * HATA
+
    * =======================================================
+
    */
 
   if (hata) {
@@ -778,9 +1007,13 @@ export default function Profil() {
   }
 
   /*
+
    * =======================================================
+
    * KULLANICI YOK
+
    * =======================================================
+
    */
 
   if (!kullanici) {
@@ -788,17 +1021,25 @@ export default function Profil() {
   }
 
   /*
+
    * =======================================================
+
    * PROFIL FOTOGRAFI
+
    * =======================================================
+
    */
 
   const fotoUrl = fotoUrlOlustur(profil?.profilePhoto);
 
   /*
+
    * =======================================================
+
    * AD SOYAD
+
    * =======================================================
+
    */
 
   const adSoyad = `${kullanici.firstName || ""} ${
@@ -806,32 +1047,53 @@ export default function Profil() {
   }`.trim();
 
   /*
+
    * =======================================================
+
    * USER INFO İÇİN TAM MODEL
+
    * =======================================================
+
    */
 
   const userInfoModel = {
     id: kullanici.id,
+
     username: kullanici.username || "",
+
     email: kullanici.email || "",
+
     firstName: kullanici.firstName || "",
+
     lastName: kullanici.lastName || "",
+
     birthDate: kullanici.birthDate || "",
+
     phoneNumber: kullanici.phoneNumber || null,
+
     profilePhoto: profil?.profilePhoto || null,
+
     city: kullanici.city || null,
+
     active: kullanici.active ?? false,
+
     emailVerified: kullanici.emailVerified ?? false,
+
     phoneVerified: kullanici.phoneVerified ?? false,
+
     createdAt: "",
+
     updatedAt: "",
   };
 
   /*
+
    * =======================================================
+
    * PROFILE INFO İÇİN MODEL
+
    * =======================================================
+
    */
 
   const profileInfoModel = {
@@ -861,21 +1123,30 @@ export default function Profil() {
   };
 
   /*
+
    * =======================================================
+
    * EKRAN
+
    * =======================================================
+
    */
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
+
         showsVerticalScrollIndicator={false}
       >
         {/*
+
          * =================================================
+
          * ÜST BAR
+
          * =================================================
+
          */}
 
         <View style={styles.ustBar}>
@@ -885,38 +1156,55 @@ export default function Profil() {
             <Text style={styles.geriText}>Geri</Text>
           </Pressable>
 
-          <Text style={styles.ustBaslik}>Profilim</Text>
+          <View style={styles.baslikGrubu}>
+            <Text style={styles.ustBaslik}>Profilim</Text>
 
-          <View
-            style={{
-              width: 60,
-            }}
-          />
+            <Pressable style={styles.ayarlarButonu} onPress={ayarlaraGit}>
+              <Text style={styles.ayarlarButonuText}>⚙️</Text>
+            </Pressable>
+          </View>
+
+          <View style={{ width: 60 }} />
         </View>
 
         {/*
+
          * =================================================
+
          * PROFIL HEADER
+
          * =================================================
+
          */}
 
         <ProfileHeader
           user={{
             id: kullanici.id,
+
             username: kullanici.username,
+
             firstName: kullanici.firstName || "",
+
             lastName: kullanici.lastName || "",
+
             profilePhoto: profil?.profilePhoto || null,
           }}
         />
 
         {/*
+
          * =================================================
+
          * FOTOĞRAF + ÇEVRİMİÇİ BİLGİSİ
+
          *
+
          * Mevcut tasarımdaki fotoğraf ve
+
          * online bilgisini koruyoruz.
+
          * =================================================
+
          */}
 
         <View style={styles.profilKart}>
@@ -925,13 +1213,21 @@ export default function Profil() {
               <View>
                 <View style={styles.profilFotoWrapper}>
                   {/*
+
                    * ProfileHeader componenti
+
                    * adı gösteriyor.
+
                    *
+
                    * Fotoğrafı burada ayrıca
+
                    * mevcut tasarimdaki gibi
+
                    * gösteriyoruz.
+
                    */}
+
                   <Pressable onPress={() => {}}>
                     <View style={styles.profilFoto}>
                       <Text style={styles.fotoPlaceholderText}>
@@ -974,9 +1270,13 @@ export default function Profil() {
         </View>
 
         {/*
+
          * =================================================
+
          * PROFİL GÜNCELLE
+
          * =================================================
+
          */}
 
         <View style={styles.guncelleContainer}>
@@ -986,26 +1286,39 @@ export default function Profil() {
         </View>
 
         {/*
+
          * =================================================
+
          * KULLANICI BILGILERI
+
          * =================================================
+
          */}
 
         <UserInfo user={userInfoModel} />
 
         {/*
+
          * =================================================
+
          * PROFIL BILGILERI
+
          * =================================================
+
          */}
 
         {profil ? (
           <ProfileInfo
             profile={profileInfoModel}
+
             meslekler={meslekler}
+
             egitimler={egitimler}
+
             medeniDurumlar={medeniDurumlar}
+
             mezhepler={mezhepler}
+
             ilgiAlanlari={ilgiAlanlari}
           />
         ) : (
@@ -1019,9 +1332,13 @@ export default function Profil() {
         )}
 
         {/*
+
          * =================================================
+
          * SORULAR VE CEVAPLAR
+
          * =================================================
+
          */}
 
         {profil && (
@@ -1035,11 +1352,17 @@ export default function Profil() {
             ) : (
               <ProfileQuestions
                 questions={sorular}
+
                 answers={soruCevaplari}
+
                 error={soruCevapHatasi}
+
                 saving={soruCevapKaydediliyor}
+
                 onRadioChange={radioCevapDegistir}
+
                 onCheckboxChange={checkboxCevapDegistir}
+
                 onSave={soruCevaplariniKaydet}
               />
             )}
@@ -1047,22 +1370,23 @@ export default function Profil() {
         )}
 
         {/*
+
          * =================================================
+
          * PROFIL ISLEMLERI
+
          * =================================================
+
          */}
 
-        <View style={styles.actionsContainer}>
-          <ProfileActions />
-
-          <Pressable style={styles.ayarlarButonu} onPress={ayarlaraGit}>
-            <Text style={styles.ayarlarButonuText}>⚙️ Ayarlar</Text>
-          </Pressable>
-        </View>
         {/*
+
          * =================================================
+
          * ALT BOSLUK
+
          * =================================================
+
          */}
 
         <View style={styles.altBosluk} />
@@ -1072,262 +1396,376 @@ export default function Profil() {
 }
 
 /*
+
  * =========================================================
+
  * STYLES
+
  * =========================================================
+
  */
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#ffffff",
+
+    backgroundColor: "#FFFCFA",
   },
 
   scrollContainer: {
     paddingBottom: 30,
   },
+
   /*AYARLAR
+
    */
 
-  ayarlarButonu: {
-    minHeight: 50,
-    borderRadius: 14,
-    backgroundColor: "#f3f4f6",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    marginTop: 10,
-  },
-
-  ayarlarButonuText: {
-    color: "#374151",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
   /*
+
    * ÜST BAR
+
    */
 
   ustBar: {
     height: 60,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
+
     paddingHorizontal: 18,
+
     borderBottomWidth: 1,
+
     borderBottomColor: "#eeeeee",
   },
 
   geri: {
     width: 60,
+
     flexDirection: "row",
+
     alignItems: "center",
   },
 
   geriIcon: {
     fontSize: 36,
+
     lineHeight: 36,
+
     marginRight: 3,
+
     color: "#d63384",
   },
 
   geriText: {
     fontSize: 16,
+
     color: "#d63384",
+
     fontWeight: "600",
   },
 
+  baslikGrubu: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+
   ustBaslik: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "700",
     color: "#222222",
   },
 
+  ayarlarButonu: {
+    width: 36,
+
+    height: 36,
+
+    borderRadius: 10,
+
+    backgroundColor: "#f3e8ff",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+  },
+
+  ayarlarButonuText: {
+    fontSize: 20,
+  },
+
   /*
+
    * PROFIL KARTI
+
    */
 
   profilKart: {
     alignItems: "center",
+
     paddingTop: 10,
+
     paddingBottom: 20,
+
     paddingHorizontal: 20,
   },
 
   /*
+
    * FOTOGRAF
+
    */
 
   fotoContainer: {
     position: "relative",
+
     marginBottom: 15,
   },
 
   profilFotoWrapper: {
     width: 130,
+
     height: 130,
+
     borderRadius: 65,
+
     overflow: "hidden",
+
     backgroundColor: "#eeeeee",
   },
 
   profilFoto: {
     width: 130,
+
     height: 130,
+
     borderRadius: 65,
+
     backgroundColor: "#f3d1e1",
+
     justifyContent: "center",
+
     alignItems: "center",
   },
 
   fotoPlaceholderText: {
     fontSize: 52,
+
     fontWeight: "700",
+
     color: "#d63384",
   },
 
   fotoYok: {
     width: 130,
+
     height: 130,
+
     borderRadius: 65,
+
     backgroundColor: "#f3d1e1",
+
     justifyContent: "center",
+
     alignItems: "center",
   },
 
   fotoYokText: {
     fontSize: 52,
+
     fontWeight: "700",
+
     color: "#d63384",
   },
 
   /*
+
    * ONLINE
+
    */
 
   onlineNokta: {
     position: "absolute",
+
     right: 5,
+
     bottom: 8,
+
     width: 22,
+
     height: 22,
+
     borderRadius: 11,
+
     backgroundColor: "#25c45a",
+
     borderWidth: 3,
-    borderColor: "#ffffff",
+
+    borderColor: "#FFFCFA",
   },
 
   onlineEtiket: {
     marginTop: 10,
+
     paddingHorizontal: 12,
+
     paddingVertical: 5,
+
     borderRadius: 15,
+
     backgroundColor: "#e8f8ee",
   },
 
   onlineText: {
     color: "#16863c",
+
     fontWeight: "600",
+
     fontSize: 13,
   },
 
   /*
+
    * AD SOYAD
+
    */
 
   adSoyad: {
     fontSize: 26,
+
     fontWeight: "700",
+
     color: "#222222",
+
     textAlign: "center",
   },
 
   kullaniciAdi: {
     marginTop: 4,
+
     fontSize: 15,
+
     color: "#777777",
   },
 
   sehir: {
     marginTop: 8,
+
     fontSize: 15,
+
     color: "#555555",
   },
 
   /*
+
    * DOGRULAMA
+
    */
 
   dogrulamaEtiket: {
     marginTop: 8,
+
     paddingHorizontal: 12,
+
     paddingVertical: 5,
+
     borderRadius: 15,
+
     backgroundColor: "#fce8f2",
   },
 
   dogrulamaText: {
     color: "#d63384",
+
     fontWeight: "600",
+
     fontSize: 13,
   },
 
   /*
+
    * GÜNCELLE
+
    */
 
   guncelleContainer: {
     paddingHorizontal: 16,
+
     marginBottom: 16,
   },
 
   guncelleButonu: {
     minHeight: 50,
+
     borderRadius: 14,
+
     backgroundColor: "#d63384",
+
     justifyContent: "center",
+
     alignItems: "center",
+
     paddingHorizontal: 20,
   },
 
   guncelleButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontSize: 16,
+
     fontWeight: "700",
   },
 
   /*
+
    * BÖLÜM
+
    */
 
   bolum: {
     marginHorizontal: 16,
+
     marginBottom: 16,
+
     padding: 18,
+
     borderRadius: 16,
-    backgroundColor: "#fafafa",
+
+    backgroundColor: "#FFF9F6",
+
     borderWidth: 1,
+
     borderColor: "#eeeeee",
   },
 
   bolumBaslik: {
     fontSize: 19,
+
     fontWeight: "700",
+
     color: "#222222",
+
     marginBottom: 12,
   },
 
   bilgiYok: {
     fontSize: 15,
+
     color: "#888888",
+
     lineHeight: 22,
   },
 
   /*
+
    * SORU CEVAP
+
    */
 
   soruCevapBolumu: {
@@ -1336,34 +1774,50 @@ const styles = StyleSheet.create({
 
   soruCevapYukleniyor: {
     marginHorizontal: 16,
+
     marginTop: 24,
+
     marginBottom: 24,
+
     minHeight: 70,
+
     borderRadius: 14,
+
     backgroundColor: "#faf5ff",
+
     borderWidth: 1,
-    borderColor: "#ede9fe",
+
+    borderColor: "#F5DCE3",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   soruCevapYukleniyorText: {
     fontSize: 14,
-    color: "#6b7280",
+
+    color: "#80666D",
+
     fontWeight: "600",
   },
 
   /*
+
    * ACTIONS
+
    */
 
   actionsContainer: {
     marginHorizontal: 16,
+
     marginBottom: 10,
   },
 
   /*
+
    * ALT BOSLUK
+
    */
 
   altBosluk: {

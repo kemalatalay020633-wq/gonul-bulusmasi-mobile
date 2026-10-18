@@ -128,6 +128,8 @@ type BackendAramaSinyali = {
   sdpMid?: string | null;
 
   sdpMLineIndex?: number | null;
+
+  aramaOturumId?: string | null;
 };
 
 type AramaOlayCallback = (...args: any[]) => void;
@@ -142,6 +144,8 @@ class AramaWebRTC {
   private mevcutKullaniciId: number | null = null;
 
   private arananKullaniciId: number | null = null;
+
+  private aramaOturumId: string | null = null;
 
   private aramaTuru: AramaTuru = "SES"; /*\*
 
@@ -340,17 +344,8 @@ class AramaWebRTC {
 
       this.ringbackHoparlorOnceAcik = this.hoparlorAcik;
 
-      InCallManager.start({
-        media: "audio",
-        auto: true,
-      });
-
-      try {
-        InCallManager.setForceSpeakerphoneOn(true);
-      } catch (hata) {
-        console.warn("Ringback hoparlör yönlendirmesi ayarlanamadı:", hata);
-      }
-
+      // Hoparlörü otomatik açma.
+      // Ses yönlendirmesini mevcut arama oturumu yönetsin.
       this.ringbackDonguAktif = true;
       this.aramaSesiCalisiyor = true;
 
@@ -360,6 +355,8 @@ class AramaWebRTC {
     } catch (hata) {
       this.ringbackMp3Durdur();
       this.aramaSesiCalisiyor = false;
+      this.ringbackDonguAktif = false;
+
       console.warn("Giden arama ringback başlatılamadı:", hata);
     }
   }
@@ -594,6 +591,15 @@ class AramaWebRTC {
 
    */
 
+  private yeniAramaOturumId(): string {
+    const parca = () =>
+      Math.floor(Math.random() * 0x10000)
+        .toString(16)
+        .padStart(4, "0");
+
+    return `${parca()}${parca()}-${parca()}-4${parca().slice(1)}-${(8 + Math.floor(Math.random() * 4)).toString(16)}${parca().slice(1)}-${parca()}${parca()}${parca()}`;
+  }
+
   ayarla(
     mevcutKullaniciId: number,
 
@@ -604,6 +610,9 @@ class AramaWebRTC {
     this.mevcutKullaniciId = mevcutKullaniciId;
 
     this.arananKullaniciId = arananKullaniciId;
+
+    // UUID yalnızca oturum tanımlayıcısıdır; yetki denetimi sunucudadır.
+    this.aramaOturumId = this.yeniAramaOturumId();
 
     this.aramaTuru = aramaTuru;
 
@@ -1296,6 +1305,24 @@ class AramaWebRTC {
 
       const aramaTuru: AramaTuru = sinyal.tur === "VIDEO" ? "VIDEO" : "SES";
 
+      if (sinyal.tip === "CALL_OFFER") {
+        if (!sinyal.aramaOturumId) {
+          console.warn("Gelen CALL_OFFER arama oturum kimliği içermiyor.");
+          return;
+        }
+      } else {
+        if (
+          !sinyal.aramaOturumId ||
+          !this.aramaOturumId ||
+          sinyal.aramaOturumId !== this.aramaOturumId
+        ) {
+          console.warn(
+            "Arama sinyali oturum kimliğiyle eşleşmedi, yok sayıldı.",
+          );
+          return;
+        }
+      }
+
       switch (sinyal.tip) {
         case "CALL_OFFER": {
           if (!sinyal.sdp) {
@@ -1315,6 +1342,7 @@ class AramaWebRTC {
           }
 
           this.sonGelenOfferSdp = sinyal.sdp;
+          this.aramaOturumId = sinyal.aramaOturumId!;
 
           const mesaj: AramaMesaji = {
             tip: "CALL_OFFER",
@@ -1506,6 +1534,12 @@ class AramaWebRTC {
       return;
     }
 
+    if (!this.aramaOturumId) {
+      console.warn("Arama sinyali gönderilemedi. Oturum kimliği yok.");
+      this.olayCalistir("hata", new Error("Arama oturum kimliği bulunamadı."));
+      return;
+    }
+
     if (this.hariciSinyalGonderici) {
       const sinyal: BackendAramaSinyali = {
         hedefKullaniciId: this.arananKullaniciId,
@@ -1521,6 +1555,8 @@ class AramaWebRTC {
         sdpMid: bilgiler.aday?.sdpMid ?? null,
 
         sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
+
+        aramaOturumId: this.aramaOturumId,
       };
 
       void Promise.resolve(this.hariciSinyalGonderici(sinyal)).catch((hata) => {
@@ -1567,6 +1603,8 @@ class AramaWebRTC {
       sdpMid: bilgiler.aday?.sdpMid ?? null,
 
       sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
+
+      aramaOturumId: this.aramaOturumId,
     };
 
     console.log("======================================");
@@ -2524,6 +2562,7 @@ class AramaWebRTC {
 
     this.remoteDescriptionHazir = false;
     this.sonGelenOfferSdp = null;
+    this.aramaOturumId = null;
     this.cevapIsleniyor = false;
     this.ringtoneBaslatiliyor = false;
 

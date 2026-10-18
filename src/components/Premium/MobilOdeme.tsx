@@ -227,7 +227,7 @@ function MobilOdeme({
             onChangeText={(deger) => setTelefon(telefonFormatla(deger))}
             editable={!yukleniyor}
             placeholder="5XX XXX XX XX"
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor="#A88F95"
             keyboardType="number-pad"
             maxLength={13}
             style={[styles.input, yukleniyor && styles.inputDisabled]}
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
 
-    backgroundColor: "#faf7ff",
+    backgroundColor: "#FFF8F4",
   },
 
   scrollContent: {
@@ -330,7 +330,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
 
     marginRight: 14,
   },
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#4c1d95",
+    color: "#672036",
 
     marginBottom: 4,
   },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
 
-    color: "#6b7280",
+    color: "#80666D",
 
     lineHeight: 20,
   },
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   packageLabel: {
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#6b21a8",
+    color: "#7D243B",
 
     marginBottom: 10,
   },
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#111827",
+    color: "#48252F",
   },
 
   packagePrice: {
@@ -416,7 +416,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#7c3aed",
+    color: "#8F2942",
   },
 
   /*
@@ -436,11 +436,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
 
     borderWidth: 1,
 
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
   },
 
   errorIcon: {
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#b91c1c",
+    color: "#9B2947",
   },
 
   /*
@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#374151",
+    color: "#694650",
 
     marginBottom: 8,
   },
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 13,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     borderWidth: 1,
 
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
 
   operatorOptionSelected: {
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
 
     backgroundColor: "#faf5ff",
   },
@@ -524,11 +524,11 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#374151",
+    color: "#694650",
   },
 
   operatorTextSelected: {
-    color: "#6d28d9",
+    color: "#A12E4A",
 
     fontWeight: "900",
   },
@@ -550,7 +550,7 @@ const styles = StyleSheet.create({
   },
 
   radioOuterSelected: {
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
   },
 
   radioInner: {
@@ -560,7 +560,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 5,
 
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
   },
 
   /*
@@ -582,17 +582,17 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     paddingHorizontal: 15,
 
     fontSize: 16,
 
-    color: "#111827",
+    color: "#48252F",
   },
 
   inputDisabled: {
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F6EDEF",
 
     opacity: 0.7,
   },
@@ -614,11 +614,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#F8E9ED",
 
     borderWidth: 1,
 
-    borderColor: "#bfdbfe",
+    borderColor: "#E9C9D2",
   },
 
   infoIcon: {
@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
 
     borderColor: "#c084fc",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   backButtonText: {
@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#6d28d9",
+    color: "#A12E4A",
   },
 
   paymentButton: {
@@ -686,11 +686,11 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 16,
 
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
 
     elevation: 4,
 
-    shadowColor: "#7c3aed",
+    shadowColor: "#8F2942",
 
     shadowOffset: {
       width: 0,
@@ -716,7 +716,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     textAlign: "center",
   },

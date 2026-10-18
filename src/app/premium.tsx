@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderRadius: 24,
     alignItems: "center",
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
   },
 
   heroIcon: {
@@ -547,14 +547,14 @@ const styles = StyleSheet.create({
   },
 
   heroTitle: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 28,
     fontWeight: "900",
     textAlign: "center",
   },
 
   heroDescription: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     marginTop: 8,
     textAlign: "center",
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   },
 
   sectionHeading: {
-    color: "#4c1d95",
+    color: "#672036",
     fontSize: 20,
     fontWeight: "900",
     textAlign: "center",
@@ -576,13 +576,13 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 9,
     borderRadius: 14,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   check: {
-    color: "#7c3aed",
+    color: "#8F2942",
     fontSize: 22,
     fontWeight: "900",
     marginRight: 10,
@@ -600,14 +600,14 @@ const styles = StyleSheet.create({
     padding: 20,
     marginBottom: 12,
     borderRadius: 18,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 2,
-    borderColor: "#e9d5ff",
+    borderColor: "#E8C5CF",
   },
 
   packageCardSelected: {
     borderWidth: 3,
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
     backgroundColor: "#faf5ff",
   },
 
@@ -618,11 +618,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
   },
 
   badgeText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 9,
     fontWeight: "800",
   },
@@ -634,14 +634,14 @@ const styles = StyleSheet.create({
   },
 
   packageTitle: {
-    color: "#4c1d95",
+    color: "#672036",
     fontSize: 18,
     fontWeight: "900",
     textAlign: "center",
   },
 
   packagePrice: {
-    color: "#5b21b6",
+    color: "#7A263C",
     fontSize: 25,
     fontWeight: "900",
     textAlign: "center",
@@ -665,17 +665,17 @@ const styles = StyleSheet.create({
   },
 
   selectButtonSelected: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
   },
 
   selectButtonText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 12,
     fontWeight: "800",
   },
 
   selectButtonTextSelected: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   selectedPackage: {
@@ -684,7 +684,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#f3e8ff",
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
     alignItems: "center",
   },
 
@@ -695,7 +695,7 @@ const styles = StyleSheet.create({
   },
 
   selectedPackageText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 20,
     fontWeight: "900",
     textAlign: "center",
@@ -712,14 +712,14 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 2,
     borderColor: "#c084fc",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     alignItems: "center",
     justifyContent: "center",
   },
 
   paymentButtonSelected: {
-    backgroundColor: "#7c3aed",
-    borderColor: "#7c3aed",
+    backgroundColor: "#8F2942",
+    borderColor: "#8F2942",
   },
 
   paymentIcon: {
@@ -728,13 +728,13 @@ const styles = StyleSheet.create({
   },
 
   paymentText: {
-    color: "#5b21b6",
+    color: "#7A263C",
     fontSize: 13,
     fontWeight: "700",
   },
 
   paymentTextSelected: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   selectedPayment: {
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingVertical: 16,
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
   },
 
@@ -764,7 +764,7 @@ const styles = StyleSheet.create({
   },
 
   continueButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "900",
   },
@@ -788,9 +788,9 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
     borderRadius: 12,
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
   },
 
   errorText: {

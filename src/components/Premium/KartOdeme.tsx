@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     borderRadius: 22,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     marginBottom: 18,
   },
@@ -325,21 +325,21 @@ const styles = StyleSheet.create({
   },
 
   title: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 25,
     fontWeight: "900",
     textAlign: "center",
   },
 
   subtitle: {
-    color: "#ede9fe",
+    color: "#F5DCE3",
     fontSize: 15,
     fontWeight: "700",
     marginTop: 8,
   },
 
   price: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 24,
     fontWeight: "900",
     marginTop: 8,
@@ -349,9 +349,9 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
     borderRadius: 12,
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
   },
 
   errorText: {
@@ -361,15 +361,15 @@ const styles = StyleSheet.create({
   },
 
   formCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderRadius: 18,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#e9d5ff",
+    borderColor: "#E8C5CF",
   },
 
   label: {
-    color: "#4c1d95",
+    color: "#672036",
     fontSize: 13,
     fontWeight: "800",
     marginBottom: 7,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     color: "#222222",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     fontSize: 15,
   },
 
@@ -408,31 +408,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#c084fc",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   taksitButtonSelected: {
-    backgroundColor: "#7c3aed",
-    borderColor: "#7c3aed",
+    backgroundColor: "#8F2942",
+    borderColor: "#8F2942",
   },
 
   taksitText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 12,
     fontWeight: "800",
   },
 
   taksitTextSelected: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   infoBox: {
     marginTop: 18,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: "#f5f3ff",
+    backgroundColor: "#F8E9ED",
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
   },
 
   infoTitle: {
@@ -443,7 +443,7 @@ const styles = StyleSheet.create({
   },
 
   infoText: {
-    color: "#6b7280",
+    color: "#80666D",
     fontSize: 12,
     lineHeight: 18,
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
     marginTop: 18,
     paddingVertical: 16,
     borderRadius: 13,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
   },
 
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
 
   payButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 14,
     fontWeight: "900",
   },
@@ -471,12 +471,12 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
     alignItems: "center",
   },
 
   backButtonText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 14,
     fontWeight: "800",
   },

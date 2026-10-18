@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
 
   messageBubbleOther: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     borderBottomLeftRadius: 4,
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   },
 
   messageContentMine: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   messageContentOther: {
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
   },
 
   mediaTitle: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 13,
     fontWeight: "700",
     marginBottom: 2,
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
 
   openIcon: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     marginLeft: 8,
   },

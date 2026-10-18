@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 // src/app/home.tsx
+
 import { API_BASE_URL } from "../config/api";
 
 import { useNavigation } from "@react-navigation/native";
@@ -28,75 +29,125 @@ const SUNUCU_ADRESI = API_BASE_URL;
 
 type User = {
   id: number;
+
   username: string;
+
   email: string;
+
   firstName: string;
+
   lastName: string;
+
   birthDate: string;
+
   phoneNumber?: string | null;
+
   city?: string | null;
+
   active: boolean;
+
   online: boolean;
+
   emailVerified?: boolean;
+
   phoneVerified?: boolean;
+
   createdAt?: string;
+
   updatedAt?: string;
 };
 
 type Profile = {
   id: number;
+
   userId: number;
+
   about?: string | null;
+
   profession?: string | null;
+
   education?: string | null;
+
   height?: number | null;
+
   weight?: number | null;
+
   maritalStatus?: string | null;
+
   religion?: string | null;
+
   interests?: string | null;
+
   profilePhoto?: string | null;
+
   profileVerified?: boolean;
 };
 
 type DiscoverUser = {
   user: User;
+
   profile: Profile | null;
 };
 
 type Filtreler = {
   minAge: string;
+
   maxAge: string;
+
   city: string;
+
   maritalStatus: string;
+
   profession: string;
+
   education: string;
+
   minHeight: string;
+
   maxHeight: string;
+
   interest: string;
+
   onlyWithPhoto: boolean;
+
   onlyWithoutPhoto: boolean;
+
   onlySameCity: boolean;
+
   onlyActive: boolean;
 };
 
 type KendiProfil = {
   user: User;
+
   profile: Profile | null;
 };
 
 const bosFiltreler: Filtreler = {
   minAge: "",
+
   maxAge: "",
+
   city: "",
+
   maritalStatus: "",
+
   profession: "",
+
   education: "",
+
   minHeight: "",
+
   maxHeight: "",
+
   interest: "",
+
   onlyWithPhoto: false,
+
   onlyWithoutPhoto: false,
+
   onlySameCity: false,
+
   onlyActive: false,
 };
 
@@ -104,22 +155,28 @@ export default function Home() {
   const navigation = useNavigation<any>();
 
   const [users, setUsers] = useState<DiscoverUser[]>([]);
+
   const [loading, setLoading] = useState(true);
+
   const [error, setError] = useState("");
 
   const [username, setUsername] = useState("");
+
   const [currentUserCity, setCurrentUserCity] = useState("");
 
   const [mevcutKullanici, setMevcutKullanici] = useState<User | null>(null);
+
   const [mevcutProfil, setMevcutProfil] = useState<Profile | null>(null);
 
   const [filtreler, setFiltreler] = useState<Filtreler>(bosFiltreler);
+
   const [filtreModalAcik, setFiltreModalAcik] = useState(false);
 
   const [yenileme, setYenileme] = useState(false);
 
   useEffect(() => {
     void kullaniciBilgileriniYukle();
+
     void kullanicilariYukle();
   }, []);
 
@@ -188,13 +245,16 @@ export default function Home() {
   const kullanicilariYukle = async () => {
     try {
       setLoading(true);
+
       setError("");
 
       const token = await AsyncStorage.getItem("token");
+
       const userIdString = await AsyncStorage.getItem("userId");
 
       if (!token) {
         navigation.replace("index");
+
         return;
       }
 
@@ -204,26 +264,32 @@ export default function Home() {
         await AsyncStorage.multiRemove(["token", "userId", "username", "role"]);
 
         navigation.replace("index");
+
         return;
       }
 
       const headers = {
         Authorization: `Bearer ${token}`,
+
         Accept: "application/json",
       };
 
       const [usersResponse, profilesResponse] = await Promise.all([
         fetch(`${API_ADRESI}/users/home`, {
           method: "GET",
+
           headers,
         }),
+
         fetch(`${API_ADRESI}/profiles`, {
           method: "GET",
+
           headers,
         }),
       ]);
 
       const usersText = await usersResponse.text();
+
       const profilesText = await profilesResponse.text();
 
       if (!usersResponse.ok) {
@@ -262,7 +328,9 @@ export default function Home() {
       });
 
       // DÜZELTİLDİ:
+
       // yuklenenProfiller -> yuklenenProfiles
+
       const kendiProfil = yuklenenProfiles.find(
         (profil) => profil.userId === mevcutUserId,
       );
@@ -270,9 +338,12 @@ export default function Home() {
       setMevcutProfil(kendiProfil ?? null);
 
       const kesfedilenKullanicilar: DiscoverUser[] = yuklenenUsers
+
         .filter((user) => user.id !== mevcutUserId)
+
         .map((user) => ({
           user,
+
           profile: profileMap.get(user.id) ?? null,
         }));
 
@@ -287,12 +358,14 @@ export default function Home() {
       }
     } finally {
       setLoading(false);
+
       setYenileme(false);
     }
   };
 
   const yenile = () => {
     setYenileme(true);
+
     void kullanicilariYukle();
   };
 
@@ -319,7 +392,9 @@ export default function Home() {
       }
 
       const kullaniciSehri = (user.city ?? "")
+
         .trim()
+
         .toLocaleLowerCase("tr-TR");
 
       const arananSehir = filtreler.city.trim().toLocaleLowerCase("tr-TR");
@@ -343,7 +418,9 @@ export default function Home() {
       if (
         filtreler.maritalStatus.trim() &&
         !(profile?.maritalStatus ?? "")
+
           .toLocaleLowerCase("tr-TR")
+
           .includes(filtreler.maritalStatus.trim().toLocaleLowerCase("tr-TR"))
       ) {
         return false;
@@ -352,7 +429,9 @@ export default function Home() {
       if (
         filtreler.profession.trim() &&
         !(profile?.profession ?? "")
+
           .toLocaleLowerCase("tr-TR")
+
           .includes(filtreler.profession.trim().toLocaleLowerCase("tr-TR"))
       ) {
         return false;
@@ -361,7 +440,9 @@ export default function Home() {
       if (
         filtreler.education.trim() &&
         !(profile?.education ?? "")
+
           .toLocaleLowerCase("tr-TR")
+
           .includes(filtreler.education.trim().toLocaleLowerCase("tr-TR"))
       ) {
         return false;
@@ -386,7 +467,9 @@ export default function Home() {
       if (
         filtreler.interest.trim() &&
         !(profile?.interests ?? "")
+
           .toLocaleLowerCase("tr-TR")
+
           .includes(filtreler.interest.trim().toLocaleLowerCase("tr-TR"))
       ) {
         return false;
@@ -445,6 +528,7 @@ export default function Home() {
       }
 
       const aFoto = fotografVarMi(a.profile);
+
       const bFoto = fotografVarMi(b.profile);
 
       if (aFoto && !bFoto) {
@@ -484,21 +568,30 @@ export default function Home() {
   const cikisYap = () => {
     Alert.alert(
       "Çıkış Yap",
+
       "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
+
       [
         {
           text: "Vazgeç",
+
           style: "cancel",
         },
+
         {
           text: "Çıkış Yap",
+
           style: "destructive",
+
           onPress: async () => {
             try {
               await AsyncStorage.multiRemove([
                 "token",
+
                 "userId",
+
                 "username",
+
                 "role",
               ]);
 
@@ -515,9 +608,11 @@ export default function Home() {
   const bildirimleriAc = () => {
     Alert.alert(
       "Bildirimler",
+
       "Bildirim ekranını bir sonraki adımda mobil uygulamaya bağlıyoruz.",
     );
   };
+
   const begenenleriAc = () => {
     navigation.navigate("begenenler");
   };
@@ -529,6 +624,7 @@ export default function Home() {
   const favorilerimeEkleyenleriAc = () => {
     navigation.navigate("favorilerimeEkleyenler");
   };
+
   const profilAc = (userId: number) => {
     navigation.navigate("user", { id: String(userId) });
   };
@@ -537,7 +633,12 @@ export default function Home() {
     navigation.navigate("messages");
   };
 
+  const paylasimlariAc = () => {
+    navigation.navigate("paylasimlar");
+  };
+
   // Kendi profil sayfasına git
+
   const profilimiAc = () => {
     navigation.navigate("profile");
   };
@@ -545,6 +646,7 @@ export default function Home() {
   const filtreGuncelle = (alan: keyof Filtreler, deger: string | boolean) => {
     setFiltreler((onceki) => ({
       ...onceki,
+
       [alan]: deger,
     }));
   };
@@ -564,7 +666,9 @@ export default function Home() {
           {fotograf ? (
             <Image
               source={{ uri: fotograf }}
+
               style={styles.fotograf}
+
               resizeMode="cover"
             />
           ) : (
@@ -576,12 +680,14 @@ export default function Home() {
           <View
             style={[
               styles.onlineEtiket,
+
               user.online ? styles.online : styles.offline,
             ]}
           >
             <View
               style={[
                 styles.onlineNokta,
+
                 user.online ? styles.onlineNokta : styles.offlineNokta,
               ]}
             />
@@ -589,19 +695,30 @@ export default function Home() {
             <Text
               style={[
                 styles.onlineMetin,
+
                 user.online ? styles.onlineMetinAktif : styles.onlineMetinPasif,
               ]}
             >
               {user.online ? "Çevrimiçi" : "Çevrimdışı"}
             </Text>
           </View>
+
+          <View style={styles.fotografAltYazi}>
+            <Text style={styles.fotografIsim} numberOfLines={1}>
+              {user.firstName}
+
+              {yas !== null ? `, ${yas}` : ""}
+            </Text>
+
+            {!!user.city && (
+              <Text style={styles.fotografSehir} numberOfLines={1}>
+                📍 {user.city}
+              </Text>
+            )}
+          </View>
         </View>
 
         <View style={styles.kullaniciBilgileri}>
-          <Text style={styles.kullaniciAdi} numberOfLines={1}>
-            {user.firstName} {user.lastName}
-          </Text>
-
           <Text style={styles.username}>@{user.username}</Text>
 
           <View style={styles.bilgiSatiri}>
@@ -664,7 +781,9 @@ export default function Home() {
 
           <TouchableOpacity
             style={styles.profilButonu}
+
             onPress={() => profilAc(user.id)}
+
             activeOpacity={0.8}
           >
             <Text style={styles.profilButonuMetin}>Profili Gör</Text>
@@ -677,7 +796,7 @@ export default function Home() {
   if (loading) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#7c3aed" />
+        <ActivityIndicator size="large" color="#8F2942" />
 
         <Text style={styles.loadingBaslik}>Gönül Buluşması</Text>
 
@@ -690,12 +809,23 @@ export default function Home() {
     <SafeAreaView style={styles.container}>
       <FlatList
         data={siralanmisKullanicilar}
+
+        numColumns={2}
+
+        columnWrapperStyle={styles.profilKartSatiri}
+
         keyExtractor={(item) => String(item.user.id)}
+
         renderItem={renderKullanici}
+
         showsVerticalScrollIndicator={false}
+
         refreshing={yenileme}
+
         onRefresh={yenile}
+
         contentContainerStyle={styles.liste}
+
         ListHeaderComponent={
           <View>
             <View style={styles.ustBar}>
@@ -709,7 +839,9 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.bildirimButonu}
+
                 onPress={bildirimleriAc}
+
                 activeOpacity={0.8}
               >
                 <Text style={styles.bildirimIkon}>🔔</Text>
@@ -727,74 +859,71 @@ export default function Home() {
                 </Text>
 
                 <Text style={styles.heroMetin}>
-                  Profil özelliklerine göre kullanıcıları inceleyebilirsin.
+                  Profil özelliklerine göre sana en uygun kişileri bul.
                 </Text>
               </View>
             </View>
 
             <View style={styles.hizliErisimBaslikSatiri}>
-              <Text style={styles.bolumBaslik}>Hızlı Erişim</Text>
+              <Text style={styles.bolumBaslik}>Sana Özel</Text>
             </View>
 
             <View style={styles.hizliErisim}>
               <TouchableOpacity
                 style={[styles.hizliKart, styles.hizliKartPembe]}
+
                 onPress={begenenleriAc}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.hizliIkon}>❤️</Text>
 
-                <Text style={styles.hizliKartBaslik}>Seni Beğenenler</Text>
-
-                <Text style={styles.hizliKartMetin}>
-                  Seni beğenen kişileri gör
+                <Text style={styles.hizliKartEtiket} numberOfLines={1}>
+                  Beğeniler
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.hizliKart, styles.hizliKartMor]}
+
                 onPress={profilimeBakanlariAc}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.hizliIkon}>👁️</Text>
 
-                <Text style={styles.hizliKartBaslikMor}>
-                  Profilime Bakanlar
-                </Text>
-
-                <Text style={styles.hizliKartMetin}>
-                  Profilini görüntüleyenleri gör
+                <Text style={styles.hizliKartEtiket} numberOfLines={1}>
+                  Ziyaretçiler
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 style={[styles.hizliKart, styles.hizliKartTuruncu]}
+
                 onPress={favorilerimeEkleyenleriAc}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.hizliIkon}>⭐</Text>
 
-                <Text style={styles.hizliKartBaslikPembe}>
-                  Favorilerime Ekleyenler
-                </Text>
-
-                <Text style={styles.hizliKartMetin}>
-                  Seni favorilerine ekleyenleri gör
+                <Text style={styles.hizliKartEtiket} numberOfLines={1}>
+                  Favoriler
                 </Text>
               </TouchableOpacity>
 
               {/* PROFİLİM */}
+
               <TouchableOpacity
                 style={[styles.hizliKart, styles.hizliKartProfil]}
+
                 onPress={profilimiAc}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.hizliIkon}>👤</Text>
 
-                <Text style={styles.hizliKartBaslikProfil}>Profilim</Text>
-
-                <Text style={styles.hizliKartMetin}>
-                  Kendi profil bilgilerini görüntüle
+                <Text style={styles.hizliKartEtiket} numberOfLines={1}>
+                  Profilim
                 </Text>
               </TouchableOpacity>
             </View>
@@ -802,7 +931,9 @@ export default function Home() {
             <View style={styles.aksiyonSatiri}>
               <TouchableOpacity
                 style={[styles.aksiyonButonu, styles.filtreButonu]}
+
                 onPress={() => setFiltreModalAcik(true)}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.aksiyonIkon}>🔎</Text>
@@ -818,12 +949,26 @@ export default function Home() {
 
               <TouchableOpacity
                 style={[styles.aksiyonButonu, styles.mesajButonu]}
+
                 onPress={mesajlariAc}
+
                 activeOpacity={0.85}
               >
                 <Text style={styles.aksiyonIkon}>💬</Text>
 
                 <Text style={styles.mesajButonuMetin}>Mesajlar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.aksiyonButonu, styles.paylasimlarButonu]}
+
+                onPress={paylasimlariAc}
+
+                activeOpacity={0.85}
+              >
+                <Text style={styles.aksiyonIkon}>📝</Text>
+
+                <Text style={styles.paylasimlarButonuMetin}>Paylaşımlar</Text>
               </TouchableOpacity>
             </View>
 
@@ -835,6 +980,7 @@ export default function Home() {
 
                 <TouchableOpacity
                   style={styles.tekrarDeneButonu}
+
                   onPress={yenile}
                 >
                   <Text style={styles.tekrarDeneMetin}>Tekrar Dene</Text>
@@ -844,7 +990,7 @@ export default function Home() {
 
             <View style={styles.sonucBasligi}>
               <View>
-                <Text style={styles.bolumBaslik}>Kullanıcılar</Text>
+                <Text style={styles.bolumBaslik}>Sana Uygun Kullanıcılar</Text>
 
                 <Text style={styles.sonucAltMetin}>Sana uygun profiller</Text>
               </View>
@@ -871,6 +1017,7 @@ export default function Home() {
                 {filtreAktifMi && (
                   <TouchableOpacity
                     style={styles.temizleButonu}
+
                     onPress={filtreleriTemizle}
                   >
                     <Text style={styles.temizleButonuMetin}>
@@ -882,11 +1029,14 @@ export default function Home() {
             )}
           </View>
         }
+
         ListFooterComponent={
           <View style={styles.altAlan}>
             <TouchableOpacity
               style={styles.cikisButonu}
+
               onPress={cikisYap}
+
               activeOpacity={0.85}
             >
               <Text style={styles.cikisIkon}>🚪</Text>
@@ -901,8 +1051,11 @@ export default function Home() {
 
       <Modal
         visible={filtreModalAcik}
+
         animationType="slide"
+
         transparent
+
         onRequestClose={() => setFiltreModalAcik(false)}
       >
         <View style={styles.modalArkaPlan}>
@@ -918,6 +1071,7 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.modalKapatButonu}
+
                 onPress={() => setFiltreModalAcik(false)}
               >
                 <Text style={styles.modalKapatMetin}>✕</Text>
@@ -926,6 +1080,7 @@ export default function Home() {
 
             <ScrollView
               showsVerticalScrollIndicator={false}
+
               contentContainerStyle={styles.filtreScroll}
             >
               <Text style={styles.filtreGrupBaslik}>Yaş</Text>
@@ -933,19 +1088,29 @@ export default function Home() {
               <View style={styles.ikiInput}>
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
+
                   placeholder="Minimum yaş"
-                  placeholderTextColor="#9ca3af"
+
+                  placeholderTextColor="#A88F95"
+
                   keyboardType="number-pad"
+
                   value={filtreler.minAge}
+
                   onChangeText={(deger) => filtreGuncelle("minAge", deger)}
                 />
 
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
+
                   placeholder="Maksimum yaş"
-                  placeholderTextColor="#9ca3af"
+
+                  placeholderTextColor="#A88F95"
+
                   keyboardType="number-pad"
+
                   value={filtreler.maxAge}
+
                   onChangeText={(deger) => filtreGuncelle("maxAge", deger)}
                 />
               </View>
@@ -955,19 +1120,29 @@ export default function Home() {
               <View style={styles.ikiInput}>
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
+
                   placeholder="Minimum boy"
-                  placeholderTextColor="#9ca3af"
+
+                  placeholderTextColor="#A88F95"
+
                   keyboardType="number-pad"
+
                   value={filtreler.minHeight}
+
                   onChangeText={(deger) => filtreGuncelle("minHeight", deger)}
                 />
 
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
+
                   placeholder="Maksimum boy"
-                  placeholderTextColor="#9ca3af"
+
+                  placeholderTextColor="#A88F95"
+
                   keyboardType="number-pad"
+
                   value={filtreler.maxHeight}
+
                   onChangeText={(deger) => filtreGuncelle("maxHeight", deger)}
                 />
               </View>
@@ -976,9 +1151,13 @@ export default function Home() {
 
               <TextInput
                 style={styles.input}
+
                 placeholder="Şehir"
-                placeholderTextColor="#9ca3af"
+
+                placeholderTextColor="#A88F95"
+
                 value={filtreler.city}
+
                 onChangeText={(deger) => filtreGuncelle("city", deger)}
               />
 
@@ -986,33 +1165,49 @@ export default function Home() {
 
               <TextInput
                 style={styles.input}
+
                 placeholder="Medeni durum"
-                placeholderTextColor="#9ca3af"
+
+                placeholderTextColor="#A88F95"
+
                 value={filtreler.maritalStatus}
+
                 onChangeText={(deger) => filtreGuncelle("maritalStatus", deger)}
               />
 
               <TextInput
                 style={styles.input}
+
                 placeholder="Meslek"
-                placeholderTextColor="#9ca3af"
+
+                placeholderTextColor="#A88F95"
+
                 value={filtreler.profession}
+
                 onChangeText={(deger) => filtreGuncelle("profession", deger)}
               />
 
               <TextInput
                 style={styles.input}
+
                 placeholder="Eğitim"
-                placeholderTextColor="#9ca3af"
+
+                placeholderTextColor="#A88F95"
+
                 value={filtreler.education}
+
                 onChangeText={(deger) => filtreGuncelle("education", deger)}
               />
 
               <TextInput
                 style={styles.input}
+
                 placeholder="İlgi alanı"
-                placeholderTextColor="#9ca3af"
+
+                placeholderTextColor="#A88F95"
+
                 value={filtreler.interest}
+
                 onChangeText={(deger) => filtreGuncelle("interest", deger)}
               />
 
@@ -1020,14 +1215,17 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.checkboxSatiri}
+
                 onPress={() =>
                   filtreGuncelle("onlyActive", !filtreler.onlyActive)
                 }
+
                 activeOpacity={0.8}
               >
                 <View
                   style={[
                     styles.checkbox,
+
                     filtreler.onlyActive && styles.checkboxSecili,
                   ]}
                 >
@@ -1043,14 +1241,17 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.checkboxSatiri}
+
                 onPress={() =>
                   filtreGuncelle("onlySameCity", !filtreler.onlySameCity)
                 }
+
                 activeOpacity={0.8}
               >
                 <View
                   style={[
                     styles.checkbox,
+
                     filtreler.onlySameCity && styles.checkboxSecili,
                   ]}
                 >
@@ -1064,18 +1265,23 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.checkboxSatiri}
+
                 onPress={() => {
                   setFiltreler((onceki) => ({
                     ...onceki,
+
                     onlyWithPhoto: !onceki.onlyWithPhoto,
+
                     onlyWithoutPhoto: false,
                   }));
                 }}
+
                 activeOpacity={0.8}
               >
                 <View
                   style={[
                     styles.checkbox,
+
                     filtreler.onlyWithPhoto && styles.checkboxSecili,
                   ]}
                 >
@@ -1089,18 +1295,23 @@ export default function Home() {
 
               <TouchableOpacity
                 style={styles.checkboxSatiri}
+
                 onPress={() => {
                   setFiltreler((onceki) => ({
                     ...onceki,
+
                     onlyWithoutPhoto: !onceki.onlyWithoutPhoto,
+
                     onlyWithPhoto: false,
                   }));
                 }}
+
                 activeOpacity={0.8}
               >
                 <View
                   style={[
                     styles.checkbox,
+
                     filtreler.onlyWithoutPhoto && styles.checkboxSecili,
                   ]}
                 >
@@ -1115,6 +1326,7 @@ export default function Home() {
               <View style={styles.filtreButonlari}>
                 <TouchableOpacity
                   style={styles.filtreTemizleButonu}
+
                   onPress={filtreleriTemizle}
                 >
                   <Text style={styles.filtreTemizleMetin}>Temizle</Text>
@@ -1122,6 +1334,7 @@ export default function Home() {
 
                 <TouchableOpacity
                   style={styles.filtreUygulaButonu}
+
                   onPress={() => setFiltreModalAcik(false)}
                 >
                   <Text style={styles.filtreUygulaMetin}>Uygula</Text>
@@ -1138,70 +1351,110 @@ export default function Home() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#faf7ff",
+
+    backgroundColor: "#FFF6F8",
   },
 
   liste: {
-    padding: 16,
-    paddingBottom: 30,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 110,
+  },
+
+  profilKartSatiri: {
+    justifyContent: "space-between",
+
+    gap: 12,
   },
 
   loadingContainer: {
     flex: 1,
-    backgroundColor: "#faf7ff",
+
+    backgroundColor: "#FFF6F8",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     padding: 24,
   },
 
   loadingBaslik: {
     marginTop: 18,
+
     fontSize: 25,
+
     fontWeight: "800",
-    color: "#5b21b6",
+
+    color: "#76203D",
   },
 
   loadingMetin: {
     marginTop: 8,
+
     fontSize: 15,
-    color: "#6b7280",
+
+    color: "#80666D",
   },
 
   ustBar: {
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
+
     marginBottom: 16,
   },
 
   ustBarBaslik: {
     fontSize: 25,
-    fontWeight: "800",
-    color: "#4c1d95",
+
+    fontWeight: "900",
+
+    color: "#86143F",
+
+    letterSpacing: -0.6,
   },
 
   ustBarAltMetin: {
     marginTop: 4,
-    fontSize: 15,
-    color: "#6d28d9",
+
+    fontSize: 14,
+
+    color: "#9C526B",
+
     fontWeight: "600",
   },
 
   bildirimButonu: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
+    width: 52,
+
+    height: 52,
+
+    borderRadius: 26,
+
+    backgroundColor: "#FFFFFF",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     borderWidth: 1,
-    borderColor: "#e9d5ff",
+
+    borderColor: "#E9C5D2",
+
     elevation: 2,
-    shadowColor: "#5b21b6",
+
+    shadowColor: "#7A263C",
+
     shadowOpacity: 0.08,
+
     shadowRadius: 6,
+
     shadowOffset: {
       width: 0,
+
       height: 3,
     },
   },
@@ -1211,34 +1464,51 @@ const styles = StyleSheet.create({
   },
 
   hero: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#B71950",
+
     borderRadius: 24,
-    padding: 20,
+
+    padding: 18,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     marginBottom: 20,
+
     elevation: 4,
-    shadowColor: "#5b21b6",
+
+    shadowColor: "#7A263C",
+
     shadowOpacity: 0.2,
+
     shadowRadius: 10,
+
     shadowOffset: {
       width: 0,
+
       height: 5,
     },
   },
 
   heroIkon: {
-    width: 58,
-    height: 58,
-    borderRadius: 18,
+    width: 66,
+
+    height: 66,
+
+    borderRadius: 22,
+
     backgroundColor: "rgba(255,255,255,0.18)",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     marginRight: 14,
   },
 
   heroKalp: {
-    fontSize: 29,
+    fontSize: 40,
   },
 
   heroYaziAlani: {
@@ -1246,16 +1516,21 @@ const styles = StyleSheet.create({
   },
 
   heroBaslik: {
-    color: "#ffffff",
-    fontSize: 19,
-    fontWeight: "800",
+    color: "#FFFCFA",
+
+    fontSize: 20,
+
+    fontWeight: "900",
+
     marginBottom: 5,
   },
 
   heroMetin: {
     color: "rgba(255,255,255,0.88)",
-    fontSize: 13,
-    lineHeight: 19,
+
+    fontSize: 14,
+
+    lineHeight: 20,
   },
 
   hizliErisimBaslikSatiri: {
@@ -1264,546 +1539,795 @@ const styles = StyleSheet.create({
 
   bolumBaslik: {
     fontSize: 21,
-    fontWeight: "800",
-    color: "#4c1d95",
+
+    fontWeight: "900",
+
+    color: "#721334",
+
+    letterSpacing: -0.4,
   },
 
   hizliErisim: {
-    gap: 12,
-    marginBottom: 18,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    justifyContent: "space-between",
+    gap: 7,
+    marginBottom: 20,
   },
 
   hizliKart: {
-    minHeight: 100,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 98,
     borderRadius: 20,
-    padding: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 3,
     borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 3,
+    shadowColor: "#9F1748",
+    shadowOpacity: 0.09,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
   },
 
   hizliKartPembe: {
-    backgroundColor: "#fff1f2",
-    borderColor: "#fbcfe8",
+    backgroundColor: "#FFF0F5",
+
+    borderColor: "#F6D0DD",
   },
 
   hizliKartMor: {
-    backgroundColor: "#f5f3ff",
-    borderColor: "#ddd6fe",
+    backgroundColor: "#F0ECFF",
+
+    borderColor: "#DED5FF",
   },
 
   hizliKartTuruncu: {
-    backgroundColor: "#fff7ed",
-    borderColor: "#fed7aa",
+    backgroundColor: "#FFF4E7",
+
+    borderColor: "#F5DEC5",
   },
 
   hizliKartProfil: {
-    backgroundColor: "#eff6ff",
-    borderColor: "#bfdbfe",
+    backgroundColor: "#F8E9ED",
+
+    borderColor: "#E9C9D2",
   },
 
   hizliIkon: {
-    fontSize: 25,
-    marginBottom: 7,
+    fontSize: 29,
+    marginBottom: 8,
+  },
+
+  hizliKartEtiket: {
+    color: "#71203D",
+    fontSize: 10,
+    fontWeight: "900",
+    textAlign: "center",
+    letterSpacing: 0,
   },
 
   hizliKartBaslik: {
     color: "#9d174d",
-    fontSize: 16,
+
+    fontSize: 11,
+
     fontWeight: "800",
   },
 
   hizliKartBaslikMor: {
-    color: "#5b21b6",
-    fontSize: 16,
+    color: "#76203D",
+
+    fontSize: 13,
+
     fontWeight: "800",
   },
 
   hizliKartBaslikPembe: {
-    color: "#c2410c",
-    fontSize: 16,
+    color: "#A94C45",
+
+    fontSize: 13,
+
     fontWeight: "800",
   },
 
   hizliKartBaslikProfil: {
-    color: "#1d4ed8",
-    fontSize: 16,
+    color: "#8F2942",
+
+    fontSize: 13,
+
     fontWeight: "800",
   },
 
   hizliKartMetin: {
-    marginTop: 3,
-    color: "#6b7280",
-    fontSize: 13,
+    marginTop: 2,
+
+    color: "#80666D",
+
+    fontSize: 10,
+
+    lineHeight: 14,
   },
 
   aksiyonSatiri: {
     flexDirection: "row",
+
     gap: 10,
+
     marginBottom: 22,
   },
 
   aksiyonButonu: {
     flex: 1,
-    minHeight: 50,
-    borderRadius: 15,
+
+    minHeight: 52,
+
+    borderRadius: 18,
+
     alignItems: "center",
+
     justifyContent: "center",
+
     flexDirection: "row",
   },
 
   filtreButonu: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#A7194B",
   },
 
   mesajButonu: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
+
     borderWidth: 1,
-    borderColor: "#c4b5fd",
+
+    borderColor: "#DDB4C0",
   },
 
   aksiyonIkon: {
     fontSize: 18,
+
     marginRight: 7,
   },
 
   filtreButonuMetin: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontWeight: "800",
-    fontSize: 15,
+
+    fontSize: 14,
   },
 
   mesajButonuMetin: {
-    color: "#6d28d9",
+    color: "#A02A50",
+
     fontWeight: "800",
+
     fontSize: 15,
+  },
+
+  paylasimlarButonu: {
+    backgroundColor: "#D62969",
+  },
+
+  paylasimlarButonuMetin: {
+    color: "#FFFCFA",
+
+    fontWeight: "800",
+
+    fontSize: 14,
   },
 
   filtreRozeti: {
     position: "absolute",
+
     top: -5,
+
     right: -5,
+
     width: 22,
+
     height: 22,
+
     borderRadius: 11,
-    backgroundColor: "#ec4899",
+
+    backgroundColor: "#D62969",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   filtreRozetiMetin: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontWeight: "900",
   },
 
   hataKutusu: {
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCEAF0",
+
     borderWidth: 1,
-    borderColor: "#fecaca",
+
+    borderColor: "#EFC1CC",
+
     borderRadius: 18,
+
     padding: 16,
+
     marginBottom: 20,
   },
 
   hataBaslik: {
-    color: "#b91c1c",
+    color: "#9B2947",
+
     fontSize: 16,
+
     fontWeight: "800",
+
     marginBottom: 5,
   },
 
   hataMetin: {
-    color: "#7f1d1d",
-    fontSize: 13,
-    lineHeight: 19,
+    color: "#57172E",
+
+    fontSize: 14,
+
+    lineHeight: 20,
   },
 
   tekrarDeneButonu: {
     marginTop: 12,
+
     alignSelf: "flex-start",
-    backgroundColor: "#dc2626",
+
+    backgroundColor: "#B72F4B",
+
     paddingHorizontal: 16,
+
     paddingVertical: 9,
+
     borderRadius: 10,
   },
 
   tekrarDeneMetin: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontWeight: "800",
   },
 
   sonucBasligi: {
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
+
     marginBottom: 14,
   },
 
   sonucAltMetin: {
     marginTop: 3,
-    color: "#6b7280",
+
+    color: "#80666D",
+
     fontSize: 13,
   },
 
   kullaniciSayisi: {
     minWidth: 42,
+
     height: 36,
+
     paddingHorizontal: 10,
+
     borderRadius: 18,
-    backgroundColor: "#ede9fe",
+
+    backgroundColor: "#F8E5EC",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   kullaniciSayisiMetin: {
-    color: "#5b21b6",
-    fontSize: 15,
-    fontWeight: "800",
+    color: "#76203D",
+
+    fontSize: 14,
+
+    fontWeight: "900",
   },
 
   kullaniciKart: {
-    backgroundColor: "#ffffff",
-    borderRadius: 22,
-    overflow: "hidden",
+    width: "48%",
+    height: 500,
     marginBottom: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    overflow: "hidden",
     borderWidth: 1,
-    borderColor: "#e9e3f8",
-    elevation: 3,
-    shadowColor: "#5b21b6",
-    shadowOpacity: 0.09,
-    shadowRadius: 8,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+    borderColor: "#F7DCE5",
+    elevation: 4,
+    shadowColor: "#8F1747",
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
 
   fotografAlani: {
-    height: 235,
-    backgroundColor: "#ede9fe",
+    height: 205,
+    backgroundColor: "#F8E5EC",
     position: "relative",
   },
 
   fotograf: {
     width: "100%",
+
     height: "100%",
   },
 
   varsayilanFotograf: {
     flex: 1,
+
     alignItems: "center",
+
     justifyContent: "center",
-    backgroundColor: "#ede9fe",
+
+    backgroundColor: "#F8E5EC",
   },
 
   varsayilanFotografMetin: {
     fontSize: 72,
   },
 
+  fotografAltYazi: {
+    display: "none",
+  },
+
+  fotografIsim: {
+    color: "#FFFFFF",
+
+    fontSize: 17,
+
+    fontWeight: "900",
+
+    letterSpacing: -0.2,
+  },
+
+  fotografSehir: {
+    color: "rgba(255,255,255,0.95)",
+
+    fontSize: 12,
+
+    fontWeight: "700",
+
+    marginTop: 4,
+  },
+
   onlineEtiket: {
     position: "absolute",
+
     top: 12,
+
     right: 12,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     paddingHorizontal: 11,
+
     paddingVertical: 7,
+
     borderRadius: 20,
   },
 
   online: {
     backgroundColor: "rgba(220,252,231,0.96)",
+
     borderWidth: 1,
+
     borderColor: "rgba(34,197,94,0.25)",
   },
 
   offline: {
     backgroundColor: "rgba(243,244,246,0.96)",
+
     borderWidth: 1,
+
     borderColor: "rgba(107,114,128,0.18)",
   },
 
   onlineNokta: {
     width: 9,
+
     height: 9,
+
     borderRadius: 5,
+
     marginRight: 6,
-    backgroundColor: "#22c55e",
+
+    backgroundColor: "#35B779",
   },
 
   offlineNokta: {
-    backgroundColor: "#9ca3af",
+    backgroundColor: "#A88F95",
   },
 
   onlineMetin: {
     fontSize: 12,
-    fontWeight: "800",
+
+    fontWeight: "900",
   },
 
   onlineMetinAktif: {
-    color: "#15803d",
+    color: "#277A54",
   },
 
   onlineMetinPasif: {
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   kullaniciBilgileri: {
-    padding: 17,
+    padding: 13,
+    flex: 1,
   },
 
   kullaniciAdi: {
-    color: "#4c1d95",
-    fontSize: 19,
-    fontWeight: "800",
+    color: "#48252F",
+
+    fontSize: 16,
+
+    fontWeight: "900",
   },
 
   username: {
-    color: "#7c3aed",
-    fontSize: 13,
-    fontWeight: "600",
-    marginTop: 3,
-    marginBottom: 10,
+    color: "#896A72",
+
+    fontSize: 11,
+
+    marginTop: 2,
+
+    marginBottom: 6,
   },
 
   bilgiSatiri: {
-    gap: 5,
-    marginBottom: 7,
+    gap: 3,
+
+    marginBottom: 5,
   },
 
   bilgi: {
-    color: "#4b5563",
-    fontSize: 13,
+    color: "#694650",
+
+    fontSize: 12,
   },
 
   detayBilgisi: {
-    color: "#6b7280",
-    fontSize: 13,
+    color: "#896A72",
+
+    fontSize: 12,
+
     marginTop: 4,
   },
 
   etiketler: {
     flexDirection: "row",
+
     flexWrap: "wrap",
+
     gap: 7,
+
     marginTop: 12,
   },
 
   aktifEtiket: {
-    backgroundColor: "#dcfce7",
+    backgroundColor: "#E5F5EC",
+
     paddingHorizontal: 9,
+
     paddingVertical: 5,
+
     borderRadius: 12,
   },
 
   aktifEtiketMetin: {
-    color: "#15803d",
+    color: "#277A54",
+
     fontSize: 11,
+
     fontWeight: "800",
   },
 
   fotografEtiket: {
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F8E5EC",
+
     paddingHorizontal: 9,
+
     paddingVertical: 5,
+
     borderRadius: 12,
   },
 
   fotografEtiketMetin: {
-    color: "#6d28d9",
+    color: "#A02A50",
+
     fontSize: 11,
+
     fontWeight: "800",
   },
 
   dogrulanmisEtiket: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#F6E6EB",
+
     paddingHorizontal: 9,
+
     paddingVertical: 5,
+
     borderRadius: 12,
   },
 
   dogrulanmisEtiketMetin: {
-    color: "#1d4ed8",
+    color: "#8F2942",
+
     fontSize: 11,
+
     fontWeight: "800",
   },
 
   hakkindaAlani: {
-    minHeight: 62,
-    marginTop: 12,
-    marginBottom: 14,
+    minHeight: 32,
+
+    marginTop: 6,
+
+    marginBottom: 8,
   },
 
   hakkinda: {
-    color: "#6b7280",
-    fontSize: 13,
-    lineHeight: 19,
+    color: "#896A72",
+
+    fontSize: 11,
+
+    lineHeight: 15,
   },
 
   hakkindaBos: {
-    color: "#9ca3af",
-    fontSize: 13,
+    color: "#A88F95",
+
+    fontSize: 10,
+
     fontStyle: "italic",
-    lineHeight: 19,
+
+    lineHeight: 14,
   },
 
   profilButonu: {
-    minHeight: 47,
+    minHeight: 46,
+    marginTop: "auto",
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#D62969",
     alignItems: "center",
     justifyContent: "center",
   },
 
   profilButonuMetin: {
-    color: "#ffffff",
-    fontSize: 15,
+    color: "#FFFCFA",
+
+    fontSize: 12,
+
     fontWeight: "800",
   },
 
   bosSonuc: {
-    backgroundColor: "#faf7ff",
+    backgroundColor: "#FFF6F8",
+
     borderWidth: 1,
-    borderColor: "#e9d5ff",
+
+    borderColor: "#E9C5D2",
+
     borderRadius: 20,
+
     padding: 25,
+
     alignItems: "center",
+
     marginBottom: 18,
   },
 
   bosSonucIkon: {
     fontSize: 38,
+
     marginBottom: 10,
   },
 
   bosSonucBaslik: {
-    color: "#5b21b6",
+    color: "#76203D",
+
     fontSize: 17,
+
     fontWeight: "800",
+
     textAlign: "center",
   },
 
   bosSonucMetin: {
     marginTop: 7,
-    color: "#6b7280",
+
+    color: "#80666D",
+
     fontSize: 13,
+
     textAlign: "center",
+
     lineHeight: 19,
   },
 
   temizleButonu: {
     marginTop: 15,
-    backgroundColor: "#7c3aed",
+
+    backgroundColor: "#A7194B",
+
     paddingHorizontal: 18,
+
     paddingVertical: 10,
+
     borderRadius: 12,
   },
 
   temizleButonuMetin: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontWeight: "800",
+
     fontSize: 13,
   },
 
   altAlan: {
-    paddingTop: 10,
+    paddingTop: 12,
+
     paddingBottom: 25,
+
     alignItems: "center",
   },
 
   cikisButonu: {
     width: "100%",
-    minHeight: 50,
-    borderRadius: 15,
+
+    minHeight: 52,
+
+    borderRadius: 18,
+
     borderWidth: 1,
-    borderColor: "#ef4444",
-    backgroundColor: "#ffffff",
+
+    borderColor: "#C83B58",
+
+    backgroundColor: "#FFFFFF",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     flexDirection: "row",
   },
 
   cikisIkon: {
     fontSize: 18,
+
     marginRight: 7,
   },
 
   cikisMetin: {
-    color: "#dc2626",
-    fontSize: 15,
-    fontWeight: "800",
+    color: "#B72F4B",
+
+    fontSize: 16,
+
+    fontWeight: "900",
   },
 
   altYazi: {
     marginTop: 14,
-    color: "#9ca3af",
+
+    color: "#A88F95",
+
     fontSize: 12,
   },
 
   modalArkaPlan: {
     flex: 1,
+
     backgroundColor: "rgba(0,0,0,0.45)",
+
     justifyContent: "flex-end",
   },
 
   filtreModal: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFFFF",
+
     borderTopLeftRadius: 28,
+
     borderTopRightRadius: 28,
+
     maxHeight: "92%",
+
     paddingTop: 20,
   },
 
   modalBaslikSatiri: {
     paddingHorizontal: 20,
+
     paddingBottom: 15,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     justifyContent: "space-between",
+
     borderBottomWidth: 1,
-    borderBottomColor: "#eee8fa",
+
+    borderBottomColor: "#EAD9DD",
   },
 
   modalBaslik: {
-    color: "#4c1d95",
+    color: "#57172E",
+
     fontSize: 23,
+
     fontWeight: "800",
   },
 
   modalAltBaslik: {
-    color: "#6b7280",
+    color: "#80666D",
+
     marginTop: 3,
+
     fontSize: 13,
   },
 
   modalKapatButonu: {
     width: 40,
+
     height: 40,
+
     borderRadius: 14,
-    backgroundColor: "#f5f3ff",
+
+    backgroundColor: "#F8E9ED",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   modalKapatMetin: {
-    color: "#6d28d9",
-    fontSize: 19,
-    fontWeight: "800",
+    color: "#A02A50",
+
+    fontSize: 20,
+
+    fontWeight: "900",
   },
 
   filtreScroll: {
     padding: 20,
+
     paddingBottom: 35,
   },
 
   filtreGrupBaslik: {
-    color: "#5b21b6",
+    color: "#76203D",
+
     fontSize: 14,
+
     fontWeight: "800",
+
     marginTop: 14,
+
     marginBottom: 8,
   },
 
   ikiInput: {
     flexDirection: "row",
+
     gap: 10,
   },
 
@@ -1813,85 +2337,125 @@ const styles = StyleSheet.create({
 
   input: {
     minHeight: 50,
-    backgroundColor: "#fafafa",
+
+    backgroundColor: "#FFF9F6",
+
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+
+    borderColor: "#E9C5D2",
+
     borderRadius: 14,
-    paddingHorizontal: 14,
-    color: "#111827",
+
+    paddingHorizontal: 16,
+
+    color: "#48252F",
+
     fontSize: 14,
+
     marginBottom: 10,
   },
 
   checkboxSatiri: {
     minHeight: 50,
+
     flexDirection: "row",
+
     alignItems: "center",
+
     marginBottom: 3,
   },
 
   checkbox: {
     width: 24,
+
     height: 24,
+
     borderRadius: 7,
+
     borderWidth: 2,
-    borderColor: "#c4b5fd",
+
+    borderColor: "#DDB4C0",
+
     alignItems: "center",
+
     justifyContent: "center",
+
     marginRight: 10,
   },
 
   checkboxSecili: {
-    backgroundColor: "#7c3aed",
-    borderColor: "#7c3aed",
+    backgroundColor: "#A7194B",
+
+    borderColor: "#8F2942",
   },
 
   checkboxTik: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontWeight: "900",
+
     fontSize: 15,
   },
 
   checkboxMetin: {
-    color: "#374151",
+    color: "#694650",
+
     fontSize: 14,
+
     fontWeight: "600",
   },
 
   filtreButonlari: {
     flexDirection: "row",
+
     gap: 10,
+
     marginTop: 20,
   },
 
   filtreTemizleButonu: {
     flex: 1,
+
     minHeight: 50,
+
     borderRadius: 14,
+
     borderWidth: 1,
-    borderColor: "#c4b5fd",
+
+    borderColor: "#DDB4C0",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   filtreTemizleMetin: {
-    color: "#6d28d9",
+    color: "#A02A50",
+
     fontSize: 14,
+
     fontWeight: "800",
   },
 
   filtreUygulaButonu: {
     flex: 1,
+
     minHeight: 50,
+
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+
+    backgroundColor: "#A7194B",
+
     alignItems: "center",
+
     justifyContent: "center",
   },
 
   filtreUygulaMetin: {
-    color: "#ffffff",
+    color: "#FFFCFA",
+
     fontSize: 14,
+
     fontWeight: "800",
   },
 });

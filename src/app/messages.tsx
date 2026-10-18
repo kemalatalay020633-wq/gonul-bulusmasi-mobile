@@ -37,25 +37,47 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * ARAMA DURUM KİLİTLERİ
 
+
+
    * =========================================================
 
+
+
    *
+
+
 
    * Aynı anda birden fazla sesli/görüntülü arama başlatılmasını
 
+
+
    * engeller.
+
+
 
    *
 
+
+
    * Özellikle hızlı çift tıklama veya component yeniden render
+
+
 
    * olduğunda aynı WebSocket Promise'inin birden fazla kez
 
+
+
    * beklenmesini önler.
+
+
 
    */
 
@@ -79,17 +101,31 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * WEBRTC STREAM DURUMLARI
 
+
+
    * =========================================================
+
+
 
    *
 
+
+
    * Arayan tarafın görüntülü arama ekranı Messages içinde
 
+
+
    * açıldığı için yerel ve uzak stream'i burada tutuyoruz.
+
+
 
    */
 
@@ -112,11 +148,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * PREMIUM DURUMU
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -126,11 +170,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * API
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -138,11 +190,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * MESAJLAR
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -220,11 +280,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * TARİH FORMATLA
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -244,51 +312,99 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * ARAMA İZNİ KONTROLÜ
 
+
+
    * =========================================================
 
+
+
    *
+
+
 
    * Arama başlamadan ÖNCE karşı tarafın izin durumunu kontrol
 
+
+
    * ediyoruz.
 
+
+
    *
+
+
 
    * Örnek:
 
+
+
    *
+
+
 
    * Kemal -> Ayşe'yi arıyor.
 
+
+
    *
+
+
 
    * Kontrol edilen kayıt:
 
+
+
    *
+
+
 
    * Ayşe -> Kemal
 
+
+
    *
+
+
 
    * Yani Ayşe, Kemal'in Ayşe'yi aramasına izin vermiş mi?
 
+
+
    *
+
+
 
    * Bu kontrol geçmeden:
 
+
+
    *
+
+
 
    * - arama ekranı açılmaz
 
+
+
    * - WebRTC ayarlanmaz
+
+
 
    * - mikrofon/kamera açılmaz
 
+
+
    * - CALL_OFFER gönderilmez
+
+
 
    */
 
@@ -486,11 +602,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * ARAMA EKRANINI 2 SANİYE SONRA KAPAT
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -522,11 +646,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * ARAMA TIMER TEMİZLİĞİ
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -542,66 +674,126 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * SESLİ ARAMA
 
+
+
    * =========================================================
 
+
+
    *
+
+
 
    * Arama akışı:
 
+
+
    *
+
+
 
    * 1. Kullanıcı kontrol edilir.
 
+
+
    * 2. AramaWebRTC ayarlanır.
+
+
 
    * 3. aramaBaslat() çağrılır.
 
+
+
    * 4. Mevcut useMessages STOMP bağlantısı kullanılır.
+
+
 
    * 5. WebRTC offer oluşturulur.
 
+
+
    * 6. CALL_OFFER mevcut STOMP bağlantısından gönderilir.
 
+
+
    *
+
+
 
    * DİKKAT:
 
+
+
    *
+
+
 
    * Burada ayrıca:
 
+
+
    *
+
+
 
    * await aramaWebRTC.webSocketBaglantisiAc();
 
+
+
    *
+
+
 
    * çağrılmıyor.
 
+
+
    *
+
+
 
    * Çünkü aramaBaslat() zaten WebSocket bağlantısını
 
+
+
    * kendi içinde yönetiyor.
+
+
 
    *
 
+
+
    * =========================================================
+
+
 
    */
 
   const handleSesliArama = async () => {
     /*
 
+
+
      * =========================================================
+
+
 
      * ÇİFT TIKLAMA / TEKRARLI ÇAĞRI KONTROLÜ
 
+
+
      * =========================================================
+
+
 
      */
 
@@ -615,13 +807,23 @@ export default function Messages() {
 
     /*
 
+
+
      * Kilidi hemen koyuyoruz.
+
+
 
      *
 
+
+
      * Böylece await öncesinde bile ikinci bir çağrı içeri
 
+
+
      * giremez.
+
+
 
      */
 
@@ -658,11 +860,19 @@ export default function Messages() {
     try {
       /*
 
+
+
        * =====================================================
+
+
 
        * HEDEF KULLANICI KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -674,11 +884,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * MEVCUT KULLANICI KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -692,11 +910,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ID DÖNÜŞÜMÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -706,11 +932,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ID GEÇERLİLİK KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -728,11 +962,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * KENDİNİ ARAMA KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -744,11 +986,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMA BİLGİLERİ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -762,25 +1012,47 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMA İZNİ KONTROLÜ
 
+
+
        * =====================================================
 
+
+
        *
+
+
 
        * İzin yoksa burada return ediyoruz.
 
+
+
        *
+
+
 
        * Böylece:
 
+
+
        * - WebRTC ayarlanmaz
+
+
 
        * - mikrofon açılmaz
 
+
+
        * - CALL_OFFER oluşmaz
+
+
 
        */
 
@@ -792,7 +1064,11 @@ export default function Messages() {
 
       /*
 
+
+
        * İzin kontrolünden SONRA arama ekranını açıyoruz.
+
+
 
        */
 
@@ -800,11 +1076,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * WEBRTC AYARLA
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -814,31 +1098,59 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMAYI BAŞLAT
 
+
+
        * =====================================================
 
+
+
        *
+
+
 
        * WebSocket bağlantısını burada ayrıca açmıyoruz.
 
+
+
        *
+
+
 
        * aramaBaslat():
 
+
+
        *
+
+
 
        * - Mevcut STOMP taşıyıcısını kullanır
 
+
+
        * - PeerConnection oluşturur
+
+
 
        * - Mikrofonu açar
 
+
+
        * - Offer oluşturur
 
+
+
        * - CALL_OFFER gönderir
+
+
 
        */
 
@@ -854,11 +1166,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * HATA DETAYI
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -872,17 +1192,31 @@ export default function Messages() {
     } finally {
       /*
 
+
+
        * =====================================================
+
+
 
        * KİLİDİ AÇ
 
+
+
        * =====================================================
+
+
 
        *
 
+
+
        * WebSocket veya WebRTC işlemi bittiğinde tekrar arama
 
+
+
        * yapılabilmesine izin veriyoruz.
+
+
 
        */
 
@@ -894,48 +1228,90 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * GÖRÜNTÜLÜ ARAMA
 
+
+
    * =========================================================
 
+
+
    *
+
+
 
    * Arama akışı:
 
+
+
    *
+
+
 
    * 1. Kullanıcı kontrol edilir.
 
+
+
    * 2. AramaWebRTC ayarlanır.
+
+
 
    * 3. aramaBaslat() çağrılır.
 
+
+
    * 4. Mevcut useMessages STOMP bağlantısı kullanılır.
+
+
 
    * 5. Kamera + mikrofon açılır.
 
+
+
    * 6. PeerConnection oluşturulur.
+
+
 
    * 7. Offer oluşturulur.
 
+
+
    * 8. CALL_OFFER mevcut STOMP bağlantısından gönderilir.
+
+
 
    *
 
+
+
    * =========================================================
+
+
 
    */
 
   const handleGoruntuluArama = async () => {
     /*
 
+
+
      * =========================================================
+
+
 
      * ÇİFT TIKLAMA / TEKRARLI ÇAĞRI KONTROLÜ
 
+
+
      * =========================================================
+
+
 
      */
 
@@ -980,11 +1356,19 @@ export default function Messages() {
     try {
       /*
 
+
+
        * =====================================================
+
+
 
        * HEDEF KULLANICI KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -996,11 +1380,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * MEVCUT KULLANICI KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1014,11 +1406,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ID DÖNÜŞÜMÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1028,11 +1428,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ID GEÇERLİLİK KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1050,11 +1458,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * KENDİNİ ARAMA KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1066,11 +1482,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMA BİLGİLERİ
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1084,15 +1508,27 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMA İZNİ KONTROLÜ
 
+
+
        * =====================================================
+
+
 
        *
 
+
+
        * Sesli ve görüntülü arama aynı izni kullanır.
+
+
 
        */
 
@@ -1104,7 +1540,11 @@ export default function Messages() {
 
       /*
 
+
+
        * İzin kontrolünden SONRA arama ekranını açıyoruz.
+
+
 
        */
 
@@ -1112,11 +1552,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * WEBRTC AYARLA
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1126,11 +1574,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * ARAMAYI BAŞLAT
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1146,11 +1602,19 @@ export default function Messages() {
 
       /*
 
+
+
        * =====================================================
+
+
 
        * HATA DETAYI
 
+
+
        * =====================================================
+
+
 
        */
 
@@ -1172,30 +1636,70 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * GELEN ARAMA DİNLEYİCİSİ
 
+
+
    * =========================================================
+
+
 
    *
 
+
+
    * Kullanıcı mesajlar ekranındayken sürekli arama topic'ini
+
+
 
    * dinler. Böylece karşı taraf CALL_OFFER gönderdiğinde
 
+
+
    * gelen arama ekranı açılır.
+
+
 
    */
 
   /*
+
+
+
    * =========================================================
+
+
+
    * GELEN ARAMA DİNLEYİCİSİ
+
+
+
    * =========================================================
+
+
+
    *
+
+
+
    * Gelen arama ve WebRTC olayları burada yönetilir.
+
+
+
    * STOMP arama sinyallerini useMessages.ts yönetir.
+
+
+
    * Bu dosyada ikinci bir sinyal dinleyicisi kurulmaz.
+
+
+
    */
 
   useEffect(() => {
@@ -1207,25 +1711,34 @@ export default function Messages() {
 
     if (!Number.isFinite(kullaniciId)) {
       console.error("❌ GELEN ARAMA: Geçersiz kullanıcı ID:", currentUserId);
+
       return;
     }
 
     console.log("======================================");
+
     console.log("📞 GELEN ARAMA DİNLEYİCİSİ BAŞLATILIYOR");
+
     console.log("📞 Kullanıcı ID:", kullaniciId);
+
     console.log("======================================");
 
     const olayDinleyiciTemizleyicileri: Array<() => void> = [];
 
     // Gelen arama teklifi
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("teklif", (mesaj) => {
         console.log("📞 GELEN ARAMA VAR");
+
         console.log("📞 Arayan ID:", mesaj.arayanId);
+
         console.log("📞 Aranan ID:", mesaj.arananId);
+
         console.log("📞 Arama türü:", mesaj.aramaTuru);
 
         setGelenAramaMesaji(mesaj);
+
         setGelenAramaTuru(mesaj.aramaTuru);
 
         let isim = `Kullanıcı ${mesaj.arayanId}`;
@@ -1241,15 +1754,18 @@ export default function Messages() {
         }
 
         setGelenAramaAdi(isim);
+
         setGelenAramaAcik(true);
       }),
     );
 
     // Karşı tarafın cevabı
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("cevap", async (mesaj) => {
         try {
           await aramaWebRTC.cevabiIsle(mesaj.cevap);
+
           console.log("🟢 CALL_ANSWER İŞLENDİ");
         } catch (hata) {
           console.error("❌ CALL_ANSWER İŞLEME HATASI:", hata);
@@ -1258,20 +1774,27 @@ export default function Messages() {
     );
 
     // Karşı taraf aramayı reddetti
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("reddet", () => {
         console.log("📵 KARŞI TARAF ARAMAYI REDDETTİ");
 
         if (aramaKapanmaZamanlayicisi.current) {
           clearTimeout(aramaKapanmaZamanlayicisi.current);
+
           aramaKapanmaZamanlayicisi.current = null;
         }
 
         setGelenAramaAcik(false);
+
         setGelenAramaMesaji(null);
+
         setAramaAcik(false);
+
         setYerelStreamUrl(null);
+
         setUzakStreamUrl(null);
+
         setAramaDurumu("Arama reddedildi.");
 
         void aramaWebRTC.aramayiBitir(true).catch((hata) => {
@@ -1281,6 +1804,7 @@ export default function Messages() {
     );
 
     // Karşı taraf aramayı bitirdi
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("bitir", () => {
         console.log("📞 KARŞI TARAF ARAMAYI BİTİRDİ");
@@ -1290,11 +1814,13 @@ export default function Messages() {
     );
 
     // WebRTC bağlantısı kuruldu
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("baglandi", () => {
         console.log("🟢 WEBRTC ARAMA BAĞLANDI");
 
         const yerel = aramaWebRTC.getYerelStream();
+
         const uzak = aramaWebRTC.getUzakStream();
 
         if (yerel) {
@@ -1310,6 +1836,7 @@ export default function Messages() {
     );
 
     // Karşı tarafın medya akışı geldi
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("uzakStream", (stream) => {
         console.log("🎥 UZAK STREAM GELDİ");
@@ -1323,6 +1850,7 @@ export default function Messages() {
     );
 
     // Bağlantı koptu
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("baglantiKoptu", () => {
         console.log("🔴 WEBRTC ARAMA BAĞLANTISI KOPTU");
@@ -1332,6 +1860,7 @@ export default function Messages() {
     );
 
     // WebRTC hatası
+
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("hata", (hata) => {
         console.error("❌ ARAMA WEBRTC HATASI:", hata);
@@ -1339,15 +1868,31 @@ export default function Messages() {
     );
 
     /*
+
+
+
      * ÖNEMLİ:
+
+
+
      * Burada aramaSinyaliDinle() çağrılmıyor.
+
+
+
      * sinyalGondericiyiAyarla() da çağrılmıyor.
+
+
+
      * Bu iki işlem useMessages.ts içinde yönetiliyor.
+
+
+
      */
 
     return () => {
       console.log(
         "🧹 WEBRTC OLAY DİNLEYİCİLERİ TEMİZLENİYOR. Kullanıcı:",
+
         kullaniciId,
       );
 
@@ -1362,13 +1907,22 @@ export default function Messages() {
       olayDinleyiciTemizleyicileri.length = 0;
     };
   }, [currentUserId, getUserDisplayName]);
+
   /*
 
+
+
    * =========================================================
+
+
 
    * GELEN ARAMAYI REDDET
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1408,11 +1962,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * GELEN ARAMAYI KABUL ET
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1452,23 +2014,43 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * WEBRTC STREAM SENKRONİZASYONU
 
+
+
    * =========================================================
+
+
 
    *
 
+
+
    * Native WebRTC tarafında stream bazı cihazlarda event ile
+
+
 
    * callback'e gelmeden hemen önce hazır olabildiği için,
 
+
+
    * arama açıkken kısa aralıklarla tekrar kontrol ediyoruz.
+
+
 
    * Bu yalnızca UI state senkronizasyonudur; yeni WebRTC
 
+
+
    * bağlantısı oluşturmaz.
+
+
 
    */
 
@@ -1510,11 +2092,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * PREMIUM KONTROLÜ
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1525,87 +2115,107 @@ export default function Messages() {
       try {
         const token = await AsyncStorage.getItem("token");
 
-        console.log("PREMIUM KONTROL TOKEN VAR MI:", !!token);
-
         if (!token) {
-          console.log("PREMIUM KONTROL: TOKEN YOK");
-
-          if (aktif) {
-            setPremium(false);
-          }
-
+          if (aktif) setPremium(false);
           return;
         }
 
-        const premiumUrl = `${API_ADRESI}/memberships/me/premium`;
+        // Kadın kullanıcılar için Premium zorunluluğu yok.
+        if (currentUserId !== null && currentUserId !== undefined) {
+          try {
+            const kullaniciCevap = await fetch(
+              `${API_ADRESI}/users/${currentUserId}`,
+              {
+                method: "GET",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  Accept: "application/json",
+                },
+              },
+            );
 
-        console.log("PREMIUM KONTROL URL:", premiumUrl);
+            if (kullaniciCevap.ok) {
+              const kullanici = await kullaniciCevap.json();
+              const cinsiyet = String(
+                kullanici?.gender ?? kullanici?.cinsiyet ?? "",
+              )
+                .trim()
+                .toLocaleUpperCase("tr-TR");
 
-        const cevap = await fetch(premiumUrl, {
+              console.log("MESAJ EKRANI KULLANICI CİNSİYETİ:", cinsiyet);
+              if (cinsiyet === "KADIN") {
+                if (aktif) {
+                  setPremium(true);
+                  setPremiumKontrolHatasi("");
+                }
+                return;
+              }
+            }
+          } catch (cinsiyetHatasi) {
+            // Cinsiyet alınamazsa mevcut Premium kontrolü uygulanır.
+            console.warn("KULLANICI CİNSİYETİ ALINAMADI:", cinsiyetHatasi);
+          }
+        }
+
+        // Erkek kullanıcılar için mevcut Premium kontrolü.
+        const cevap = await fetch(`${API_ADRESI}/memberships/me/premium`, {
           method: "GET",
-
           headers: {
             Authorization: `Bearer ${token}`,
-
             Accept: "application/json",
           },
         });
 
+        const responseText = await cevap.text();
         console.log("PREMIUM STATUS:", cevap.status);
-
-        const sonuc = await cevap.json();
-
-        console.log("PREMIUM BODY:", sonuc);
+        console.log("PREMIUM BODY:", responseText);
 
         if (!cevap.ok) {
           throw new Error(`Premium durumu alınamadı. HTTP ${cevap.status}`);
         }
 
+        let sonuc: any = responseText;
+        try {
+          sonuc = JSON.parse(responseText);
+        } catch {
+          // true/false metin cevabı olabilir.
+        }
+
         const premiumAktif =
           typeof sonuc === "boolean"
             ? sonuc
-            : typeof sonuc === "object" && sonuc !== null
-              ? sonuc.premium === true ||
-                sonuc.aktif === true ||
-                sonuc.active === true
-              : false;
+            : typeof sonuc === "string"
+              ? sonuc.trim().toLowerCase() === "true"
+              : typeof sonuc === "object" && sonuc !== null
+                ? sonuc.premium === true ||
+                  sonuc.aktif === true ||
+                  sonuc.active === true
+                : false;
 
         if (aktif) {
           setPremium(premiumAktif);
+          setPremiumKontrolHatasi("");
         }
       } catch (hata) {
         console.error("PREMIUM KONTROL HATASI:", hata);
-
         if (aktif) {
           setPremiumKontrolHatasi("Premium üyelik durumu kontrol edilemedi.");
-
           setPremium(false);
         }
       }
     };
 
     void premiumKontrolEt();
-
     return () => {
       aktif = false;
     };
-  }, []);
-
-  /*
-
-   * =========================================================
-
-   * LOADING
-
-   * =========================================================
-
-   */
+  }, [currentUserId]);
 
   if (loading || premium === null) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#5b3cc4" />
+          <ActivityIndicator size="large" color="#8D1746" />
 
           <Text style={styles.loadingText}>
             {loading
@@ -1619,11 +2229,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * PREMIUM DEĞİLSE
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1666,11 +2284,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * KONUŞMA SEÇİLMEDİ
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1678,11 +2304,19 @@ export default function Messages() {
 
   /*
 
+
+
    * =========================================================
+
+
 
    * PREMIUM KULLANICI
 
+
+
    * =========================================================
+
+
 
    */
 
@@ -1697,7 +2331,11 @@ export default function Messages() {
       >
         {/* =================================================
 
+
+
             HEADER
+
+
 
         ================================================= */}
 
@@ -1715,7 +2353,11 @@ export default function Messages() {
 
         {/* =================================================
 
+
+
             HATA
+
+
 
         ================================================= */}
 
@@ -1727,7 +2369,11 @@ export default function Messages() {
 
         {/* =================================================
 
+
+
             MOBİL KONUŞMALAR
+
+
 
         ================================================= */}
 
@@ -1758,18 +2404,30 @@ export default function Messages() {
         ) : (
           /*
 
+
+
            * =================================================
+
+
 
            * MOBİL KONUŞMA PANELİ
 
+
+
            * =================================================
+
+
 
            */
 
           <View style={styles.fullScreenPanel}>
             {/* =================================================
 
+
+
                 KONUŞMALARA GERİ DÖN
+
+
 
             ================================================= */}
 
@@ -1785,7 +2443,11 @@ export default function Messages() {
 
             {/* =================================================
 
+
+
                 AKTİF KONUŞMA
+
+
 
             ================================================= */}
 
@@ -1839,11 +2501,19 @@ export default function Messages() {
 
                 /*
 
+
+
                  * =================================================
+
+
 
                  * SESLİ ARAMA
 
+
+
                  * =================================================
+
+
 
                  */
 
@@ -1851,11 +2521,19 @@ export default function Messages() {
 
                 /*
 
+
+
                  * =================================================
+
+
 
                  * GÖRÜNTÜLÜ ARAMA
 
+
+
                  * =================================================
+
+
 
                  */
 
@@ -1877,54 +2555,88 @@ export default function Messages() {
 
 /*
 
+
+
  * =========================================================
+
+
 
  * STYLES
 
+
+
  * =========================================================
+
+
 
  */
 
 const styles = StyleSheet.create({
   /*
 
+
+
    * =======================================================
+
+
 
    * SAFE AREA
 
+
+
    * =======================================================
+
+
 
    */
 
   safeArea: {
     flex: 1,
 
-    backgroundColor: "#faf9ff",
+    paddingTop: Platform.OS === "android" ? 18 : 0,
+
+    backgroundColor: "#FFF4F7",
   },
 
   /*
 
+
+
    * =======================================================
+
+
 
    * ANA CONTAINER
 
+
+
    * =======================================================
+
+
 
    */
 
   container: {
     flex: 1,
 
-    backgroundColor: "#faf9ff",
+    backgroundColor: "#FFF4F7",
   },
 
   /*
 
+
+
    * =======================================================
+
+
 
    * LOADING
 
+
+
    * =======================================================
+
+
 
    */
 
@@ -1937,7 +2649,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 25,
 
-    backgroundColor: "#faf9ff",
+    backgroundColor: "#FFF4F7",
   },
 
   loadingText: {
@@ -1945,7 +2657,7 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
-    color: "#5b3cc4",
+    color: "#8D1746",
 
     fontWeight: "600",
 
@@ -1954,11 +2666,19 @@ const styles = StyleSheet.create({
 
   /*
 
+
+
    * =======================================================
+
+
 
    * HATA
 
+
+
    * =======================================================
+
+
 
    */
 
@@ -1973,11 +2693,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 10,
 
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
 
     borderWidth: 1,
 
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
   },
 
   errorText: {
@@ -1990,24 +2710,34 @@ const styles = StyleSheet.create({
 
   /*
 
+
+
    * =======================================================
+
+
 
    * MOBİL KONUŞMA LİSTESİ
 
+
+
    * =======================================================
+
+
 
    */
 
   fullScreenList: {
     flex: 1,
 
-    backgroundColor: "#faf9ff",
+    backgroundColor: "#FFF4F7",
   },
 
   listTitleContainer: {
-    height: 58,
+    minHeight: 72,
 
-    paddingHorizontal: 18,
+    paddingHorizontal: 20,
+
+    paddingVertical: 10,
 
     flexDirection: "row",
 
@@ -2015,11 +2745,11 @@ const styles = StyleSheet.create({
 
     justifyContent: "space-between",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFF8FA",
 
     borderBottomWidth: 1,
 
-    borderBottomColor: "#eeeaff",
+    borderBottomColor: "#F4DCE5",
   },
 
   listTitle: {
@@ -2027,37 +2757,59 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#5b3cc4",
+    color: "#8D1746",
   },
 
   listCount: {
     fontSize: 13,
 
-    color: "#777777",
+    color: "#8D1746",
 
-    fontWeight: "600",
+    fontWeight: "800",
+
+    backgroundColor: "#F9DFE8",
+
+    paddingHorizontal: 13,
+
+    paddingVertical: 8,
+
+    overflow: "hidden",
+
+    borderRadius: 18,
   },
 
   listContainer: {
     flex: 1,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFF4F7",
+
+    paddingHorizontal: 12,
+
+    paddingTop: 10,
   },
 
   /*
 
+
+
    * =======================================================
+
+
 
    * MOBİL KONUŞMA PANELİ
 
+
+
    * =======================================================
+
+
 
    */
 
   fullScreenPanel: {
     flex: 1,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFF4F7",
   },
 
   conversationsBackButton: {
@@ -2069,17 +2821,17 @@ const styles = StyleSheet.create({
 
     alignItems: "center",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFF8FA",
 
     borderBottomWidth: 1,
 
-    borderBottomColor: "#eeeaff",
+    borderBottomColor: "#F4DCE5",
   },
 
   conversationsBackIcon: {
     fontSize: 25,
 
-    color: "#5b3cc4",
+    color: "#8D1746",
 
     marginRight: 8,
 
@@ -2089,7 +2841,7 @@ const styles = StyleSheet.create({
   conversationsBackText: {
     fontSize: 15,
 
-    color: "#5b3cc4",
+    color: "#8D1746",
 
     fontWeight: "700",
   },
@@ -2099,16 +2851,24 @@ const styles = StyleSheet.create({
 
     minWidth: 0,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   /*
 
+
+
    * =======================================================
+
+
 
    * ARAMA EKRANI
 
+
+
    * =======================================================
+
+
 
    */
 
@@ -2131,7 +2891,7 @@ const styles = StyleSheet.create({
 
     minHeight: 330,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     borderRadius: 30,
 
@@ -2199,7 +2959,7 @@ const styles = StyleSheet.create({
   },
 
   reddetButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 15,
 
@@ -2223,7 +2983,7 @@ const styles = StyleSheet.create({
   },
 
   kabulEtButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 15,
 
@@ -2249,7 +3009,7 @@ const styles = StyleSheet.create({
 
     minHeight: 310,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     borderRadius: 28,
 
@@ -2319,7 +3079,7 @@ const styles = StyleSheet.create({
   },
 
   gidenVideoBeklemeMetni: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 14,
 
@@ -2381,7 +3141,7 @@ const styles = StyleSheet.create({
   },
 
   aramaKapatText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 16,
 
@@ -2399,11 +3159,11 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#5b3cc4",
+    borderColor: "#8D1746",
   },
 
   homeButtonText: {
-    color: "#5b3cc4",
+    color: "#8D1746",
 
     fontSize: 13,
 
@@ -2419,7 +3179,7 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 30,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   lockIcon: {
@@ -2469,7 +3229,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 25,
 
-    backgroundColor: "#5b3cc4",
+    backgroundColor: "#8D1746",
 
     alignItems: "center",
 
@@ -2477,7 +3237,7 @@ const styles = StyleSheet.create({
   },
 
   premiumButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 16,
 

@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PhoneCall, Video as VideoIcon } from "lucide-react-native";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -1571,12 +1572,6 @@ function ConversationPanel({
         ]}
       >
         <View style={styles.messageWrapper}>
-          {!kendiMesaji && (
-            <Text style={styles.senderName} numberOfLines={1}>
-              {gonderenAdi}
-            </Text>
-          )}
-
           <View
             style={[
               styles.messageBubble,
@@ -1622,7 +1617,15 @@ function ConversationPanel({
                     : styles.messageTimeOther,
                 ]}
               >
-                {formatDate(item.sentAt)}
+                {(() => {
+                  const tarih = new Date(item.sentAt);
+                  return Number.isNaN(tarih.getTime())
+                    ? formatDate(item.sentAt)
+                    : tarih.toLocaleTimeString("tr-TR", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+                })()}
               </Text>
 
               {kendiMesaji && (
@@ -1758,12 +1761,20 @@ function ConversationPanel({
           </View>
 
           <View style={styles.headerActions}>
-            {selectedUserActive && (
-              <View style={styles.activeBadge}>
-                <Text style={styles.activeBadgeText}>Aktif</Text>
-              </View>
-            )}
-
+            <Pressable
+              style={styles.ustAramaButonu}
+              onPress={() => void aramaBaslat("VIDEO")}
+              accessibilityLabel="Görüntülü ara"
+            >
+              <VideoIcon size={23} color="#E53935" strokeWidth={2} />
+            </Pressable>
+            <Pressable
+              style={styles.ustAramaButonu}
+              onPress={() => void aramaBaslat("SES")}
+              accessibilityLabel="Sesli ara"
+            >
+              <PhoneCall size={23} color="#852B49" strokeWidth={2} />
+            </Pressable>
             <Pressable
               style={[
                 styles.aramaIzniButonu,
@@ -1847,42 +1858,6 @@ function ConversationPanel({
           {/* ===================================================
               ARAMA BUTONLARI
           =================================================== */}
-
-          <View style={styles.aramaButonlari}>
-            {/* SESLİ ARAMA */}
-
-            <Pressable
-              style={styles.aramaButonu}
-              onPress={() => {
-                console.log("📞 SESLİ ARAMA BAŞLATILIYOR", {
-                  selectedUserId,
-                  selectedUserName,
-                });
-
-                void aramaBaslat("SES");
-              }}
-              disabled={selectedUserId === null}
-            >
-              <Text style={styles.aramaButonuIkon}>📞</Text>
-            </Pressable>
-
-            {/* GÖRÜNTÜLÜ ARAMA */}
-
-            <Pressable
-              style={styles.aramaButonu}
-              onPress={() => {
-                console.log("📹 GÖRÜNTÜLÜ ARAMA BAŞLATILIYOR", {
-                  selectedUserId,
-                  selectedUserName,
-                });
-
-                void aramaBaslat("VIDEO");
-              }}
-              disabled={selectedUserId === null}
-            >
-              <Text style={styles.aramaButonuIkon}>📹</Text>
-            </Pressable>
-          </View>
 
           {/* ===================================================
               MESAJ INPUT
@@ -2112,14 +2087,10 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-
     width: "100%",
-
     minWidth: 0,
-
     minHeight: 0,
-
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFF4F7",
   },
 
   /*
@@ -2130,15 +2101,10 @@ const styles = StyleSheet.create({
 
   emptyPanel: {
     flex: 1,
-
     width: "100%",
-
-    backgroundColor: "#faf9ff",
-
+    backgroundColor: "#FFF7FA",
     alignItems: "center",
-
     justifyContent: "center",
-
     paddingHorizontal: 28,
   },
 
@@ -2149,19 +2115,15 @@ const styles = StyleSheet.create({
   },
 
   emptyAvatar: {
-    width: 72,
-
-    height: 72,
-
-    borderRadius: 36,
-
-    marginBottom: 16,
-
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    marginBottom: 18,
     alignItems: "center",
-
     justifyContent: "center",
-
-    backgroundColor: "#eeeaff",
+    backgroundColor: "#FCE7EF",
+    borderWidth: 1,
+    borderColor: "#F5B8CE",
   },
 
   emptyAvatarText: {
@@ -2169,14 +2131,10 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    color: "#5b3cc4",
-
-    fontSize: 19,
-
+    color: "#7D1D43",
+    fontSize: 20,
     fontWeight: "800",
-
     textAlign: "center",
-
     marginBottom: 8,
   },
 
@@ -2200,42 +2158,35 @@ const styles = StyleSheet.create({
 
   header: {
     width: "100%",
-
-    minHeight: 68,
-
-    paddingHorizontal: 14,
-
-    paddingVertical: 9,
-
     flexDirection: "row",
-
     alignItems: "center",
-
-    backgroundColor: "#ffffff",
-
+    backgroundColor: "#FFFFFF",
+    minHeight: 76,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
-
-    borderBottomColor: "#eeeaff",
+    borderBottomColor: "#F4DCE5",
+    shadowColor: "#7D1D43",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   headerAvatar: {
-    width: 46,
-
-    height: 46,
-
-    borderRadius: 23,
-
     alignItems: "center",
-
     justifyContent: "center",
-
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#FCE7EF",
+    borderWidth: 2,
+    borderColor: "#F5B8CE",
     marginRight: 11,
-
-    backgroundColor: "#eeeaff",
   },
 
   headerAvatarText: {
-    color: "#5b3cc4",
+    color: "#92264F",
 
     fontSize: 19,
 
@@ -2252,48 +2203,34 @@ const styles = StyleSheet.create({
 
   headerActions: {
     flexDirection: "row",
-
     alignItems: "center",
-
     justifyContent: "flex-end",
-
-    marginLeft: 6,
-
+    marginLeft: 8,
     gap: 5,
-
-    maxWidth: 150,
   },
 
   aramaIzniButonu: {
-    minHeight: 38,
-
-    maxWidth: 105,
-
-    paddingHorizontal: 8,
-
-    paddingVertical: 5,
-
-    borderRadius: 11,
-
+    paddingVertical: 6,
     flexDirection: "row",
-
     alignItems: "center",
-
     justifyContent: "center",
-
     borderWidth: 1,
+    maxWidth: 82,
+    minHeight: 36,
+    paddingHorizontal: 7,
+    borderRadius: 18,
   },
 
   aramaIzniButonuAktif: {
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
 
-    borderColor: "#f0b4ba",
+    borderColor: "#E9A8BE",
   },
 
   aramaIzniButonuPasif: {
-    backgroundColor: "#eeeaff",
+    backgroundColor: "#FBE8EF",
 
-    borderColor: "#d8cff8",
+    borderColor: "#E9B8C9",
   },
 
   aramaIzniButonuDevreDisi: {
@@ -2307,7 +2244,7 @@ const styles = StyleSheet.create({
   },
 
   aramaIzniButonuMetni: {
-    color: "#4d35a8",
+    color: "#7D1D43",
 
     fontSize: 9,
 
@@ -2321,13 +2258,11 @@ const styles = StyleSheet.create({
   },
 
   headerName: {
-    color: "#4d35a8",
-
-    fontSize: 17,
-
-    lineHeight: 21,
-
+    color: "#7D1D43",
+    fontSize: 18,
+    lineHeight: 23,
     fontWeight: "800",
+    letterSpacing: 0.1,
   },
 
   statusContainer: {
@@ -2371,7 +2306,7 @@ const styles = StyleSheet.create({
   },
 
   typingText: {
-    color: "#7b61c9",
+    color: "#C12F65",
 
     fontSize: 10,
 
@@ -2410,24 +2345,18 @@ const styles = StyleSheet.create({
 
   messageArea: {
     flex: 1,
-
     width: "100%",
-
     minHeight: 0,
-
     overflow: "hidden",
-
-    backgroundColor: "#faf9ff",
+    backgroundColor: "#FFF4F7",
   },
 
   messageListContent: {
-    paddingHorizontal: 10,
-
-    paddingTop: 10,
-
-    paddingBottom: 15,
-
+    paddingTop: 16,
+    paddingBottom: 18,
     flexGrow: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
   },
 
   /*
@@ -2438,9 +2367,7 @@ const styles = StyleSheet.create({
 
   messageRow: {
     width: "100%",
-
-    marginVertical: 3,
-
+    marginVertical: 5,
     flexDirection: "row",
   },
 
@@ -2453,13 +2380,12 @@ const styles = StyleSheet.create({
   },
 
   messageWrapper: {
-    maxWidth: "84%",
-
     minWidth: 0,
+    maxWidth: "82%",
   },
 
   senderName: {
-    color: "#6b5ca5",
+    color: "#8D4562",
 
     fontSize: 11,
 
@@ -2480,42 +2406,33 @@ const styles = StyleSheet.create({
 
   messageBubble: {
     maxWidth: "100%",
-
-    paddingHorizontal: 13,
-
-    paddingVertical: 9,
-
-    borderRadius: 18,
-
     overflow: "hidden",
+    borderRadius: 20,
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    elevation: 1,
+    shadowColor: "#7D1D43",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
   },
 
   messageBubbleMine: {
-    backgroundColor: "#5b3cc4",
-
-    borderTopLeftRadius: 18,
-
-    borderTopRightRadius: 18,
-
-    borderBottomLeftRadius: 18,
-
-    borderBottomRightRadius: 4,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomLeftRadius: 20,
+    backgroundColor: "#C12F65",
+    borderBottomRightRadius: 6,
   },
 
   messageBubbleOther: {
-    backgroundColor: "#ffffff",
-
     borderWidth: 1,
-
-    borderColor: "#eeeaff",
-
-    borderTopLeftRadius: 18,
-
-    borderTopRightRadius: 18,
-
-    borderBottomLeftRadius: 4,
-
-    borderBottomRightRadius: 18,
+    borderColor: "#F4DCE5",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderBottomRightRadius: 20,
+    backgroundColor: "#FFFFFF",
+    borderBottomLeftRadius: 6,
   },
 
   messageContent: {
@@ -2525,11 +2442,13 @@ const styles = StyleSheet.create({
   },
 
   messageContentMine: {
-    color: "#ffffff",
+    color: "#FFFFFF",
+    fontSize: 15,
+    lineHeight: 22,
   },
 
   messageContentOther: {
-    color: "#333333",
+    color: "#292329",
   },
 
   /*
@@ -2605,7 +2524,7 @@ const styles = StyleSheet.create({
 
     alignItems: "center",
 
-    backgroundColor: "rgba(91,60,196,0.10)",
+    backgroundColor: "rgba(194,47,101,0.09)",
   },
 
   mediaIconContainer: {
@@ -2635,7 +2554,7 @@ const styles = StyleSheet.create({
   },
 
   mediaTitle: {
-    color: "#4d35a8",
+    color: "#7D1D43",
 
     fontSize: 12,
 
@@ -2651,7 +2570,7 @@ const styles = StyleSheet.create({
   },
 
   mediaOpenIcon: {
-    color: "#5b3cc4",
+    color: "#92264F",
 
     fontSize: 15,
 
@@ -2730,26 +2649,21 @@ const styles = StyleSheet.create({
 
   inputContainer: {
     width: "100%",
-
     flexShrink: 0,
-
-    minHeight: 68,
-
-    backgroundColor: "#ffffff",
-
-    borderTopWidth: 1,
-
-    borderTopColor: "#eeeaff",
-
+    minHeight: 76,
     zIndex: 20,
-
-    elevation: 20,
-
+    elevation: 12,
     flexDirection: "row",
-
     alignItems: "center",
-
-    paddingHorizontal: 5,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    borderTopWidth: 1,
+    borderTopColor: "#F4DCE5",
+    shadowColor: "#7D1D43",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
   },
 
   /*
@@ -2781,7 +2695,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#eeeaff",
+    backgroundColor: "#FBE8EF",
   },
 
   aramaButonuIkon: {
@@ -2789,9 +2703,10 @@ const styles = StyleSheet.create({
   },
 
   mesajInputAlani: {
-    flex: 1,
-
     minWidth: 0,
+
+    flex: 1,
+    width: "100%",
   },
 
   /*
@@ -2802,7 +2717,7 @@ const styles = StyleSheet.create({
 
   aramaOverlay: {
     flex: 1,
-    backgroundColor: "#171322",
+    backgroundColor: "#4B142B",
     alignItems: "center",
     justifyContent: "space-between",
     paddingTop: 55,
@@ -2816,13 +2731,13 @@ const styles = StyleSheet.create({
   },
 
   aramaBaslik: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "700",
   },
 
   aramaKullaniciAdi: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 23,
     fontWeight: "800",
     marginTop: 6,
@@ -2836,29 +2751,31 @@ const styles = StyleSheet.create({
   },
 
   aramaAvatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 124,
+    height: 124,
+    borderRadius: 62,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#5b3cc4",
+    backgroundColor: "#92264F",
+    borderWidth: 4,
+    borderColor: "#F5B8CE",
     marginBottom: 22,
   },
 
   aramaAvatarText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 48,
     fontWeight: "800",
   },
 
   sesliAramaIsmi: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 25,
     fontWeight: "800",
   },
 
   aramaDurumMetni: {
-    color: "#cfc8e8",
+    color: "#F1C8D7",
     fontSize: 15,
     marginTop: 9,
   },
@@ -2902,7 +2819,7 @@ const styles = StyleSheet.create({
   },
 
   videoBeklemeMetni: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
   },
 
@@ -2935,23 +2852,23 @@ const styles = StyleSheet.create({
   },
 
   aramaKontrolIkon: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 22,
   },
 
   aramaKontrolMetni: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 9,
     marginTop: 2,
     fontWeight: "700",
   },
 
   aramaBitirButonu: {
-    backgroundColor: "#d92d3f",
+    backgroundColor: "#E11D48",
   },
 
   aramaReddetButonu: {
-    backgroundColor: "#d92d3f",
+    backgroundColor: "#E11D48",
   },
 
   aramaKabulButonu: {
@@ -2959,7 +2876,7 @@ const styles = StyleSheet.create({
   },
 
   aramaKontrolButonuAktif: {
-    backgroundColor: "#5b3cc4",
+    backgroundColor: "#92264F",
   },
 
   aramaSonuBildirim: {
@@ -2972,11 +2889,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 14,
     borderRadius: 14,
-    backgroundColor: "rgba(42, 35, 58, 0.96)",
+    backgroundColor: "rgba(91, 22, 48, 0.96)",
   },
 
   aramaSonuBildirimBaslik: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "800",
     textAlign: "center",
@@ -3036,7 +2953,7 @@ const styles = StyleSheet.create({
   },
 
   videoCloseButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 22,
 
@@ -3100,7 +3017,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#eeeaff",
+    backgroundColor: "#FBE8EF",
   },
 
   noMessageIconText: {
@@ -3108,7 +3025,7 @@ const styles = StyleSheet.create({
   },
 
   noMessageTitle: {
-    color: "#5b3cc4",
+    color: "#92264F",
 
     fontSize: 17,
 
@@ -3126,4 +3043,14 @@ const styles = StyleSheet.create({
 
     textAlign: "center",
   },
+  ustAramaButonu: {
+    width: 40,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF1F5",
+    marginHorizontal: 2,
+  },
+  ustAramaIkonu: { fontSize: 23, color: "#8B2948", fontWeight: "700" },
 });

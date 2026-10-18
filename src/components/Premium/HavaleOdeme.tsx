@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
 
-    backgroundColor: "#faf7ff",
+    backgroundColor: "#FFF8F4",
   },
 
   scrollContent: {
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
 
     marginRight: 14,
   },
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#4c1d95",
+    color: "#672036",
 
     marginBottom: 4,
   },
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
 
-    color: "#6b7280",
+    color: "#80666D",
 
     lineHeight: 20,
   },
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   packageLabel: {
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#6b21a8",
+    color: "#7D243B",
 
     marginBottom: 10,
   },
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#111827",
+    color: "#48252F",
   },
 
   packagePrice: {
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#7c3aed",
+    color: "#8F2942",
   },
 
   /*
@@ -388,19 +388,19 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   bankCardHeader: {
     padding: 17,
 
-    backgroundColor: "#f5f3ff",
+    backgroundColor: "#F8E9ED",
 
     borderBottomWidth: 1,
 
-    borderBottomColor: "#ddd6fe",
+    borderBottomColor: "#E8C5CF",
   },
 
   bankCardTitle: {
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#4c1d95",
+    color: "#672036",
   },
 
   bankCardContent: {
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
 
-    color: "#6b7280",
+    color: "#80666D",
 
     marginBottom: 5,
   },
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#111827",
+    color: "#48252F",
 
     marginBottom: 18,
   },
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   ibanText: {
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#111827",
+    color: "#48252F",
 
     lineHeight: 21,
   },
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 9,
 
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
   },
 
   copyIcon: {
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#6d28d9",
+    color: "#A12E4A",
   },
 
   /*
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#fffbeb",
+    backgroundColor: "#FFFCFAbeb",
 
     borderWidth: 1,
 
@@ -614,7 +614,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#4c1d95",
+    color: "#672036",
 
     marginBottom: 8,
   },
@@ -624,7 +624,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 23,
 
-    color: "#6b7280",
+    color: "#80666D",
 
     marginBottom: 22,
   },
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
 
     borderColor: "#c084fc",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   backButtonText: {
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#6d28d9",
+    color: "#A12E4A",
   },
 
   paymentButton: {
@@ -674,11 +674,11 @@ const styles = StyleSheet.create({
 
     paddingHorizontal: 16,
 
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
 
     elevation: 4,
 
-    shadowColor: "#7c3aed",
+    shadowColor: "#8F2942",
 
     shadowOffset: {
       width: 0,
@@ -704,7 +704,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "900",
 
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     textAlign: "center",
   },
@@ -720,7 +720,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 });
 

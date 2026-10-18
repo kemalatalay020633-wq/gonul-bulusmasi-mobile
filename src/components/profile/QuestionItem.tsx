@@ -95,9 +95,9 @@ export default function QuestionItem({
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     borderRadius: 14,
     padding: 16,
     marginBottom: 12,
@@ -107,12 +107,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 23,
     fontWeight: "700",
-    color: "#4c1d95",
+    color: "#672036",
     marginBottom: 14,
   },
 
   required: {
-    color: "#dc2626",
+    color: "#B72F4B",
     fontWeight: "800",
   },
 
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   optionText: {
     flex: 1,
     fontSize: 15,
-    color: "#374151",
+    color: "#694650",
     marginLeft: 10,
     lineHeight: 21,
   },
@@ -143,18 +143,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     borderWidth: 2,
     borderColor: "#a78bfa",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     alignItems: "center",
     justifyContent: "center",
   },
 
   checkboxSelected: {
-    backgroundColor: "#7c3aed",
-    borderColor: "#7c3aed",
+    backgroundColor: "#8F2942",
+    borderColor: "#8F2942",
   },
 
   checkmark: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     fontWeight: "800",
   },
@@ -165,19 +165,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 2,
     borderColor: "#a78bfa",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     alignItems: "center",
     justifyContent: "center",
   },
 
   radioSelected: {
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
   },
 
   radioInner: {
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
   },
 });

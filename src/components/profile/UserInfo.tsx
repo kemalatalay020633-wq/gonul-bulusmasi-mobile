@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 12,
   },
 
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     borderRadius: 16,
     paddingHorizontal: 16,
     paddingVertical: 8,
@@ -113,20 +113,20 @@ const styles = StyleSheet.create({
 
   rowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#ede9fe",
+    borderBottomColor: "#F5DCE3",
   },
 
   label: {
     width: 120,
     fontSize: 14,
     fontWeight: "700",
-    color: "#5b21b6",
+    color: "#7A263C",
   },
 
   value: {
     flex: 1,
     fontSize: 14,
     lineHeight: 21,
-    color: "#374151",
+    color: "#694650",
   },
 });

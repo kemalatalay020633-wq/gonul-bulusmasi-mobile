@@ -88,7 +88,7 @@ const styles = StyleSheet.create({
     minHeight: 68,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderBottomWidth: 1,
     borderBottomColor: "#eeeaff",
     flexDirection: "row",
@@ -153,11 +153,11 @@ const styles = StyleSheet.create({
   },
 
   onlineDot: {
-    backgroundColor: "#22c55e",
+    backgroundColor: "#35B779",
   },
 
   offlineDot: {
-    backgroundColor: "#9ca3af",
+    backgroundColor: "#A88F95",
   },
 
   selectedUserName: {
@@ -175,11 +175,11 @@ const styles = StyleSheet.create({
   },
 
   onlineText: {
-    color: "#15803d",
+    color: "#277A54",
   },
 
   offlineText: {
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   rightArea: {
@@ -209,13 +209,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginLeft: 3,
     borderRadius: 10,
-    backgroundColor: "#dc2626",
+    backgroundColor: "#B72F4B",
     alignItems: "center",
     justifyContent: "center",
   },
 
   notificationText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 9,
     fontWeight: "800",
   },

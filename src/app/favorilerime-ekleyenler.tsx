@@ -725,7 +725,7 @@ export default function FavorilerimeEkleyenler() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fffaf5",
+    backgroundColor: "#FFFCFAaf5",
   },
 
   scrollContainer: {
@@ -762,8 +762,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#fed7aa",
-    backgroundColor: "#fffaf5",
+    borderBottomColor: "#EFD2C0",
+    backgroundColor: "#FFFCFAaf5",
   },
 
   geriButonu: {
@@ -820,7 +820,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     padding: 18,
     borderRadius: 16,
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
     borderColor: "#fecdd3",
   },
@@ -849,7 +849,7 @@ const styles = StyleSheet.create({
   },
 
   tekrarButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -865,8 +865,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#fed7aa",
-    backgroundColor: "#ffffff",
+    borderColor: "#EFD2C0",
+    backgroundColor: "#FFFCFA",
   },
 
   bosYildiz: {
@@ -907,9 +907,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     borderRadius: 20,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#fed7aa",
+    borderColor: "#EFD2C0",
   },
 
   kullaniciUst: {
@@ -1000,7 +1000,7 @@ const styles = StyleSheet.create({
   },
 
   profilButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "800",
   },

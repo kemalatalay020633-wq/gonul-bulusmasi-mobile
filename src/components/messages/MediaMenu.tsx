@@ -1,4 +1,11 @@
-import React from "react";
+import {
+  FileText,
+  Image as ImageIcon,
+  Music,
+  Plus,
+  Video,
+  X,
+} from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 type MediaType = "image" | "video" | "audio" | "file";
@@ -21,126 +28,139 @@ function MediaMenu({
   const disabled = sending || mediaSending;
 
   const medyaSec = (type: MediaType) => {
-    if (disabled) {
-      return;
-    }
-
+    if (disabled) return;
     onOpenMediaPicker(type);
   };
 
   return (
     <View style={styles.container}>
       <Pressable
-        style={[styles.attachButton, disabled && styles.disabledButton]}
+        accessibilityRole="button"
+        accessibilityLabel="Medya veya dosya ekle"
+        style={({ pressed }) => [
+          styles.attachButton,
+          pressed && styles.attachButtonPressed,
+          disabled && styles.disabledButton,
+        ]}
         disabled={disabled}
         onPress={onMediaButtonClick}
       >
-        <Text style={styles.attachIcon}>📎</Text>
+        <Plus size={27} color="#7C2948" strokeWidth={1.9} />
       </Pressable>
 
       <Modal
         visible={mediaMenuOpen}
         transparent
-        animationType="fade"
+        animationType="slide"
+        statusBarTranslucent
         onRequestClose={onMediaButtonClick}
       >
-        <Pressable style={styles.overlay} onPress={onMediaButtonClick}>
+        <View style={styles.modalRoot}>
           <Pressable
-            style={styles.menu}
-            onPress={(event) => event.stopPropagation()}
-          >
+            accessibilityRole="button"
+            accessibilityLabel="Menüyü kapat"
+            style={styles.overlay}
+            onPress={onMediaButtonClick}
+          />
+
+          <View style={styles.sheet}>
+            <View style={styles.handle} />
+
             <View style={styles.menuHeader}>
-              <Text style={styles.menuTitle}>Medya Gönder</Text>
+              <View>
+                <Text style={styles.menuTitle}>Paylaş</Text>
+                <Text style={styles.menuSubtitle}>
+                  Sohbete medya veya dosya ekle
+                </Text>
+              </View>
 
               <Pressable
-                style={styles.closeButton}
+                accessibilityRole="button"
+                accessibilityLabel="Kapat"
+                style={({ pressed }) => [
+                  styles.closeButton,
+                  pressed && styles.closeButtonPressed,
+                ]}
                 onPress={onMediaButtonClick}
               >
-                <Text style={styles.closeText}>✕</Text>
+                <X size={19} color="#6F5963" strokeWidth={2} />
               </Pressable>
             </View>
 
             <View style={styles.options}>
               <Pressable
-                style={[styles.option, disabled && styles.optionDisabled]}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.option,
+                  pressed && styles.optionPressed,
+                  disabled && styles.optionDisabled,
+                ]}
                 disabled={disabled}
                 onPress={() => medyaSec("image")}
               >
                 <View style={[styles.iconContainer, styles.imageIcon]}>
-                  <Text style={styles.optionIcon}>🖼️</Text>
+                  <ImageIcon size={25} color="#852B49" strokeWidth={1.9} />
                 </View>
-
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>Fotoğraf</Text>
-
-                  <Text style={styles.optionDescription}>
-                    Galeriden fotoğraf seç
-                  </Text>
-                </View>
+                <Text style={styles.optionTitle}>Fotoğraf</Text>
               </Pressable>
 
               <Pressable
-                style={[styles.option, disabled && styles.optionDisabled]}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.option,
+                  pressed && styles.optionPressed,
+                  disabled && styles.optionDisabled,
+                ]}
                 disabled={disabled}
                 onPress={() => medyaSec("video")}
               >
                 <View style={[styles.iconContainer, styles.videoIcon]}>
-                  <Text style={styles.optionIcon}>🎬</Text>
+                  <Video size={25} color="#6241B7" strokeWidth={1.9} />
                 </View>
-
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>Video</Text>
-
-                  <Text style={styles.optionDescription}>
-                    Galeriden video seç
-                  </Text>
-                </View>
+                <Text style={styles.optionTitle}>Video</Text>
               </Pressable>
 
               <Pressable
-                style={[styles.option, disabled && styles.optionDisabled]}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.option,
+                  pressed && styles.optionPressed,
+                  disabled && styles.optionDisabled,
+                ]}
                 disabled={disabled}
                 onPress={() => medyaSec("audio")}
               >
                 <View style={[styles.iconContainer, styles.audioIcon]}>
-                  <Text style={styles.optionIcon}>🎵</Text>
+                  <Music size={25} color="#287B55" strokeWidth={1.9} />
                 </View>
-
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>Ses Dosyası</Text>
-
-                  <Text style={styles.optionDescription}>
-                    Cihazdan ses dosyası seç
-                  </Text>
-                </View>
+                <Text style={styles.optionTitle}>Ses</Text>
               </Pressable>
 
               <Pressable
-                style={[styles.option, disabled && styles.optionDisabled]}
+                accessibilityRole="button"
+                style={({ pressed }) => [
+                  styles.option,
+                  pressed && styles.optionPressed,
+                  disabled && styles.optionDisabled,
+                ]}
                 disabled={disabled}
                 onPress={() => medyaSec("file")}
               >
                 <View style={[styles.iconContainer, styles.fileIcon]}>
-                  <Text style={styles.optionIcon}>📄</Text>
+                  <FileText size={25} color="#9A6718" strokeWidth={1.9} />
                 </View>
-
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>Dosya</Text>
-
-                  <Text style={styles.optionDescription}>
-                    Cihazdan dosya seç
-                  </Text>
-                </View>
+                <Text style={styles.optionTitle}>Belge</Text>
               </Pressable>
             </View>
 
             {mediaSending && (
               <View style={styles.loadingContainer}>
+                <View style={styles.loadingDot} />
                 <Text style={styles.loadingText}>Medya yükleniyor...</Text>
               </View>
             )}
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -150,145 +170,170 @@ export default MediaMenu;
 
 const styles = StyleSheet.create({
   container: {
-    position: "relative",
+    flexShrink: 0,
+    justifyContent: "center",
   },
 
   attachButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#eeeaff",
+    backgroundColor: "transparent",
+  },
+
+  attachButtonPressed: {
+    backgroundColor: "#F8E8ED",
   },
 
   disabledButton: {
-    opacity: 0.45,
+    opacity: 0.4,
   },
 
-  attachIcon: {
-    fontSize: 21,
+  modalRoot: {
+    flex: 1,
+    justifyContent: "flex-end",
   },
 
   overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-    padding: 16,
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: "rgba(25, 14, 22, 0.42)",
+  },
+  sheet: {
+    width: "100%",
+    backgroundColor: "#FFFCFA",
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    paddingTop: 10,
+    paddingBottom: 28,
+    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: "#F1E4E9",
   },
 
-  menu: {
-    width: "100%",
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    paddingBottom: 12,
-    overflow: "hidden",
+  handle: {
+    alignSelf: "center",
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#D9C8D0",
+    marginBottom: 18,
   },
 
   menuHeader: {
-    minHeight: 58,
-    paddingHorizontal: 18,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eeeaff",
+    marginBottom: 20,
   },
 
   menuTitle: {
-    color: "#4d35a8",
-    fontSize: 18,
-    fontWeight: "700",
+    color: "#321E29",
+    fontSize: 20,
+    fontWeight: "800",
+  },
+
+  menuSubtitle: {
+    color: "#8A7A82",
+    fontSize: 12,
+    marginTop: 4,
   },
 
   closeButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#f3f1fa",
+    backgroundColor: "#F5EDF1",
   },
 
-  closeText: {
-    color: "#666666",
-    fontSize: 17,
-    fontWeight: "600",
+  closeButtonPressed: {
+    opacity: 0.7,
   },
 
   options: {
-    paddingHorizontal: 12,
-    paddingTop: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 8,
   },
 
   option: {
-    minHeight: 68,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    flexDirection: "row",
+    flex: 1,
+    minWidth: 0,
     alignItems: "center",
-    borderBottomWidth: 1,
-    borderBottomColor: "#f1eff7",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 16,
+    backgroundColor: "#FFF8FA",
+  },
+
+  optionPressed: {
+    backgroundColor: "#F8E8ED",
   },
 
   optionDisabled: {
-    opacity: 0.45,
+    opacity: 0.4,
   },
 
   iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 12,
+    marginBottom: 9,
   },
 
   imageIcon: {
-    backgroundColor: "#eeeaff",
+    backgroundColor: "#F8DDE7",
   },
 
   videoIcon: {
-    backgroundColor: "#f3e8ff",
+    backgroundColor: "#E9E1FA",
   },
 
   audioIcon: {
-    backgroundColor: "#eaf7ef",
+    backgroundColor: "#DFF3E8",
   },
 
   fileIcon: {
-    backgroundColor: "#fff4df",
-  },
-
-  optionIcon: {
-    fontSize: 23,
-  },
-
-  optionTextContainer: {
-    flex: 1,
+    backgroundColor: "#FCEBCF",
   },
 
   optionTitle: {
-    color: "#333333",
-    fontSize: 15,
+    color: "#45333D",
+    fontSize: 11,
     fontWeight: "700",
-    marginBottom: 3,
-  },
-
-  optionDescription: {
-    color: "#888888",
-    fontSize: 12,
+    textAlign: "center",
   },
 
   loadingContainer: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#EDE2E7",
+  },
+
+  loadingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#7C2948",
+    marginRight: 8,
   },
 
   loadingText: {
-    color: "#5b3cc4",
+    color: "#7C2948",
     fontSize: 12,
     fontWeight: "600",
-    textAlign: "center",
   },
 });

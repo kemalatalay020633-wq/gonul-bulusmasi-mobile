@@ -495,7 +495,7 @@ export default function ProfilimeBakanlar() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.yukleniyorContainer}>
-          <ActivityIndicator size="large" color="#7c3aed" />
+          <ActivityIndicator size="large" color="#8F2942" />
 
           <Text style={styles.yukleniyorText}>
             Profilinize bakanlar yükleniyor...
@@ -707,7 +707,7 @@ export default function ProfilimeBakanlar() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#faf7ff",
+    backgroundColor: "#FFF8F4",
   },
 
   scrollContainer: {
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
   yukleniyorText: {
     marginTop: 14,
     fontSize: 15,
-    color: "#5b21b6",
+    color: "#7A263C",
     fontWeight: "600",
     textAlign: "center",
   },
@@ -744,8 +744,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: "#ddd6fe",
-    backgroundColor: "#faf7ff",
+    borderBottomColor: "#E8C5CF",
+    backgroundColor: "#FFF8F4",
   },
 
   geriButonu: {
@@ -758,13 +758,13 @@ const styles = StyleSheet.create({
   geriIcon: {
     fontSize: 36,
     lineHeight: 36,
-    color: "#6d28d9",
+    color: "#A12E4A",
     marginRight: 2,
   },
 
   geriText: {
     fontSize: 15,
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "700",
   },
 
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
   baslik: {
     fontSize: 19,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     textAlign: "center",
   },
 
@@ -801,7 +801,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     padding: 18,
     borderRadius: 16,
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
     borderColor: "#fecdd3",
   },
@@ -823,14 +823,14 @@ const styles = StyleSheet.create({
     marginTop: 14,
     minHeight: 44,
     borderRadius: 12,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
 
   tekrarButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 14,
     fontWeight: "700",
   },
@@ -846,8 +846,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#ddd6fe",
-    backgroundColor: "#ffffff",
+    borderColor: "#E8C5CF",
+    backgroundColor: "#FFFCFA",
   },
 
   bosIcon: {
@@ -858,7 +858,7 @@ const styles = StyleSheet.create({
   bosBaslik: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     textAlign: "center",
   },
 
@@ -887,9 +887,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 16,
     borderRadius: 20,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
   },
 
   kullaniciUst: {
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
     height: 82,
     borderRadius: 41,
     overflow: "hidden",
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
     flexShrink: 0,
   },
 
@@ -921,13 +921,13 @@ const styles = StyleSheet.create({
     borderRadius: 41,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
   },
 
   fotoPlaceholderText: {
     fontSize: 32,
     fontWeight: "800",
-    color: "#7c3aed",
+    color: "#8F2942",
   },
 
   /*
@@ -943,7 +943,7 @@ const styles = StyleSheet.create({
   adSoyad: {
     fontSize: 19,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
   },
 
   kullaniciAdi: {
@@ -962,7 +962,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     fontSize: 14,
     fontWeight: "700",
-    color: "#7c3aed",
+    color: "#8F2942",
   },
 
   /*
@@ -973,14 +973,14 @@ const styles = StyleSheet.create({
     marginTop: 16,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
 
   profilButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "800",
   },

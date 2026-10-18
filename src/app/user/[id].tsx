@@ -390,11 +390,13 @@ export default function KullanıcıProfil() {
 
       if (!response.ok) {
         let hataMesaji = `Mesaj gönderilemedi. HTTP ${response.status}`;
+        let premiumGerekli = false;
 
         try {
           const veri = JSON.parse(responseText);
 
           if (veri?.kod === "PREMIUM_GEREKLI") {
+            premiumGerekli = true;
             hataMesaji =
               "Mesaj gönderebilmek için aktif PREMIUM üyeliğiniz bulunmalıdır.";
           } else if (veri?.mesaj) {
@@ -404,6 +406,21 @@ export default function KullanıcıProfil() {
           if (responseText) {
             hataMesaji = responseText;
           }
+        }
+
+        if (premiumGerekli) {
+          Alert.alert("Premium Üyelik Gerekli", hataMesaji, [
+            {
+              text: "Vazgeç",
+              style: "cancel",
+            },
+            {
+              text: "⭐ Premium Ol",
+              onPress: () => navigation.navigate("premium"),
+            },
+          ]);
+
+          return;
         }
 
         throw new Error(hataMesaji);
@@ -639,9 +656,7 @@ export default function KullanıcıProfil() {
 
           {profil?.profileVerified && (
             <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>
-                ✓ Profil Doğrulandı
-              </Text>
+              <Text style={styles.verifiedBadgeText}>✓ Profil Doğrulandı</Text>
             </View>
           )}
         </View>
@@ -732,8 +747,7 @@ export default function KullanıcıProfil() {
 
           <View style={styles.aboutBox}>
             <Text style={styles.aboutText}>
-              {profil?.about ||
-                "Bu kullanıcı hakkında henüz bilgi eklenmemiş."}
+              {profil?.about || "Bu kullanıcı hakkında henüz bilgi eklenmemiş."}
             </Text>
           </View>
         </View>
@@ -892,26 +906,26 @@ const styles = StyleSheet.create({
     marginTop: 14,
     fontSize: 16,
     fontWeight: "600",
-    color: "#4c1d95",
+    color: "#672036",
   },
 
   hataBaslik: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#4c1d95",
+    color: "#672036",
     marginBottom: 10,
     textAlign: "center",
   },
 
   hataText: {
     fontSize: 15,
-    color: "#6b7280",
+    color: "#80666D",
     textAlign: "center",
     marginBottom: 20,
   },
 
   primaryButton: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     paddingHorizontal: 24,
     paddingVertical: 13,
     borderRadius: 12,
@@ -919,7 +933,7 @@ const styles = StyleSheet.create({
   },
 
   primaryButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontWeight: "800",
     fontSize: 15,
   },
@@ -933,14 +947,14 @@ const styles = StyleSheet.create({
   },
 
   secondaryButtonText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "800",
     fontSize: 15,
   },
 
   topBar: {
     height: 64,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -954,20 +968,20 @@ const styles = StyleSheet.create({
   },
 
   backIcon: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 38,
     lineHeight: 40,
     marginRight: 4,
   },
 
   backText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 15,
     fontWeight: "700",
   },
 
   topTitle: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 20,
     fontWeight: "800",
   },
@@ -978,7 +992,7 @@ const styles = StyleSheet.create({
   },
 
   homeButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 13,
     fontWeight: "700",
   },
@@ -987,7 +1001,7 @@ const styles = StyleSheet.create({
     margin: 14,
     padding: 18,
     borderRadius: 22,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     alignItems: "center",
     shadowOpacity: 0.08,
     shadowRadius: 12,
@@ -1003,7 +1017,7 @@ const styles = StyleSheet.create({
     height: 330,
     borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
     position: "relative",
     alignItems: "center",
     justifyContent: "center",
@@ -1019,13 +1033,13 @@ const styles = StyleSheet.create({
     width: 130,
     height: 130,
     borderRadius: 65,
-    backgroundColor: "#ddd6fe",
+    backgroundColor: "#E8C5CF",
     alignItems: "center",
     justifyContent: "center",
   },
 
   photoPlaceholderText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontSize: 60,
     fontWeight: "800",
   },
@@ -1037,23 +1051,23 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#22c55e",
+    backgroundColor: "#35B779",
     borderWidth: 3,
-    borderColor: "#ffffff",
+    borderColor: "#FFFCFA",
   },
 
   name: {
     marginTop: 18,
     fontSize: 28,
     fontWeight: "800",
-    color: "#4c1d95",
+    color: "#672036",
     textAlign: "center",
   },
 
   username: {
     marginTop: 4,
     fontSize: 16,
-    color: "#7c3aed",
+    color: "#8F2942",
     fontWeight: "600",
   },
 
@@ -1066,41 +1080,41 @@ const styles = StyleSheet.create({
   },
 
   tag: {
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#F6EDEF",
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
   },
 
   tagText: {
-    color: "#374151",
+    color: "#694650",
     fontWeight: "600",
     fontSize: 13,
   },
 
   onlineBadge: {
     marginTop: 14,
-    backgroundColor: "#dcfce7",
+    backgroundColor: "#E5F5EC",
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 20,
   },
 
   onlineBadgeText: {
-    color: "#15803d",
+    color: "#277A54",
     fontWeight: "800",
   },
 
   verifiedBadge: {
     marginTop: 10,
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 20,
   },
 
   verifiedBadgeText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "800",
   },
 
@@ -1121,7 +1135,7 @@ const styles = StyleSheet.create({
   },
 
   likeButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontWeight: "800",
     fontSize: 14,
   },
@@ -1138,7 +1152,7 @@ const styles = StyleSheet.create({
     borderColor: "#8b5cf6",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   favoriteActive: {
@@ -1146,7 +1160,7 @@ const styles = StyleSheet.create({
   },
 
   favoriteButtonText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "800",
     fontSize: 14,
   },
@@ -1159,13 +1173,13 @@ const styles = StyleSheet.create({
   messageButton: {
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     justifyContent: "center",
   },
 
   messageButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     fontWeight: "800",
   },
@@ -1176,24 +1190,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#e9d5ff",
+    borderColor: "#E8C5CF",
   },
 
   messageTitle: {
     fontSize: 15,
-    color: "#4c1d95",
+    color: "#672036",
     fontWeight: "700",
     marginBottom: 12,
   },
 
   messageInput: {
     minHeight: 120,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
     borderRadius: 12,
     padding: 12,
-    color: "#374151",
+    color: "#694650",
     fontSize: 15,
   },
 
@@ -1205,26 +1219,26 @@ const styles = StyleSheet.create({
   },
 
   characterCount: {
-    color: "#6b7280",
+    color: "#80666D",
     fontSize: 12,
   },
 
   sendButton: {
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 10,
   },
 
   sendButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontWeight: "800",
   },
 
   sectionTitle: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 12,
   },
 
@@ -1233,11 +1247,11 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   aboutText: {
-    color: "#6b7280",
+    color: "#80666D",
     fontSize: 15,
     lineHeight: 24,
   },
@@ -1245,9 +1259,9 @@ const styles = StyleSheet.create({
   infoCard: {
     minHeight: 95,
     borderRadius: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     padding: 15,
     marginBottom: 10,
     justifyContent: "center",
@@ -1265,13 +1279,13 @@ const styles = StyleSheet.create({
   },
 
   infoTitle: {
-    color: "#7c3aed",
+    color: "#8F2942",
     fontSize: 13,
     fontWeight: "700",
   },
 
   infoValue: {
-    color: "#374151",
+    color: "#694650",
     fontSize: 16,
     fontWeight: "700",
   },
@@ -1288,30 +1302,30 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#f3e8ff",
     borderWidth: 1,
-    borderColor: "#e9d5ff",
+    borderColor: "#E8C5CF",
   },
 
   interestText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "700",
     fontSize: 13,
   },
 
   emptyText: {
-    color: "#6b7280",
+    color: "#80666D",
     fontSize: 14,
   },
 
   detailButton: {
     minHeight: 54,
     borderRadius: 14,
-    backgroundColor: "#6d28d9",
+    backgroundColor: "#A12E4A",
     alignItems: "center",
     justifyContent: "center",
   },
 
   detailButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     fontWeight: "800",
   },
@@ -1329,24 +1343,24 @@ const styles = StyleSheet.create({
     borderColor: "#8b5cf6",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   bottomBackText: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "800",
   },
 
   bottomMessageButton: {
     minHeight: 50,
     borderRadius: 13,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     justifyContent: "center",
   },
 
   bottomMessageText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontWeight: "800",
   },
 });

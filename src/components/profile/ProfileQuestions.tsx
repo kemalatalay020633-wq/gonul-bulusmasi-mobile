@@ -93,7 +93,7 @@ export default function ProfileQuestions({
       >
         {saving ? (
           <>
-            <ActivityIndicator size="small" color="#ffffff" />
+            <ActivityIndicator size="small" color="#FFFCFA" />
 
             <Text style={styles.saveButtonText}>Kaydediliyor...</Text>
           </>
@@ -115,14 +115,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 6,
   },
 
   description: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#6b7280",
+    color: "#80666D",
     marginBottom: 18,
   },
 
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   categoryTitle: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#6d28d9",
+    color: "#A12E4A",
     marginBottom: 10,
   },
 
@@ -144,22 +144,22 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     alignItems: "center",
     marginBottom: 16,
   },
 
   emptyText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#80666D",
     textAlign: "center",
   },
 
   errorContainer: {
     width: "100%",
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#b91c1c",
+    color: "#9B2947",
     textAlign: "center",
   },
 
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     width: "100%",
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
 
   saveButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     fontWeight: "700",
   },

@@ -3,7 +3,6 @@ import { useNavigation } from "@react-navigation/native";
 import { useState } from "react";
 
 import {
-  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -263,12 +262,7 @@ ${xhr.responseText}`,
   // =============================================================
 
   const sifremiUnuttum = () => {
-    console.log("SIFREMI UNUTTUM BASILDI");
-
-    Alert.alert(
-      "Şifremi Unuttum",
-      "Şifre sıfırlama ekranını daha sonra ekleyeceğiz.",
-    );
+    navigation.navigate("sifreSifirlama");
   };
 
   // =============================================================

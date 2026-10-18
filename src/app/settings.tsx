@@ -1,4 +1,6 @@
-import React, { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -9,78 +11,29 @@ import {
   Text,
   View,
 } from "react-native";
-// src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
-import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const API_ADRESI = API_BASE_URL + "/api";
+const API_ADRESI = `${API_BASE_URL}/api`;
 
-export default function Settings() {
+export default function SettingsScreen() {
   const navigation = useNavigation<any>();
-
   const [siliniyor, setSiliniyor] = useState(false);
   const [hata, setHata] = useState("");
 
-  /*
-   * =========================================================
-   * ANA SAYFA
-   * =========================================================
-   */
-
-  const anaSayfayaGit = () => {
-    navigation.navigate("home");
-  };
-
-  /*
-   * =========================================================
-   * PROFIL
-   * =========================================================
-   */
-
-  const profileGit = () => {
-    navigation.navigate("profile");
-  };
-
-  /*
-   * =========================================================
-   * PROFIL Dï¿½oZENLE
-   * =========================================================
-   */
-
-  const profilDuzenleyeGit = () => {
-    navigation.navigate("profileEdit");
-  };
-
-  /*
-   * =========================================================
-   * MESAJLAR
-   * =========================================================
-   */
-
-  const mesajlaraGit = () => {
-    navigation.navigate("messages");
-  };
-
-  /*
-   * =========================================================
-   * HESAP SILME UYARISI
-   * =========================================================
-   */
+  const anaSayfayaGit = () => navigation.navigate("home");
+  const profileGit = () => navigation.navigate("profile");
+  const profilDuzenleyeGit = () => navigation.navigate("profileEdit");
+  const mesajlaraGit = () => navigation.navigate("messages");
 
   const silmeOnayiniAc = () => {
     setHata("");
-
     Alert.alert(
-      "Hesabi Sil",
-      "Hesabinizi silmek istediï¿½Yinizden emin misiniz?\n\nBu iï¿½Ylem geri alinamaz. Profiliniz, mesajlariniz, medya dosyalariniz ve hesabiniza ait diï¿½Yer veriler silinebilir.",
+      "Hesabı Sil",
+      "Hesabınızı silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz. Profiliniz, mesajlarınız, medya dosyalarınız ve hesabınıza ait diğer veriler silinebilir.",
       [
+        { text: "Vazgeç", style: "cancel" },
         {
-          text: "Vazgeï¿½",
-          style: "cancel",
-        },
-        {
-          text: "Hesabi Sil",
+          text: "Hesabı Sil",
           style: "destructive",
           onPress: () => {
             void hesabimiSil();
@@ -90,27 +43,18 @@ export default function Settings() {
     );
   };
 
-  /*
-   * =========================================================
-   * HESABI SIL
-   * =========================================================
-   */
-
   const hesabimiSil = async () => {
+    if (siliniyor) return;
+
     try {
       setSiliniyor(true);
       setHata("");
 
       const token = await AsyncStorage.getItem("token");
-
       if (!token) {
-        setHata("Oturum bulunamadi. Lï¿½tfen tekrar giriï¿½Y yapin.");
-
-        Alert.alert(
-          "Oturum Bulunamadi",
-          "Oturumunuz bulunamadi. Lï¿½tfen tekrar giriï¿½Y yapin.",
-        );
-
+        const mesaj = "Oturum bulunamadı. Lütfen tekrar giriş yapın.";
+        setHata(mesaj);
+        Alert.alert("Oturum Bulunamadı", mesaj);
         return;
       }
 
@@ -126,31 +70,17 @@ export default function Settings() {
 
       if (!response.ok) {
         let hataMesaji = "Hesap silinemedi.";
-
         if (metin.trim()) {
           try {
             const veri = JSON.parse(metin);
-
-            if (veri?.message) {
-              hataMesaji = veri.message;
-            } else if (veri?.error) {
-              hataMesaji = veri.error;
-            } else if (veri?.mesaj) {
-              hataMesaji = veri.mesaj;
-            }
+            hataMesaji =
+              veri?.message || veri?.error || veri?.mesaj || hataMesaji;
           } catch {
             hataMesaji = metin;
           }
         }
-
         throw new Error(hataMesaji);
       }
-
-      /*
-       * =====================================================
-       * LOCAL STORAGE TEMIZLE
-       * =====================================================
-       */
 
       await AsyncStorage.multiRemove([
         "token",
@@ -158,53 +88,53 @@ export default function Settings() {
         "username",
         "user",
         "currentUser",
+        "role",
       ]);
 
-      /*
-       * =====================================================
-       * GIRIS SAYFASINA Dï¿½-N
-       * =====================================================
-       */
-
-      Alert.alert("Hesap Silindi", "Hesabiniz baï¿½Yariyla silindi.", [
+      Alert.alert("Hesap Silindi", "Hesabınız başarıyla silindi.", [
         {
           text: "Tamam",
-          onPress: () => {
-            navigation.replace("index");
-          },
+          onPress: () => navigation.replace("index"),
         },
       ]);
     } catch (error) {
-      console.error("HESAP SILINEMEDI:", error);
-
+      console.error("HESAP SİLİNEMEDİ:", error);
       const hataMesaji =
         error instanceof Error
           ? error.message
-          : "Hesap silinirken beklenmeyen bir hata oluï¿½Ytu.";
-
+          : "Hesap silinirken beklenmeyen bir hata oluştu.";
       setHata(hataMesaji);
-
       Alert.alert("Hata", hataMesaji);
     } finally {
       setSiliniyor(false);
     }
   };
 
-  /*
-   * =========================================================
-   * HATA TEMIZLE
-   * =========================================================
-   */
+  const hatayiTemizle = () => setHata("");
 
-  const hatayiTemizle = () => {
-    setHata("");
-  };
-
-  /*
-   * =========================================================
-   * EKRAN
-   * =========================================================
-   */
+  const ayarSatiri = (
+    ikon: string,
+    baslik: string,
+    aciklama: string,
+    tiklama: () => void,
+  ) => (
+    <Pressable
+      style={({ pressed }) => [
+        styles.settingsItem,
+        pressed && styles.settingsItemPressed,
+      ]}
+      onPress={tiklama}
+    >
+      <View style={styles.settingsIconBox}>
+        <Text style={styles.settingsIcon}>{ikon}</Text>
+      </View>
+      <View style={styles.settingsItemContent}>
+        <Text style={styles.settingsItemTitle}>{baslik}</Text>
+        <Text style={styles.settingsItemDescription}>{aciklama}</Text>
+      </View>
+      <Text style={styles.settingsArrow}>›</Text>
+    </Pressable>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -212,191 +142,93 @@ export default function Settings() {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* =================================================
-            ï¿½oST BASLIK
-        ================================================= */}
-
         <View style={styles.header}>
           <Pressable style={styles.anaSayfaButonu} onPress={anaSayfayaGit}>
-            <Text style={styles.anaSayfaIcon}>ï¿½?ï¿½</Text>
-
+            <Text style={styles.anaSayfaIcon}>‹</Text>
             <Text style={styles.anaSayfaText}>Ana Sayfa</Text>
           </Pressable>
 
           <View style={styles.baslikAlani}>
             <View style={styles.baslikIconKutusu}>
-              <Text style={styles.baslikIcon}>ï¿½sT</Text>
+              <Text style={styles.baslikIcon}>⚙️</Text>
             </View>
-
-            <View>
+            <View style={styles.baslikMetni}>
               <Text style={styles.baslik}>Ayarlar</Text>
-
               <Text style={styles.baslikAciklama}>
-                Hesap ve uygulama ayarlariniz
+                Hesap ve uygulama ayarlarınız
               </Text>
             </View>
           </View>
-
           <View style={styles.headerBosluk} />
         </View>
 
         <View style={styles.divider} />
 
-        {/* =================================================
-            HATA
-        ================================================= */}
-
         {hata ? (
           <Pressable style={styles.hataKart} onPress={hatayiTemizle}>
-            <Text style={styles.hataBaslik}>ï¿½sï¿½ Bir hata oluï¿½Ytu</Text>
-
+            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
             <Text style={styles.hataText}>{hata}</Text>
-
-            <Text style={styles.hataKapat}>Kapatmak iï¿½in dokunun</Text>
+            <Text style={styles.hataKapat}>Kapatmak için dokunun</Text>
           </Pressable>
         ) : null}
 
-        {/* =================================================
-            HESAP
-        ================================================= */}
-
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Hesap</Text>
-
           <Text style={styles.sectionDescription}>
-            Profilinizi ve mesajlaï¿½Yma seï¿½eneklerinizi yï¿½netin.
+            Profilinizi ve mesajlaşma seçeneklerinizi yönetin.
           </Text>
         </View>
 
         <View style={styles.settingsList}>
-          {/* =================================================
-              PROFIL
-          ================================================= */}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsItem,
-              pressed && styles.settingsItemPressed,
-            ]}
-            onPress={profileGit}
-          >
-            <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>gY'ï¿½</Text>
-            </View>
-
-            <View style={styles.settingsItemContent}>
-              <Text style={styles.settingsItemTitle}>Profilim</Text>
-
-              <Text style={styles.settingsItemDescription}>
-                Profilinizi gï¿½rï¿½ntï¿½leyin
-              </Text>
-            </View>
-
-            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
-          </Pressable>
-
+          {ayarSatiri("👤", "Profilim", "Profilinizi görüntüleyin", profileGit)}
           <View style={styles.itemDivider} />
-
-          {/* =================================================
-              PROFIL Dï¿½oZENLE
-          ================================================= */}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsItem,
-              pressed && styles.settingsItemPressed,
-            ]}
-            onPress={profilDuzenleyeGit}
-          >
-            <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>ï¿½oï¿½ï¸</Text>
-            </View>
-
-            <View style={styles.settingsItemContent}>
-              <Text style={styles.settingsItemTitle}>Profili Dï¿½zenle</Text>
-
-              <Text style={styles.settingsItemDescription}>
-                Profil bilgilerinizi gï¿½ncelleyin
-              </Text>
-            </View>
-
-            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
-          </Pressable>
-
+          {ayarSatiri(
+            "✏️",
+            "Profili Düzenle",
+            "Profil bilgilerinizi güncelleyin",
+            profilDuzenleyeGit,
+          )}
           <View style={styles.itemDivider} />
-
-          {/* =================================================
-              MESAJLAR
-          ================================================= */}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.settingsItem,
-              pressed && styles.settingsItemPressed,
-            ]}
-            onPress={mesajlaraGit}
-          >
-            <View style={styles.settingsIconBox}>
-              <Text style={styles.settingsIcon}>gY'ï¿½</Text>
-            </View>
-
-            <View style={styles.settingsItemContent}>
-              <Text style={styles.settingsItemTitle}>Mesajlar</Text>
-
-              <Text style={styles.settingsItemDescription}>
-                Mesajlaï¿½Ymalarinizi gï¿½rï¿½ntï¿½leyin
-              </Text>
-            </View>
-
-            <Text style={styles.settingsArrow}>ï¿½?ï¿½</Text>
-          </Pressable>
+          {ayarSatiri(
+            "✉️",
+            "Mesajlar",
+            "Mesajlaşmalarınızı görüntüleyin",
+            mesajlaraGit,
+          )}
         </View>
-
-        {/* =================================================
-            BILGI KUTUSU
-        ================================================= */}
 
         <View style={styles.infoBox}>
           <View style={styles.infoIconBox}>
-            <Text style={styles.infoIcon}>gY"'</Text>
+            <Text style={styles.infoIcon}>🔒</Text>
           </View>
-
           <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Hesap gï¿½venliï¿½Yi</Text>
-
+            <Text style={styles.infoTitle}>Hesap güvenliği</Text>
             <Text style={styles.infoText}>
-              Hesap bilgilerinizi gï¿½ncel tutun ve profilinizde yalnizca
-              paylaï¿½Ymak istediï¿½Yiniz bilgileri bulundurun.
+              Hesap bilgilerinizi güncel tutun ve profilinizde yalnızca
+              paylaşmak istediğiniz bilgileri bulundurun.
             </Text>
           </View>
         </View>
 
-        {/* =================================================
-            TEHLIKELI Bï¿½-LGE
-        ================================================= */}
-
         <View style={styles.dangerSection}>
           <View style={styles.dangerHeader}>
             <View style={styles.dangerIconBox}>
-              <Text style={styles.dangerIcon}>gY-'</Text>
+              <Text style={styles.dangerIcon}>🗑️</Text>
             </View>
-
             <View style={styles.dangerHeaderContent}>
-              <Text style={styles.dangerTitle}>Tehlikeli Bï¿½lge</Text>
-
+              <Text style={styles.dangerTitle}>Tehlikeli Bölge</Text>
               <Text style={styles.dangerDescription}>
-                Hesabinizi kalici olarak silme iï¿½Ylemi
+                Hesabınızı kalıcı olarak silme işlemi
               </Text>
             </View>
           </View>
 
           <View style={styles.dangerContent}>
             <Text style={styles.dangerText}>
-              Hesabinizi sildiï¿½Yinizde profil bilgileriniz, mesajlariniz, medya
-              dosyalariniz ve hesabiniza ait diï¿½Yer veriler kalici olarak
+              Hesabınızı sildiğinizde profil bilgileriniz, mesajlarınız, medya
+              dosyalarınız ve hesabınıza ait diğer veriler kalıcı olarak
               silinebilir.
             </Text>
-
             <Pressable
               style={({ pressed }) => [
                 styles.deleteButton,
@@ -409,17 +241,15 @@ export default function Settings() {
               {siliniyor ? (
                 <>
                   <ActivityIndicator size="small" color="#be123c" />
-
                   <Text style={styles.deleteButtonText}>
                     Hesap siliniyor...
                   </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.deleteButtonIcon}>gY-'</Text>
-
+                  <Text style={styles.deleteButtonIcon}>🗑️</Text>
                   <Text style={styles.deleteButtonText}>
-                    Hesabimi Kalici Olarak Sil
+                    Hesabımı Kalıcı Olarak Sil
                   </Text>
                 </>
               )}
@@ -427,69 +257,48 @@ export default function Settings() {
           </View>
         </View>
 
-        {/* =================================================
-            ALT BILGI
-        ================================================= */}
-
         <View style={styles.footer}>
-          <Text style={styles.footerBrand}>Gï¿½nï¿½l Buluï¿½Ymasi</Text>
-
-          <Text style={styles.footerText}>Hesap Ayarlari</Text>
+          <Text style={styles.footerBrand}>Gönül Buluşması</Text>
+          <Text style={styles.footerText}>Hesap Ayarları</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/*
- * =========================================================
- * STYLES
- * =========================================================
- */
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fffaf5",
+    backgroundColor: "#FFFCFAaf5",
   },
-
   scrollContainer: {
     paddingBottom: 40,
   },
-
-  /*
-   * HEADER
-   */
-
   header: {
     minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
-    backgroundColor: "#fffaf5",
+    backgroundColor: "#FFFCFAaf5",
   },
-
   anaSayfaButonu: {
     width: 90,
     minHeight: 48,
     flexDirection: "row",
     alignItems: "center",
   },
-
   anaSayfaIcon: {
     fontSize: 36,
     lineHeight: 36,
     color: "#b45309",
     marginRight: 2,
   },
-
   anaSayfaText: {
     fontSize: 14,
     fontWeight: "700",
     color: "#b45309",
   },
-
   baslikAlani: {
     flex: 1,
     flexDirection: "row",
@@ -497,7 +306,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 8,
   },
-
   baslikIconKutusu: {
     width: 44,
     height: 44,
@@ -507,114 +315,89 @@ const styles = StyleSheet.create({
     backgroundColor: "#fef3c7",
     marginRight: 10,
   },
-
   baslikIcon: {
     fontSize: 24,
   },
-
+  baslikMetni: {
+    flexShrink: 1,
+  },
   baslik: {
     fontSize: 20,
     fontWeight: "800",
     color: "#92400e",
   },
-
   baslikAciklama: {
     marginTop: 2,
     fontSize: 12,
     color: "#78716c",
   },
-
   headerBosluk: {
     width: 90,
   },
-
   divider: {
     height: 1,
-    backgroundColor: "#fed7aa",
+    backgroundColor: "#EFD2C0",
   },
-
-  /*
-   * HATA
-   */
-
   hataKart: {
     marginHorizontal: 16,
     marginTop: 18,
     padding: 16,
     borderRadius: 16,
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
     borderColor: "#fecdd3",
   },
-
   hataBaslik: {
     fontSize: 16,
     fontWeight: "800",
     color: "#be123c",
     marginBottom: 6,
   },
-
   hataText: {
     fontSize: 14,
     lineHeight: 21,
     color: "#881337",
   },
-
   hataKapat: {
     marginTop: 8,
     fontSize: 12,
     color: "#be123c",
     fontWeight: "600",
   },
-
-  /*
-   * SECTION
-   */
-
   sectionHeader: {
     paddingHorizontal: 18,
     paddingTop: 24,
     paddingBottom: 12,
   },
-
   sectionTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: "#292524",
   },
-
   sectionDescription: {
     marginTop: 5,
     fontSize: 14,
     lineHeight: 20,
     color: "#78716c",
   },
-
-  /*
-   * SETTINGS LIST
-   */
-
   settingsList: {
     marginHorizontal: 16,
     borderRadius: 18,
     overflow: "hidden",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
-    borderColor: "#fed7aa",
+    borderColor: "#EFD2C0",
   },
-
   settingsItem: {
     minHeight: 82,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 16,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
-
   settingsItemPressed: {
-    backgroundColor: "#fff7ed",
+    backgroundColor: "#FFFCFA7ed",
   },
-
   settingsIconBox: {
     width: 48,
     height: 48,
@@ -623,109 +406,86 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fef3c7",
   },
-
   settingsIcon: {
     fontSize: 22,
   },
-
   settingsItemContent: {
     flex: 1,
     marginLeft: 14,
   },
-
   settingsItemTitle: {
     fontSize: 16,
     fontWeight: "800",
     color: "#292524",
   },
-
   settingsItemDescription: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 18,
     color: "#78716c",
   },
-
   settingsArrow: {
     marginLeft: 10,
     fontSize: 28,
     fontWeight: "400",
     color: "#a8a29e",
   },
-
   itemDivider: {
     height: 1,
     marginLeft: 78,
     backgroundColor: "#f5f5f4",
   },
-
-  /*
-   * INFO BOX
-   */
-
   infoBox: {
     marginHorizontal: 16,
     marginTop: 22,
     padding: 16,
     flexDirection: "row",
     borderRadius: 18,
-    backgroundColor: "#eff6ff",
+    backgroundColor: "#F8E9ED",
     borderWidth: 1,
-    borderColor: "#bfdbfe",
+    borderColor: "#E9C9D2",
   },
-
   infoIconBox: {
     width: 42,
     height: 42,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#dbeafe",
+    backgroundColor: "#F6E6EB",
   },
-
   infoIcon: {
     fontSize: 20,
   },
-
   infoContent: {
     flex: 1,
     marginLeft: 12,
   },
-
   infoTitle: {
     fontSize: 15,
     fontWeight: "800",
     color: "#1e3a8a",
   },
-
   infoText: {
     marginTop: 5,
     fontSize: 13,
     lineHeight: 20,
     color: "#1e40af",
   },
-
-  /*
-   * DANGER
-   */
-
   dangerSection: {
     marginHorizontal: 16,
     marginTop: 24,
     borderRadius: 20,
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
     borderColor: "#fecdd3",
     overflow: "hidden",
   },
-
   dangerHeader: {
     flexDirection: "row",
     alignItems: "center",
     padding: 16,
     backgroundColor: "#ffe4e6",
   },
-
   dangerIconBox: {
     width: 46,
     height: 46,
@@ -734,90 +494,71 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#fecdd3",
   },
-
   dangerIcon: {
     fontSize: 21,
   },
-
   dangerHeaderContent: {
     flex: 1,
     marginLeft: 12,
   },
-
   dangerTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: "#9f1239",
   },
-
   dangerDescription: {
     marginTop: 3,
     fontSize: 13,
     color: "#be123c",
   },
-
   dangerContent: {
     padding: 16,
   },
-
   dangerText: {
     fontSize: 14,
     lineHeight: 21,
     color: "#881337",
   },
-
   deleteButton: {
     marginTop: 16,
     minHeight: 50,
     borderRadius: 14,
     borderWidth: 1.5,
     borderColor: "#be123c",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
-
   deleteButtonPressed: {
     backgroundColor: "#ffe4e6",
   },
-
   deleteButtonDisabled: {
     opacity: 0.65,
   },
-
   deleteButtonIcon: {
     fontSize: 18,
     marginRight: 8,
   },
-
   deleteButtonText: {
     fontSize: 14,
     fontWeight: "800",
     color: "#be123c",
   },
-
-  /*
-   * FOOTER
-   */
-
   footer: {
     alignItems: "center",
     paddingTop: 28,
     paddingBottom: 10,
   },
-
   footerBrand: {
     fontSize: 15,
     fontWeight: "800",
     color: "#92400e",
   },
-
   footerText: {
     marginTop: 4,
     fontSize: 12,
     color: "#a8a29e",
   },
 });
-

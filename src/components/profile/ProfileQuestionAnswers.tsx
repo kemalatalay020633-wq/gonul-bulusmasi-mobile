@@ -33,7 +33,7 @@ export default function ProfileQuestionAnswers({
         <Text style={styles.title}>Sorular ve Cevaplar</Text>
 
         <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color="#7c3aed" />
+          <ActivityIndicator size="small" color="#8F2942" />
 
           <Text style={styles.loadingText}>
             Sorular ve cevaplar yükleniyor...
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     marginBottom: 14,
   },
 
@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
 
   loadingText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   list: {
@@ -127,13 +127,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
     alignItems: "center",
   },
 
   emptyText: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#80666D",
     textAlign: "center",
     lineHeight: 21,
   },
@@ -143,20 +143,20 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#faf5ff",
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
   },
 
   question: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#5b21b6",
+    color: "#7A263C",
     lineHeight: 23,
     marginBottom: 8,
   },
 
   answer: {
     fontSize: 15,
-    color: "#374151",
+    color: "#694650",
     lineHeight: 23,
   },
 });

@@ -59,9 +59,9 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
     borderWidth: 3,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 14,
@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#ede9fe",
+    backgroundColor: "#F5DCE3",
   },
 
   avatarText: {
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 25,
     fontWeight: "800",
-    color: "#4c1d95",
+    color: "#672036",
     textAlign: "center",
   },
 
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
     fontSize: 16,
     fontWeight: "600",
-    color: "#7c3aed",
+    color: "#8F2942",
     textAlign: "center",
   },
 });

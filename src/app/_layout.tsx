@@ -25,7 +25,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#ffffff" }}>
+    <View style={{ flex: 1, backgroundColor: "#FFFCFA" }}>
       <Slot />
     </View>
   );

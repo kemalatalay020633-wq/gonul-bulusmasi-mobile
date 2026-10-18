@@ -574,6 +574,45 @@ function useMessages() {
         return false;
       }
 
+      // Önce oturum açmış kullanıcının cinsiyetini kontrol et.
+      // Kadın kullanıcılar için Premium zorunluluğu yoktur.
+      const mevcutKullaniciId = await getCurrentUserId();
+      if (mevcutKullaniciId !== null) {
+        try {
+          const kullaniciResponse = await fetch(
+            `${API_ADRESI}/users/${mevcutKullaniciId}`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/json",
+              },
+            },
+          );
+
+          if (kullaniciResponse.ok) {
+            const kullanici = await kullaniciResponse.json();
+            const cinsiyet = String(
+              kullanici?.gender ?? kullanici?.cinsiyet ?? "",
+            )
+              .trim()
+              .toLocaleUpperCase("tr-TR");
+
+            console.log("PREMIUM KONTROL KULLANICI CİNSİYETİ:", cinsiyet);
+
+            if (cinsiyet === "KADIN") {
+              console.log("KADIN KULLANICI: PREMIUM KONTROLÜ ATLANDI.");
+              return true;
+            }
+          }
+        } catch (cinsiyetHatasi) {
+          // Cinsiyet endpoint'i yanıt vermezse erkeklere ait Premium
+          // kontrolünü yanlışlıkla atlamamak için normal kontrole devam et.
+          console.warn("KULLANICI CİNSİYETİ ALINAMADI:", cinsiyetHatasi);
+        }
+      }
+
+      // Erkek kullanıcılar için mevcut Premium endpoint'i aynen korunur.
       const response = await fetch(`${API_ADRESI}/memberships/me/premium`, {
         method: "GET",
         headers: {
@@ -604,12 +643,15 @@ function useMessages() {
           const veri = sonuc as {
             premium?: unknown;
             aktif?: unknown;
+            active?: unknown;
           };
 
           if (typeof veri.premium === "boolean") {
             premium = veri.premium;
           } else if (typeof veri.aktif === "boolean") {
             premium = veri.aktif;
+          } else if (typeof veri.active === "boolean") {
+            premium = veri.active;
           }
         }
       } catch {
@@ -623,29 +665,23 @@ function useMessages() {
           "🔒 Premium Üyelik Gerekli",
           "Mesaj, dosya gönderme ve sesli/görüntülü arama özelliklerini kullanabilmek için Premium üye olmanız gerekiyor.",
           [
-            {
-              text: "Vazgeç",
-              style: "cancel",
-            },
+            { text: "Vazgeç", style: "cancel" },
             {
               text: "⭐ Premium Ol",
-              onPress: () => {
-                navigation.navigate("premium");
-              },
+              onPress: () => navigation.navigate("premium"),
             },
           ],
         );
-
         return false;
       }
 
       return true;
     } catch (error) {
       console.error("PREMIUM KONTROL HATASI:", error);
-
+      Alert.alert("Hata", "Premium üyelik durumu kontrol edilemedi.");
       return false;
     }
-  }, [getToken, navigation]);
+  }, [getToken, getCurrentUserId, navigation]);
 
   const stompFrameGonder = useCallback(
     async (destination: string, body: any): Promise<boolean> => {
@@ -1321,7 +1357,6 @@ function useMessages() {
 
         console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
       },
-
       onStompError: (frame) => {
         console.error(
           "❌ STOMP SUNUCU HATASI:",

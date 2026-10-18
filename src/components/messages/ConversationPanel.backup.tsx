@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     width: "100%",
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   /*
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderBottomWidth: 1,
     borderBottomColor: "#eeeaff",
   },
@@ -1118,7 +1118,7 @@ const styles = StyleSheet.create({
   },
 
   messageBubbleOther: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderWidth: 1,
     borderColor: "#eeeaff",
     borderTopLeftRadius: 18,
@@ -1133,7 +1133,7 @@ const styles = StyleSheet.create({
   },
 
   messageContentMine: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   messageContentOther: {
@@ -1294,7 +1294,7 @@ const styles = StyleSheet.create({
     width: "100%",
     flexShrink: 0,
     minHeight: 68,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderTopWidth: 1,
     borderTopColor: "#eeeaff",
     zIndex: 20,

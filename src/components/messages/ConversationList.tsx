@@ -198,7 +198,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     borderBottomWidth: 1,
     borderBottomColor: "#eeeaf8",
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
 
   avatarTextSelected: {
-    color: "#ffffff",
+    color: "#FFFCFA",
   },
 
   /*

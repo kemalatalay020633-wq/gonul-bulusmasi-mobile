@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +12,6 @@ import {
   View,
 } from "react-native";
 // src/app/home.tsx
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { API_BASE_URL } from "../config/api";
 const API_ADRESI = API_BASE_URL + "/api";
@@ -41,55 +39,55 @@ export default function Register() {
     setError("");
 
     if (!username.trim()) {
-      setError("Lï¿½tfen kullanici adinizi giriniz.");
+      setError("Lütfen kullanıcı adınızı giriniz.");
       return;
     }
 
     if (username.trim().length < 3) {
-      setError("Kullanici adi en az 3 karakter olmalidir.");
+      setError("Kullanıcı adi en az 3 karakter olmalıdır.");
       return;
     }
 
     if (!email.trim()) {
-      setError("Lï¿½tfen e-posta adresinizi giriniz.");
+      setError("Lütfen e-posta adresinizi giriniz.");
       return;
     }
 
     if (!password) {
-      setError("Lï¿½tfen ï¿½Yifrenizi giriniz.");
+      setError("Lütfen şifrenizi giriniz.");
       return;
     }
 
     if (password.length < 8) {
-      setError("Sifre en az 8 karakter olmalidir.");
+      setError("Şifre en az 8 karakter olmalıdır.");
       return;
     }
 
     if (!firstName.trim()) {
-      setError("Lï¿½tfen adinizi giriniz.");
+      setError("Lütfen adınızı giriniz.");
       return;
     }
 
     if (!lastName.trim()) {
-      setError("Lï¿½tfen soyadinizi giriniz.");
+      setError("Lütfen soyadınızı giriniz.");
       return;
     }
 
     if (!birthDate.trim()) {
-      setError("Lï¿½tfen doï¿½Yum tarihinizi giriniz.");
+      setError("Lütfen doğum tarihinizi giriniz.");
       return;
     }
 
     if (!gender) {
-      setError("Lï¿½tfen cinsiyet seï¿½iniz.");
+      setError("Lütfen cinsiyet seçiniz.");
       return;
     }
 
     /*
      * =========================================================
-     * DOGUM TARIHI
+     * DOGUM TARİHİ
      *
-     * Kullanici:
+     * Kullanıcı:
      * GG/AA/YYYY
      *
      * Backend:
@@ -100,7 +98,7 @@ export default function Register() {
     const parcalar = birthDate.split("/");
 
     if (parcalar.length !== 3) {
-      setError("Doï¿½Yum tarihini GG/AA/YYYY ï¿½Yeklinde giriniz.");
+      setError("Doğum tarihini GG/AA/YYYY şeklinde giriniz.");
       return;
     }
 
@@ -109,7 +107,7 @@ export default function Register() {
     const yil = parcalar[2];
 
     if (gun.length !== 2 || ay.length !== 2 || yil.length !== 4) {
-      setError("Doï¿½Yum tarihini GG/AA/YYYY ï¿½Yeklinde giriniz.");
+      setError("Doğum tarihini GG/AA/YYYY şeklinde giriniz.");
       return;
     }
 
@@ -122,26 +120,26 @@ export default function Register() {
       !Number.isInteger(aySayisi) ||
       !Number.isInteger(yilSayisi)
     ) {
-      setError("Doï¿½Yum tarihi geï¿½ersiz.");
+      setError("Doğum tarihi geçersiz.");
       return;
     }
 
     if (aySayisi < 1 || aySayisi > 12) {
-      setError("Doï¿½Yum tarihi geï¿½ersiz. Ay 01-12 arasinda olmalidir.");
+      setError("Doğum tarihi geçersiz. Ay 01-12 arasında olmalıdır.");
       return;
     }
 
     if (gunSayisi < 1 || gunSayisi > 31) {
-      setError("Doï¿½Yum tarihi geï¿½ersiz. Gï¿½n 01-31 arasinda olmalidir.");
+      setError("Doğum tarihi geçersiz. Gün 01-31 arasında olmalıdır.");
       return;
     }
 
     /*
      * =========================================================
-     * GERï¿½?EK TAKVIM TARIHI KONTROLï¿½o
+     * GERÇEK TAKVİM TARİHİ KONTROLÜ
      *
-     * ï¿½-rneï¿½Yin:
-     * 31/02/1990 -> geï¿½ersiz
+     * Örneğin:
+     * 31/02/1990 -> geçersiz
      * =========================================================
      */
 
@@ -152,20 +150,20 @@ export default function Register() {
       kontrolTarihi.getMonth() !== aySayisi - 1 ||
       kontrolTarihi.getDate() !== gunSayisi
     ) {
-      setError("Geï¿½erli bir doï¿½Yum tarihi giriniz.");
+      setError("Geçerli bir doğum tarihi giriniz.");
       return;
     }
 
     /*
      * =========================================================
-     * GELECEK TARIH KONTROLï¿½o
+     * GELECEK TARİH KONTROLÜ
      * =========================================================
      */
 
     const bugun = new Date();
 
     if (kontrolTarihi >= bugun) {
-      setError("Doï¿½Yum tarihi gelecekte olamaz.");
+      setError("Doğum tarihi gelecekte olamaz.");
       return;
     }
 
@@ -183,11 +181,11 @@ export default function Register() {
 
     const birthDateBackend = `${yil}-${ay}-${gun}`;
 
-    console.log("DOGUM TARIHI MOBIL:", birthDate);
+    console.log("DOGUM TARİHİ MOBIL:", birthDate);
 
-    console.log("DOGUM TARIHI BACKEND:", birthDateBackend);
+    console.log("DOGUM TARİHİ BACKEND:", birthDateBackend);
 
-    console.log("CINSIYET:", gender);
+    console.log("CİNSİYET:", gender);
 
     setLoading(true);
 
@@ -247,8 +245,8 @@ export default function Register() {
        * =====================================================
        * HATA
        *
-       * Backend Tï¿½rkï¿½e olarak "mesaj" dï¿½ndï¿½rï¿½yor.
-       * Bu yï¿½zden hem mesaj hem message kontrol ediyoruz.
+       * Backend Türkçe olarak "mesaj" döndürüyor.
+       * Bu yüzden hem mesaj hem message kontrol ediyoruz.
        * =====================================================
        */
 
@@ -257,7 +255,7 @@ export default function Register() {
           data.mesaj ||
             data.message ||
             data.error ||
-            `Kayit baï¿½Yarisiz. HTTP ${response.status}`,
+            `Kayıt başarısız. HTTP ${response.status}`,
         );
       }
 
@@ -267,64 +265,18 @@ export default function Register() {
        * =====================================================
        */
 
-      console.log("KAYIT BASARILI:", data);
+      console.log("KAYIT BAŞARILI:", data);
 
-      /*
-       * =====================================================
-       * TOKEN
-       * =====================================================
-       */
-
-      if (data.token) {
-        await AsyncStorage.setItem("token", data.token);
-      }
-
-      /*
-       * =====================================================
-       * USER ID
-       * =====================================================
-       */
-
-      if (data.userId !== undefined && data.userId !== null) {
-        await AsyncStorage.setItem("userId", String(data.userId));
-      }
-
-      /*
-       * =====================================================
-       * USERNAME
-       * =====================================================
-       */
-
-      if (data.username) {
-        await AsyncStorage.setItem("username", data.username);
-      }
-
-      /*
-       * =====================================================
-       * BASARI MESAJI
-       * =====================================================
-       */
-
-      Alert.alert(
-        "Kayit Baï¿½Yarili",
-        "Gï¿½nï¿½l Buluï¿½Ymasi'na hoï¿½Y geldiniz.",
-        [
-          {
-            text: "Devam Et",
-
-            onPress: () => {
-              navigation.replace("home");
-            },
-          },
-        ],
-      );
+      navigation.replace("emailDogrulama", {
+        email: email.trim(),
+      });
     } catch (hata) {
       console.error("KAYIT HATASI:", hata);
 
       if (hata instanceof Error) {
         setError(hata.message);
       } else {
-        setError("Kayit sirasinda bir hata oluï¿½Ytu.");
+        setError("Kayıt sırasında bir hata oluştu.");
       }
     } finally {
       setLoading(false);
@@ -333,7 +285,7 @@ export default function Register() {
 
   /*
    * =========================================================
-   * CINSIYET SEï¿½?IMI
+   * CİNSİYET SEÇİMİ
    *
    * Backend enum:
    * KADIN
@@ -364,12 +316,12 @@ export default function Register() {
       >
         <View style={styles.container}>
           {/* =================================================
-              ï¿½oST ALAN
+              ÜST ALAN
           ================================================= */}
 
           <View style={styles.header}>
             {/* =================================================
-                GERï¿½?EK Gï¿½-Nï¿½oL BULUSMASI LOGOSU
+                GERÇEK GÖNÜL BULUŞMASI LOGOSU
             ================================================= */}
 
             <View style={styles.logoAlan}>
@@ -380,10 +332,10 @@ export default function Register() {
               />
             </View>
 
-            <Text style={styles.appTitle}>Gï¿½nï¿½l Buluï¿½Ymasi</Text>
+            <Text style={styles.appTitle}>Gönül Buluşması</Text>
 
             <Text style={styles.subtitle}>
-              Yeni bir baï¿½Ylangiï¿½ iï¿½in ilk adim
+              Yeni bir başlangıç için ilk adım
             </Text>
           </View>
 
@@ -392,10 +344,10 @@ export default function Register() {
           ================================================= */}
 
           <View style={styles.card}>
-            <Text style={styles.title}>Hesabini oluï¿½Ytur</Text>
+            <Text style={styles.title}>Hesabını oluştur</Text>
 
             <Text style={styles.description}>
-              ï¿½ocretsiz olarak kaydol ve Gï¿½nï¿½l Buluï¿½Ymasi'na katil.
+              Ücretsiz olarak kaydol ve Gönül Buluşması'na katıl.
             </Text>
 
             {/* =================================================
@@ -413,7 +365,7 @@ export default function Register() {
             ================================================= */}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Kullanici Adi</Text>
+              <Text style={styles.label}>Kullanıcı Adi</Text>
 
               <TextInput
                 value={username}
@@ -421,8 +373,8 @@ export default function Register() {
                   setUsername(text);
                   setError("");
                 }}
-                placeholder="Kullanici adin"
-                placeholderTextColor="#9ca3af"
+                placeholder="Kullanıcı adin"
+                placeholderTextColor="#A88F95"
                 autoCapitalize="none"
                 autoCorrect={false}
                 maxLength={30}
@@ -444,7 +396,7 @@ export default function Register() {
                   setError("");
                 }}
                 placeholder="E-posta adresin"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#A88F95"
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -457,7 +409,7 @@ export default function Register() {
             ================================================= */}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Sifre</Text>
+              <Text style={styles.label}>Şifre</Text>
 
               <TextInput
                 value={password}
@@ -465,8 +417,8 @@ export default function Register() {
                   setPassword(text);
                   setError("");
                 }}
-                placeholder="Sifren"
-                placeholderTextColor="#9ca3af"
+                placeholder="Şifren"
+                placeholderTextColor="#A88F95"
                 secureTextEntry
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -475,7 +427,7 @@ export default function Register() {
               />
 
               <Text style={styles.helperText}>
-                Sifren en az 8 karakter olmalidir.
+                Şifren en az 8 karakter olmalıdır.
               </Text>
             </View>
 
@@ -493,7 +445,7 @@ export default function Register() {
                   setError("");
                 }}
                 placeholder="Adin"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#A88F95"
                 autoCapitalize="words"
                 style={styles.input}
               />
@@ -512,19 +464,19 @@ export default function Register() {
                   setLastName(text);
                   setError("");
                 }}
-                placeholder="Soyadin"
-                placeholderTextColor="#9ca3af"
+                placeholder="Soyadın"
+                placeholderTextColor="#A88F95"
                 autoCapitalize="words"
                 style={styles.input}
               />
             </View>
 
             {/* =================================================
-                DOGUM TARIHI
+                DOGUM TARİHİ
             ================================================= */}
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Doï¿½Yum Tarihi</Text>
+              <Text style={styles.label}>Doğum Tarihi</Text>
 
               <TextInput
                 value={birthDate}
@@ -563,17 +515,17 @@ export default function Register() {
                   setError("");
                 }}
                 placeholder="GG/AA/YYYY"
-                placeholderTextColor="#9ca3af"
+                placeholderTextColor="#A88F95"
                 keyboardType="number-pad"
                 maxLength={10}
                 style={styles.input}
               />
 
-              <Text style={styles.helperText}>ï¿½-rnek: 15/05/1990</Text>
+              <Text style={styles.helperText}>Örnek: 15/05/1990</Text>
             </View>
 
             {/* =================================================
-                CINSIYET
+                CİNSİYET
             ================================================= */}
 
             <View style={styles.inputGroup}>
@@ -595,7 +547,7 @@ export default function Register() {
                       gender === "KADIN" && styles.genderTextSelected,
                     ]}
                   >
-                    gY'ï¿½ Kadin
+                    ♀ Kadın
                   </Text>
                 </Pressable>
 
@@ -614,7 +566,7 @@ export default function Register() {
                       gender === "ERKEK" && styles.genderTextSelected,
                     ]}
                   >
-                    gY'ï¿½ Erkek
+                    ♂ Erkek
                   </Text>
                 </Pressable>
               </View>
@@ -633,28 +585,28 @@ export default function Register() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color="#ffffff" />
+                <ActivityIndicator color="#FFFCFA" />
               ) : (
                 <>
-                  <Text style={styles.buttonIcon}>gY'ï¿½</Text>
+                  <Text style={styles.buttonIcon}>✦</Text>
 
                   <Text style={styles.registerButtonText}>
-                    ï¿½ocretsiz Kayit Ol
+                    Ücretsiz Kayıt Ol
                   </Text>
                 </>
               )}
             </Pressable>
 
             {/* =================================================
-                Gï¿½oVENLIK
+                GÜVENLİK
             ================================================= */}
 
             <View style={styles.securityBox}>
-              <Text style={styles.securityIcon}>gY"'</Text>
+              <Text style={styles.securityIcon}>🔒</Text>
 
               <Text style={styles.securityText}>
-                Kiï¿½Yisel bilgilerini korumaya ï¿½nem veriyoruz. Hesabini
-                istediï¿½Yin zaman silebilirsin.
+                Kişisel bilgilerini korumaya önem veriyoruz. Hesabını istediğin
+                zaman silebilirsin.
               </Text>
             </View>
 
@@ -663,10 +615,10 @@ export default function Register() {
             ================================================= */}
 
             <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Zaten hesabin var mi?</Text>
+              <Text style={styles.loginText}>Zaten hesabın var mı?</Text>
 
               <Pressable onPress={() => navigation.replace("index")}>
-                <Text style={styles.loginButton}>Giriï¿½Y Yap</Text>
+                <Text style={styles.loginButton}>Giriş Yap</Text>
               </Pressable>
             </View>
 
@@ -675,13 +627,13 @@ export default function Register() {
             ================================================= */}
 
             <Text style={styles.footerText}>
-              Kayit olarak Gï¿½nï¿½l Buluï¿½Ymasi topluluk kurallarina uymayi
-              kabul etmiï¿½Y olursun.
+              Kayıt olarak Gönül Buluşması topluluk kurallarına uymayı kabul
+              etmiş olursun.
             </Text>
           </View>
 
           {/* =================================================
-              ï¿½-ZELLIKLER
+              ÖZELLİKLER
           ================================================= */}
 
           <View style={styles.features}>
@@ -693,17 +645,15 @@ export default function Register() {
               />
             </View>
             <View style={styles.feature}>
-              <Text style={styles.featureIcon}>ï¿½o"</Text>
+              <Text style={styles.featureIcon}>♡</Text>
 
-              <Text style={styles.featureText}>
-                Profilini kendin oluï¿½Ytur
-              </Text>
+              <Text style={styles.featureText}>Profilini kendin oluştur</Text>
             </View>
 
             <View style={styles.feature}>
-              <Text style={styles.featureIcon}>gY"ï¿½</Text>
+              <Text style={styles.featureIcon}>🔒</Text>
 
-              <Text style={styles.featureText}>Gï¿½venli kullanim</Text>
+              <Text style={styles.featureText}>Güvenli kullanım</Text>
             </View>
           </View>
         </View>
@@ -721,7 +671,7 @@ export default function Register() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f5f3ff",
+    backgroundColor: "#F8E9ED",
   },
 
   scrollContent: {
@@ -749,7 +699,7 @@ const styles = StyleSheet.create({
 
   /*
    * =========================================================
-   * GERï¿½?EK LOGO
+   * GERÇEK LOGO
    * =========================================================
    */
 
@@ -775,7 +725,7 @@ const styles = StyleSheet.create({
   subtitle: {
     marginTop: 5,
     fontSize: 14,
-    color: "#6b7280",
+    color: "#80666D",
     fontWeight: "600",
   },
 
@@ -786,11 +736,11 @@ const styles = StyleSheet.create({
    */
 
   card: {
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderRadius: 22,
     padding: 22,
 
-    shadowColor: "#5b21b6",
+    shadowColor: "#7A263C",
 
     shadowOffset: {
       width: 0,
@@ -812,7 +762,7 @@ const styles = StyleSheet.create({
 
   description: {
     fontSize: 14,
-    color: "#6b7280",
+    color: "#80666D",
     lineHeight: 21,
     marginBottom: 22,
   },
@@ -824,9 +774,9 @@ const styles = StyleSheet.create({
    */
 
   errorBox: {
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
     borderWidth: 1,
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 11,
@@ -853,7 +803,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#374151",
+    color: "#694650",
     marginBottom: 7,
   },
 
@@ -862,27 +812,27 @@ const styles = StyleSheet.create({
     minHeight: 52,
 
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
 
     borderRadius: 12,
 
-    backgroundColor: "#fafafa",
+    backgroundColor: "#FFF9F6",
 
     paddingHorizontal: 15,
 
     fontSize: 15,
-    color: "#111827",
+    color: "#48252F",
   },
 
   helperText: {
     marginTop: 5,
     fontSize: 11,
-    color: "#6b7280",
+    color: "#80666D",
   },
 
   /*
    * =========================================================
-   * CINSIYET
+   * CİNSİYET
    * =========================================================
    */
 
@@ -896,19 +846,19 @@ const styles = StyleSheet.create({
     minHeight: 52,
 
     borderWidth: 1,
-    borderColor: "#ddd6fe",
+    borderColor: "#E8C5CF",
 
     borderRadius: 12,
 
     alignItems: "center",
     justifyContent: "center",
 
-    backgroundColor: "#fafafa",
+    backgroundColor: "#FFF9F6",
   },
 
   genderButtonSelected: {
     backgroundColor: "#f3e8ff",
-    borderColor: "#7c3aed",
+    borderColor: "#8F2942",
     borderWidth: 2,
   },
 
@@ -919,7 +869,7 @@ const styles = StyleSheet.create({
   },
 
   genderTextSelected: {
-    color: "#6d28d9",
+    color: "#A12E4A",
     fontWeight: "800",
   },
 
@@ -936,14 +886,14 @@ const styles = StyleSheet.create({
 
     borderRadius: 13,
 
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
 
     alignItems: "center",
     justifyContent: "center",
 
     flexDirection: "row",
 
-    shadowColor: "#7c3aed",
+    shadowColor: "#8F2942",
 
     shadowOffset: {
       width: 0,
@@ -966,14 +916,14 @@ const styles = StyleSheet.create({
   },
 
   registerButtonText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
     fontSize: 16,
     fontWeight: "800",
   },
 
   /*
    * =========================================================
-   * Gï¿½oVENLIK
+   * GÜVENLİK
    * =========================================================
    */
 
@@ -987,7 +937,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#faf5ff",
 
     borderWidth: 1,
-    borderColor: "#ede9fe",
+    borderColor: "#F5DCE3",
 
     flexDirection: "row",
     alignItems: "center",
@@ -1001,7 +951,7 @@ const styles = StyleSheet.create({
   securityText: {
     flex: 1,
 
-    color: "#5b21b6",
+    color: "#7A263C",
 
     fontSize: 11,
     lineHeight: 17,
@@ -1021,19 +971,19 @@ const styles = StyleSheet.create({
     paddingTop: 20,
 
     borderTopWidth: 1,
-    borderTopColor: "#ede9fe",
+    borderTopColor: "#F5DCE3",
 
     alignItems: "center",
   },
 
   loginText: {
-    color: "#6b7280",
+    color: "#80666D",
     fontSize: 13,
     marginBottom: 7,
   },
 
   loginButton: {
-    color: "#7c3aed",
+    color: "#8F2942",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -1057,7 +1007,7 @@ const styles = StyleSheet.create({
 
   /*
    * =========================================================
-   * ï¿½-ZELLIKLER
+   * ÖZELLİKLER
    * =========================================================
    */
 
@@ -1090,7 +1040,7 @@ const styles = StyleSheet.create({
   },
 
   featureText: {
-    color: "#6b7280",
+    color: "#80666D",
 
     fontSize: 10,
 

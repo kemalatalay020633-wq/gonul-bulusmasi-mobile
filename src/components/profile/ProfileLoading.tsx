@@ -5,7 +5,7 @@ export default function ProfileLoading() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <ActivityIndicator size="large" color="#7c3aed" />
+        <ActivityIndicator size="large" color="#8F2942" />
 
         <Text style={styles.text}>Profil yükleniyor...</Text>
       </View>
@@ -26,13 +26,13 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     maxWidth: 450,
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
     borderRadius: 20,
     padding: 32,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#ede9fe",
-    shadowColor: "#5b21b6",
+    borderColor: "#F5DCE3",
+    shadowColor: "#7A263C",
     shadowOffset: {
       width: 0,
       height: 8,
@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 17,
     fontWeight: "700",
-    color: "#4c1d95",
+    color: "#672036",
     textAlign: "center",
   },
 });

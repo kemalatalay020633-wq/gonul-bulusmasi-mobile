@@ -559,7 +559,7 @@ export default function Begenenler() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.yukleniyorContainer}>
-          <ActivityIndicator size="large" color="#ec4899" />
+          <ActivityIndicator size="large" color="#E83E70" />
 
           <Text style={styles.yukleniyorText}>
             Seni beğenenler yükleniyor...
@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
 
-    backgroundColor: "#faf7ff",
+    backgroundColor: "#FFF8F4",
   },
 
   scrollContainer: {
@@ -806,7 +806,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 36,
 
-    color: "#6d28d9",
+    color: "#A12E4A",
 
     marginRight: 3,
   },
@@ -816,7 +816,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#6d28d9",
+    color: "#A12E4A",
   },
 
   baslikKart: {
@@ -830,9 +830,9 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#fbcfe8",
+    borderColor: "#F2B6C5",
 
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
 
     marginBottom: 18,
   },
@@ -856,7 +856,7 @@ const styles = StyleSheet.create({
   baslikIkon: {
     fontSize: 32,
 
-    color: "#ec4899",
+    color: "#E83E70",
   },
 
   baslikBilgi: {
@@ -886,7 +886,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
 
-    backgroundColor: "#fff1f2",
+    backgroundColor: "#FCE8EC",
 
     borderWidth: 1,
 
@@ -920,7 +920,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#ec4899",
+    backgroundColor: "#E83E70",
 
     alignItems: "center",
 
@@ -930,7 +930,7 @@ const styles = StyleSheet.create({
   },
 
   tekrarButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 14,
 
@@ -946,7 +946,7 @@ const styles = StyleSheet.create({
 
     borderColor: "#eadcff",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
 
     alignItems: "center",
 
@@ -956,7 +956,7 @@ const styles = StyleSheet.create({
   bosIkon: {
     fontSize: 55,
 
-    color: "#ec4899",
+    color: "#E83E70",
   },
 
   bosBaslik: {
@@ -966,7 +966,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#5b21b6",
+    color: "#7A263C",
 
     textAlign: "center",
   },
@@ -998,7 +998,7 @@ const styles = StyleSheet.create({
 
     borderColor: "#eadcff",
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   kullaniciUst: {
@@ -1046,7 +1046,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#ec4899",
+    color: "#E83E70",
   },
 
   bilgiler: {
@@ -1062,7 +1062,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#5b21b6",
+    color: "#7A263C",
   },
 
   kullaniciAdi: {
@@ -1088,7 +1088,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#ec4899",
+    color: "#E83E70",
   },
 
   profilButonu: {
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#7c3aed",
+    backgroundColor: "#8F2942",
 
     alignItems: "center",
 
@@ -1108,7 +1108,7 @@ const styles = StyleSheet.create({
   },
 
   profilButonuText: {
-    color: "#ffffff",
+    color: "#FFFCFA",
 
     fontSize: 15,
 

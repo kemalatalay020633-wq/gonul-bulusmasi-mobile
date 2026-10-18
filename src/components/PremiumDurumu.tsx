@@ -113,7 +113,7 @@ function PremiumDurumu({ children }: PremiumDurumuProps) {
   if (premium === null && !hata) {
     return (
       <View style={styles.yukleniyorContainer}>
-        <ActivityIndicator size="large" color="#7c3aed" />
+        <ActivityIndicator size="large" color="#8F2942" />
 
         <Text style={styles.yukleniyorText}>
           Premium durumu kontrol ediliyor...
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
 
     padding: 20,
 
-    backgroundColor: "#ffffff",
+    backgroundColor: "#FFFCFA",
   },
 
   yukleniyorText: {
@@ -187,11 +187,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#fef2f2",
+    backgroundColor: "#FCE8EC",
 
     borderWidth: 1,
 
-    borderColor: "#fecaca",
+    borderColor: "#EFC1CC",
   },
 
   hataBaslik: {
