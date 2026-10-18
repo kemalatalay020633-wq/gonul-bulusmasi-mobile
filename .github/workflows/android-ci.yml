@@ -1,0 +1,45 @@
+﻿name: Android CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  android-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Depoyu indir
+        uses: actions/checkout@v4
+
+      - name: Node.js kur
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Android SDK kur
+        uses: android-actions/setup-android@v3
+
+      - name: Bağımlılıkları yükle
+        run: npm ci
+
+      - name: TypeScript kontrolü
+        run: npx tsc --noEmit
+
+      - name: Android APK derle
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
