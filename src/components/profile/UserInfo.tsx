@@ -1,4 +1,3 @@
-import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 type UserProfile = {
@@ -26,33 +25,24 @@ export default function UserInfo({ user }: UserInfoProps) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Hesap Bilgilerim</Text>
-
       <View style={styles.card}>
         <BilgiSatiri etiket="Kullanıcı Adı" deger={user.username} />
-
         <BilgiSatiri etiket="E-posta" deger={user.email} />
-
         <BilgiSatiri
           etiket="Ad Soyad"
-          deger={`${user.firstName} ${user.lastName}`}
+          deger={`${user.firstName} ${user.lastName}`.trim()}
         />
-
         <BilgiSatiri etiket="Doğum Tarihi" deger={user.birthDate || "-"} />
-
         <BilgiSatiri etiket="Telefon" deger={user.phoneNumber || "-"} />
-
         <BilgiSatiri etiket="Şehir" deger={user.city || "-"} />
-
         <BilgiSatiri
           etiket="Hesap Durumu"
           deger={user.active ? "Aktif" : "Pasif"}
         />
-
         <BilgiSatiri
           etiket="E-posta Durumu"
           deger={user.emailVerified ? "Doğrulandı" : "Doğrulanmadı"}
         />
-
         <BilgiSatiri
           etiket="Telefon Durumu"
           deger={user.phoneVerified ? "Doğrulandı" : "Doğrulanmadı"}
@@ -73,8 +63,7 @@ function BilgiSatiri({ etiket, deger, son = false }: BilgiSatiriProps) {
   return (
     <View style={[styles.row, !son && styles.rowBorder]}>
       <Text style={styles.label}>{etiket}</Text>
-
-      <Text style={styles.value}>{deger}</Text>
+      <Text style={styles.value}>{deger || "-"}</Text>
     </View>
   );
 }
@@ -82,51 +71,47 @@ function BilgiSatiri({ etiket, deger, son = false }: BilgiSatiriProps) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    marginBottom: 24,
+    marginBottom: 4,
   },
-
   title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#7A263C",
-    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#F4C45B",
+    marginBottom: 11,
   },
-
   card: {
     width: "100%",
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#410052",
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#8E4B9E",
     borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 13,
+    paddingVertical: 5,
   },
-
   row: {
     width: "100%",
-    minHeight: 48,
-    paddingVertical: 14,
+    minHeight: 43,
+    paddingVertical: 11,
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
   },
-
   rowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: "#F5DCE3",
+    borderBottomColor: "#704078",
   },
-
   label: {
-    width: 120,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#7A263C",
-  },
-
-  value: {
     flex: 1,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#694650",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#E8C8F0",
+  },
+  value: {
+    flex: 1.25,
+    textAlign: "right",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
   },
 });

@@ -28,26 +28,37 @@ export default function EmailDogrulamaScreen() {
   const yanitiOku = async (response: Response) => {
     const metin = await response.text();
 
-    let veri: any = {};
-
-    if (metin) {
-      try {
-        veri = JSON.parse(metin);
-      } catch {
-        veri = { mesaj: metin, message: metin };
+    if (!response.ok) {
+      switch (response.status) {
+        case 400:
+          throw new Error("Girilen bilgiler geçersiz. Bilgilerini kontrol et.");
+        case 401:
+        case 403:
+          throw new Error(
+            "İşlem doğrulanamadı. Bilgilerini kontrol edip tekrar dene.",
+          );
+        case 404:
+          throw new Error("İstenen işlem gerçekleştirilemedi.");
+        case 429:
+          throw new Error(
+            "Çok fazla istek gönderdin. Lütfen bir süre sonra tekrar dene.",
+          );
+        default:
+          throw new Error(
+            "İşlem sırasında bir hata oluştu. Lütfen tekrar dene.",
+          );
       }
     }
 
-    if (!response.ok) {
-      throw new Error(
-        veri.mesaj ||
-          veri.message ||
-          veri.error ||
-          `İşlem başarısız. HTTP ${response.status}`,
-      );
+    if (!metin.trim()) {
+      return {};
     }
 
-    return veri;
+    try {
+      return JSON.parse(metin);
+    } catch {
+      throw new Error("Sunucudan geçerli bir yanıt alınamadı.");
+    }
   };
 
   const ePostayiDogrula = async () => {
@@ -126,13 +137,11 @@ export default function EmailDogrulamaScreen() {
         },
       );
 
-      const veri = await yanitiOku(response);
+      await yanitiOku(response);
 
       Alert.alert(
         "İstek alındı",
-        veri.mesaj ||
-          veri.message ||
-          "E-posta adresi kayıtlıysa yeni doğrulama kodu gönderilmiştir.",
+        "E-posta adresi kayıtlıysa yeni doğrulama kodu gönderilmiştir.",
       );
     } catch (error) {
       setHata(
@@ -216,7 +225,10 @@ export default function EmailDogrulamaScreen() {
           </Pressable>
 
           <Pressable
-            style={styles.tekrarButon}
+            style={[
+              styles.tekrarButon,
+              (yukleniyor || tekrarGonderiliyor) && styles.butonPasif,
+            ]}
             onPress={dogrulamaKodunuTekrarGonder}
             disabled={yukleniyor || tekrarGonderiliyor}
           >

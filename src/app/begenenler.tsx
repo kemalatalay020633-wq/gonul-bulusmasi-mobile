@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -17,11 +16,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useNavigation } from "@react-navigation/native";
 
+import KimlikDogrulamaliAvatar from "../components/common/KimlikDogrulamaliAvatar";
 import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = API_BASE_URL + "/api";
-
-const SUNUCU_ADRESI = API_BASE_URL;
 
 type LikeDto = {
   id: number;
@@ -103,7 +101,6 @@ export default function Begenenler() {
   const navigation = useNavigation<any>();
 
   const [begenenler, setBegenenler] = useState<BegenenKullanici[]>([]);
-
   const [yukleniyor, setYukleniyor] = useState(true);
 
   const [hata, setHata] = useState("");
@@ -117,32 +114,6 @@ export default function Begenenler() {
    * =========================================================
 
    */
-
-  const fotoUrlOlustur = useCallback(
-    (foto: string | null | undefined): string => {
-      if (!foto) {
-        return "";
-      }
-
-      const temizFoto = foto.trim();
-
-      if (!temizFoto) {
-        return "";
-      }
-
-      if (temizFoto.startsWith("http://") || temizFoto.startsWith("https://")) {
-        return temizFoto;
-      }
-
-      if (temizFoto.startsWith("/")) {
-        return `${SUNUCU_ADRESI}${temizFoto}`;
-      }
-
-      return `${SUNUCU_ADRESI}/${temizFoto}`;
-    },
-
-    [],
-  );
 
   /*
 
@@ -274,8 +245,6 @@ export default function Begenenler() {
             kullaniciId,
 
             response.status,
-
-            responseText,
           );
 
           return null;
@@ -322,7 +291,7 @@ export default function Begenenler() {
         const responseText = await response.text();
 
         if (!response.ok) {
-          console.error("PROFİLLER ALINAMADI:", response.status, responseText);
+          console.error("PROFİLLER ALINAMADI. HTTP DURUMU:", response.status);
 
           return [];
         }
@@ -365,15 +334,11 @@ export default function Begenenler() {
   const begenenleriGetir = useCallback(async () => {
     try {
       setYukleniyor(true);
-
       setHata("");
 
       /*
-
        * TOKEN
-
        */
-
       const token = await AsyncStorage.getItem("token");
 
       if (!token) {
@@ -381,11 +346,8 @@ export default function Begenenler() {
       }
 
       /*
-
        * MEVCUT KULLANICI
-
        */
-
       const userId = await AsyncStorage.getItem("userId");
 
       if (!userId) {
@@ -399,34 +361,17 @@ export default function Begenenler() {
       }
 
       /*
-
        * =================================================
-
        * 1 - BENİ BEĞENENLER
-
-       *
-
-       * GERÇEK ENDPOINT:
-
-       *
-
-       * GET
-
-       * /api/likes/beni-begenenler/{kullaniciId}
-
+       * GET /api/likes/beni-begenenler/{kullaniciId}
        * =================================================
-
        */
-
       const response = await fetch(
         `${API_ADRESI}/likes/beni-begenenler/${kullaniciId}`,
-
         {
           method: "GET",
-
           headers: {
             Authorization: `Bearer ${token}`,
-
             Accept: "application/json",
           },
         },
@@ -435,7 +380,7 @@ export default function Begenenler() {
       const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error(responseText || "Beni beğenenler alınamadı.");
+        throw new Error("Beğenenler şu anda alınamıyor. Lütfen tekrar dene.");
       }
 
       let begeniler: LikeDto[] = [];
@@ -451,27 +396,17 @@ export default function Begenenler() {
       }
 
       /*
-
        * =================================================
-
        * 2 - PROFİLLER
-
        * =================================================
-
        */
-
       const profiller = await profilleriGetir(token);
 
       /*
-
        * =================================================
-
-       * 3 - KULLANICI BİLGİLERI
-
+       * 3 - KULLANICI BİLGİLERİ
        * =================================================
-
        */
-
       const sonuc = await Promise.all(
         begeniler.map(async (begeni) => {
           const begenenKullaniciId = Number(begeni.userId);
@@ -485,14 +420,17 @@ export default function Begenenler() {
 
           return {
             begeni,
-
             kullanici,
-
             profil,
           };
         }),
       );
 
+      /*
+       * =================================================
+       * 4 - STATE
+       * =================================================
+       */
       setBegenenler(sonuc);
     } catch (error) {
       console.error("BEĞENENLER HATASI:", error);
@@ -502,7 +440,6 @@ export default function Begenenler() {
       setYukleniyor(false);
     }
   }, [kullaniciGetir, profilleriGetir]);
-
   /*
 
    * =========================================================
@@ -559,7 +496,7 @@ export default function Begenenler() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.yukleniyorContainer}>
-          <ActivityIndicator size="large" color="#E83E70" />
+          <ActivityIndicator size="large" color="#E8B85B" />
 
           <Text style={styles.yukleniyorText}>
             Seni beğenenler yükleniyor...
@@ -650,10 +587,6 @@ export default function Begenenler() {
 
               .join(" ");
 
-            const foto = fotoUrlOlustur(
-              profil?.profilePhoto ?? kullanici?.profilePhoto ?? null,
-            );
-
             const begenenKullaniciId = Number(begeni.userId);
 
             const medeniDurum = medeniDurumGetir(profil?.maritalStatus);
@@ -662,25 +595,21 @@ export default function Begenenler() {
               <View key={begeni.id} style={styles.kullaniciKart}>
                 <View style={styles.kullaniciUst}>
                   {/* AVATAR */}
-
                   <View style={styles.fotoContainer}>
-                    {foto ? (
-                      <Image
-                        source={{
-                          uri: foto,
-                        }}
-
-                        style={styles.foto}
-
-                        resizeMode="cover"
+                    {kullanici?.id ? (
+                      <KimlikDogrulamaliAvatar
+                        kullaniciId={kullanici.id}
+                        boyut={82}
+                        altYazi={(adSoyad || kullanici.username || "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                        imageStyle={styles.foto}
                       />
                     ) : (
                       <View style={styles.fotoPlaceholder}>
                         <Text style={styles.fotoPlaceholderText}>
                           {(adSoyad || kullanici?.username || "?")
-
                             .charAt(0)
-
                             .toUpperCase()}
                         </Text>
                       </View>
@@ -756,7 +685,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
 
-    backgroundColor: "#FFF8F4",
+    backgroundColor: "#10051F",
   },
 
   scrollContainer: {
@@ -780,7 +709,7 @@ const styles = StyleSheet.create({
 
     fontSize: 15,
 
-    color: "#9d174d",
+    color: "#E8B85B",
 
     fontWeight: "600",
 
@@ -806,7 +735,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 36,
 
-    color: "#A12E4A",
+    color: "#E8B85B",
 
     marginRight: 3,
   },
@@ -816,7 +745,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#A12E4A",
+    color: "#E8B85B",
   },
 
   baslikKart: {
@@ -830,9 +759,9 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#F2B6C5",
+    borderColor: "#F4C45B",
 
-    backgroundColor: "#FCE8EC",
+    backgroundColor: "#42152F",
 
     marginBottom: 18,
   },
@@ -850,13 +779,13 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#fce7f3",
+    backgroundColor: "#64227D",
   },
 
   baslikIkon: {
     fontSize: 32,
 
-    color: "#E83E70",
+    color: "#E8B85B",
   },
 
   baslikBilgi: {
@@ -870,7 +799,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#9d174d",
+    color: "#E8B85B",
   },
 
   baslikAciklama: {
@@ -878,7 +807,7 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
-    color: "#78716c",
+    color: "#D9A9EE",
   },
 
   hataKart: {
@@ -886,11 +815,11 @@ const styles = StyleSheet.create({
 
     borderRadius: 16,
 
-    backgroundColor: "#FCE8EC",
+    backgroundColor: "#42152F",
 
     borderWidth: 1,
 
-    borderColor: "#fecdd3",
+    borderColor: "#F4C45B",
 
     marginBottom: 18,
   },
@@ -900,7 +829,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#be123c",
+    color: "#FFD5E8",
 
     marginBottom: 7,
   },
@@ -910,7 +839,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 21,
 
-    color: "#881337",
+    color: "#F3D9FF",
   },
 
   tekrarButonu: {
@@ -920,7 +849,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 12,
 
-    backgroundColor: "#E83E70",
+    backgroundColor: "#E8B85B",
 
     alignItems: "center",
 
@@ -930,7 +859,7 @@ const styles = StyleSheet.create({
   },
 
   tekrarButonuText: {
-    color: "#FFFCFA",
+    color: "#321044",
 
     fontSize: 14,
 
@@ -944,9 +873,9 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#eadcff",
+    borderColor: "#F4C45B",
 
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#260B38",
 
     alignItems: "center",
 
@@ -956,7 +885,7 @@ const styles = StyleSheet.create({
   bosIkon: {
     fontSize: 55,
 
-    color: "#E83E70",
+    color: "#E8B85B",
   },
 
   bosBaslik: {
@@ -966,7 +895,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#7A263C",
+    color: "#FFFFFF",
 
     textAlign: "center",
   },
@@ -978,7 +907,7 @@ const styles = StyleSheet.create({
 
     lineHeight: 21,
 
-    color: "#78716c",
+    color: "#D9A9EE",
 
     textAlign: "center",
   },
@@ -996,9 +925,9 @@ const styles = StyleSheet.create({
 
     borderWidth: 1,
 
-    borderColor: "#eadcff",
+    borderColor: "#F4C45B",
 
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#260B38",
   },
 
   kullaniciUst: {
@@ -1016,7 +945,7 @@ const styles = StyleSheet.create({
 
     overflow: "hidden",
 
-    backgroundColor: "#fce7f3",
+    backgroundColor: "#64227D",
 
     flexShrink: 0,
   },
@@ -1038,7 +967,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#fce7f3",
+    backgroundColor: "#64227D",
   },
 
   fotoPlaceholderText: {
@@ -1046,7 +975,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#E83E70",
+    color: "#E8B85B",
   },
 
   bilgiler: {
@@ -1062,7 +991,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "800",
 
-    color: "#7A263C",
+    color: "#FFFFFF",
   },
 
   kullaniciAdi: {
@@ -1070,7 +999,7 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
-    color: "#78716c",
+    color: "#D9A9EE",
   },
 
   detay: {
@@ -1078,7 +1007,7 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
-    color: "#57534e",
+    color: "#F0E1F7",
   },
 
   begeniBilgisi: {
@@ -1088,7 +1017,7 @@ const styles = StyleSheet.create({
 
     fontWeight: "700",
 
-    color: "#E83E70",
+    color: "#E8B85B",
   },
 
   profilButonu: {
@@ -1098,7 +1027,7 @@ const styles = StyleSheet.create({
 
     borderRadius: 14,
 
-    backgroundColor: "#8F2942",
+    backgroundColor: "#E8B85B",
 
     alignItems: "center",
 
@@ -1108,7 +1037,7 @@ const styles = StyleSheet.create({
   },
 
   profilButonuText: {
-    color: "#FFFCFA",
+    color: "#321044",
 
     fontSize: 15,
 

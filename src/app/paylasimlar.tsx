@@ -1,12 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
-import { useCallback, useEffect, useState } from "react";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -17,7 +19,11 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { launchImageLibrary, type Asset } from "react-native-image-picker";
+import {
+  launchCamera,
+  launchImageLibrary,
+  type Asset,
+} from "react-native-image-picker";
 import { API_BASE_URL } from "../config/api";
 type Paylasim = {
   id: number;
@@ -27,6 +33,18 @@ type Paylasim = {
   fotografUrl: string | null;
   olusturmaTarihi: string;
 };
+type UyariButonu = {
+  text: string;
+  style?: "cancel" | "destructive" | "default";
+  onPress?: () => void;
+};
+
+type UyariPenceresi = {
+  baslik: string;
+  mesaj: string;
+  butonlar: UyariButonu[];
+};
+
 type SayfaliPaylasim = {
   content: Paylasim[];
   totalPages: number;
@@ -39,8 +57,8 @@ type SayfaliPaylasim = {
 const API_URL = `${API_BASE_URL}/api/paylasimlar`;
 const SUNUCU_ADRESI = API_BASE_URL;
 const SAYFA_BOYUTU = 10;
-const MOR = "#6D28D9";
-const ACIK_MOR = "#F5F0FF";
+const MOR = "#7541B8";
+const ACIK_MOR = "#F0E8FA";
 function fotografAdresiniHazirla(
   adres: string | null | undefined,
   paylasimId: number,
@@ -65,7 +83,12 @@ function fotografAdresiniHazirla(
     // Geçerli bir mutlak URL değilse aşağıda göreli adres olarak ele alınır.
   }
 
-  if (temiz.startsWith("http://") || temiz.startsWith("https://")) return temiz;
+  if (temiz.startsWith("https://")) return temiz;
+
+  if (temiz.startsWith("http://")) {
+    return undefined;
+  }
+
   return temiz.startsWith("/")
     ? `${SUNUCU_ADRESI}${temiz}`
     : `${SUNUCU_ADRESI}/${temiz}`;
@@ -73,12 +96,23 @@ function fotografAdresiniHazirla(
 
 async function yanitiKontrolEt<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    const mesaj = await response.text();
-    throw new Error(mesaj || `İşlem başarısız. HTTP ${response.status}`);
+    const mesaj =
+      response.status === 401 || response.status === 403
+        ? "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın."
+        : response.status === 429
+          ? "Çok fazla işlem yapıldı. Lütfen biraz bekleyin."
+          : response.status >= 500
+            ? "Sunucuda bir sorun oluştu. Lütfen daha sonra tekrar deneyin."
+            : "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+
+    throw new Error(mesaj);
   }
+
   if (response.status === 204) return undefined as T;
+
   return response.json() as Promise<T>;
 }
+
 function tarihFormatla(tarih: string): string {
   const deger = new Date(tarih);
   if (Number.isNaN(deger.getTime())) return tarih;
@@ -90,7 +124,143 @@ function tarihFormatla(tarih: string): string {
 function basHarf(ad?: string | null): string {
   return ad?.trim().charAt(0).toLocaleUpperCase("tr-TR") || "K";
 }
+type PaylasimFotografiProps = {
+  fotografAdresi: string;
+  korumali: boolean;
+  token: string | null;
+};
+
+/**
+ * ArrayBuffer verisini harici paket kullanmadan Base64'e çevirir.
+ * React Native ortamında FileReader her zaman bulunmadığından
+ * tarayıcıya özgü FileReader.readAsDataURL kullanılmaz.
+ */
+function arrayBufferiBase64eCevir(veri: ArrayBuffer): string {
+  const baytlar = new Uint8Array(veri);
+  const karakterler =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let sonuc = "";
+
+  for (let i = 0; i < baytlar.length; i += 3) {
+    const birinci = baytlar[i];
+    const ikinci = i + 1 < baytlar.length ? baytlar[i + 1] : 0;
+    const ucuncu = i + 2 < baytlar.length ? baytlar[i + 2] : 0;
+
+    sonuc += karakterler[(birinci >> 2) & 0x3f];
+    sonuc += karakterler[((birinci & 0x03) << 4) | (ikinci >> 4)];
+    sonuc +=
+      i + 1 < baytlar.length
+        ? karakterler[((ikinci & 0x0f) << 2) | (ucuncu >> 6)]
+        : "=";
+    sonuc += i + 2 < baytlar.length ? karakterler[ucuncu & 0x3f] : "=";
+  }
+
+  return sonuc;
+}
+
+function PaylasimFotografi({
+  fotografAdresi,
+  korumali,
+  token,
+}: PaylasimFotografiProps) {
+  const [goruntuAdresi, setGoruntuAdresi] = useState<string | null>(null);
+
+  useEffect(() => {
+    let iptalEdildi = false;
+    const denetleyici = new AbortController();
+
+    setGoruntuAdresi(null);
+
+    const fotografiYukle = async () => {
+      try {
+        if (!korumali) {
+          setGoruntuAdresi(fotografAdresi);
+          return;
+        }
+
+        if (!token) {
+          console.warn("Paylaşım fotoğrafı için oturum token'ı bulunamadı.");
+          return;
+        }
+
+        const response = await fetch(fotografAdresi, {
+          method: "GET",
+          headers: {
+            Accept: "image/*",
+            Authorization: `Bearer ${token}`,
+          },
+          signal: denetleyici.signal,
+        });
+
+        if (!response.ok) {
+          const hataMetni = await response.text();
+          throw new Error(
+            hataMetni || `Fotoğraf alınamadı. HTTP ${response.status}`,
+          );
+        }
+
+        const icerikTuru =
+          response.headers.get("content-type")?.split(";")[0].trim() ||
+          "image/jpeg";
+
+        if (!icerikTuru.startsWith("image/")) {
+          const yanit = await response.text();
+          throw new Error(
+            `Sunucu fotoğraf yerine ${icerikTuru} döndürdü. ${yanit.slice(0, 160)}`,
+          );
+        }
+
+        const veri = await response.arrayBuffer();
+
+        if (iptalEdildi) return;
+
+        if (veri.byteLength === 0) {
+          throw new Error("Sunucudan boş fotoğraf verisi geldi.");
+        }
+
+        const base64 = arrayBufferiBase64eCevir(veri);
+
+        if (!iptalEdildi) {
+          setGoruntuAdresi(`data:${icerikTuru};base64,${base64}`);
+        }
+      } catch (err) {
+        if (iptalEdildi) return;
+        if (err instanceof Error && err.name === "AbortError") return;
+
+        console.error("PAYLAŞIM FOTOĞRAFI YÜKLEME HATASI:", err);
+      }
+    };
+
+    void fotografiYukle();
+
+    return () => {
+      iptalEdildi = true;
+      denetleyici.abort();
+    };
+  }, [fotografAdresi, korumali, token]);
+
+  if (!goruntuAdresi) {
+    return (
+      <View style={styles.paylasimFotografiYukleniyor}>
+        <ActivityIndicator color={MOR} />
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: goruntuAdresi }}
+      style={styles.paylasimFotografi}
+      resizeMode="contain"
+      onError={() =>
+        console.warn("Paylaşım fotoğrafı görüntülenemedi:", fotografAdresi)
+      }
+    />
+  );
+}
+
 export default function PaylasimlarEkrani() {
+  const sonSayfaRef = useRef(false);
   const navigation = useNavigation<any>();
   const [paylasimlar, setPaylasimlar] = useState<Paylasim[]>([]);
   const [oturumToken, setOturumToken] = useState<string | null>(null);
@@ -106,9 +276,22 @@ export default function PaylasimlarEkrani() {
   const [sonSayfa, setSonSayfa] = useState(false);
   const [yukleniyor, setYukleniyor] = useState(true);
   const [yenileniyor, setYenileniyor] = useState(false);
+  const [yenilemeBekliyor, setYenilemeBekliyor] = useState(false);
   const [gonderiliyor, setGonderiliyor] = useState(false);
   const [hata, setHata] = useState("");
   const [bilgi, setBilgi] = useState("");
+  const [uyariPenceresi, setUyariPenceresi] = useState<UyariPenceresi | null>(
+    null,
+  );
+
+  const uyariGoster = (
+    baslik: string,
+    mesaj: string,
+    butonlar: UyariButonu[] = [{ text: "Tamam" }],
+  ) => setUyariPenceresi({ baslik, mesaj, butonlar });
+
+  const yuklemeKilidi = useRef(false);
+
   const kimlikBilgileriniYukle = useCallback(async () => {
     setYetkiKontrolYukleniyor(true);
     setPaylasimIzni(null);
@@ -144,10 +327,9 @@ export default function PaylasimlarEkrani() {
 
       if (!kullaniciResponse.ok) {
         throw new Error(
-          `Kullanıcı bilgisi alınamadı. HTTP ${kullaniciResponse.status}`,
+          "Kullanıcı bilgileri alınamadı. Lütfen tekrar deneyin.",
         );
       }
-
       const kullaniciVerisi = await kullaniciResponse.json();
       const gelenCinsiyet = String(kullaniciVerisi?.gender ?? "")
         .trim()
@@ -181,7 +363,7 @@ export default function PaylasimlarEkrani() {
 
       if (!premiumResponse.ok) {
         throw new Error(
-          `Premium durumu kontrol edilemedi. HTTP ${premiumResponse.status}`,
+          "Premium üyelik bilgisi kontrol edilemedi. Lütfen tekrar deneyin.",
         );
       }
 
@@ -205,6 +387,8 @@ export default function PaylasimlarEkrani() {
       setHata("");
       return token;
     } catch (err) {
+      console.error("PAYLAŞIM YETKİSİ KONTROL HATASI:", err);
+
       setPaylasimIzni(false);
       setHata(
         err instanceof Error
@@ -216,22 +400,36 @@ export default function PaylasimlarEkrani() {
       setYetkiKontrolYukleniyor(false);
     }
   }, []);
+
   const paylasimlariYukle = useCallback(
     async (istenenSayfa = 0, yenileme = false) => {
-      const token = await AsyncStorage.getItem("token");
-      if (!token) {
-        setYukleniyor(false);
-        Alert.alert(
-          "Oturum gerekli",
-          "Paylaşımları görmek için giriş yapmalısın.",
-          [{ text: "Tamam" }],
-        );
+      if (yuklemeKilidi.current) {
+        if (istenenSayfa === 0) {
+          setYenilemeBekliyor(true);
+        }
         return;
       }
+
+      if (istenenSayfa > 0 && sonSayfaRef.current) return;
+
+      yuklemeKilidi.current = true;
+
       try {
         if (yenileme) setYenileniyor(true);
         else setYukleniyor(true);
+
         setHata("");
+
+        const token = await AsyncStorage.getItem("token");
+
+        if (!token) {
+          uyariGoster(
+            "Giriş yapmalısın",
+            "Paylaşımları görmek için hesabına giriş yap.",
+          );
+          return;
+        }
+
         const response = await fetch(
           `${API_URL}?sayfa=${istenenSayfa}&boyut=${SAYFA_BOYUTU}`,
           {
@@ -242,41 +440,62 @@ export default function PaylasimlarEkrani() {
             },
           },
         );
+
         const sonuc = await yanitiKontrolEt<SayfaliPaylasim>(response);
-        setPaylasimlar((onceki) =>
-          istenenSayfa === 0 ? sonuc.content : [...onceki, ...sonuc.content],
-        );
+
+        setPaylasimlar((onceki) => {
+          if (istenenSayfa === 0) {
+            return sonuc.content;
+          }
+
+          const mevcutIdler = new Set(onceki.map((oge) => oge.id));
+
+          const yeniPaylasimlar = sonuc.content.filter(
+            (oge) => !mevcutIdler.has(oge.id),
+          );
+
+          return [...onceki, ...yeniPaylasimlar];
+        });
+
         setSayfa(istenenSayfa);
         setSonSayfa(sonuc.last);
+        sonSayfaRef.current = sonuc.last;
       } catch (err) {
+        console.error("PAYLAŞIMLARI YÜKLEME HATASI:", err);
+
         setHata(
-          err instanceof Error ? err.message : "Paylaşımlar yüklenemedi.",
+          err instanceof Error
+            ? err.message
+            : "Paylaşımlar yüklenemedi. Lütfen tekrar deneyin.",
         );
       } finally {
+        yuklemeKilidi.current = false;
         setYukleniyor(false);
         setYenileniyor(false);
       }
     },
+
     [],
   );
+
   useEffect(() => {
     void kimlikBilgileriniYukle();
     void paylasimlariYukle(0);
   }, [kimlikBilgileriniYukle, paylasimlariYukle]);
-  const fotografSec = async () => {
-    setHata("");
-    const sonuc = await launchImageLibrary({
-      mediaType: "photo",
-      selectionLimit: 1,
-      quality: 1,
-    });
-    if (sonuc.didCancel) return;
-    if (sonuc.errorCode) {
-      setHata(sonuc.errorMessage || "Fotoğraf galerisi açılamadı.");
+  useEffect(() => {
+    if (yenilemeBekliyor && !yukleniyor && !yenileniyor) {
+      setYenilemeBekliyor(false);
+      void paylasimlariYukle(0, true);
+    }
+  }, [yenilemeBekliyor, yukleniyor, yenileniyor, paylasimlariYukle]);
+  // Kamera ve galeri aynı Asset state'ini kullanır.
+  // Böylece önizleme ve yükleme işlemi iki kaynakta da aynı şekilde çalışır.
+  const fotografiHazirla = (asset: Asset | undefined) => {
+    if (!asset?.uri) {
+      setHata("Fotoğraf dosyasına erişilemedi. Lütfen tekrar deneyin.");
       return;
     }
-    const asset = sonuc.assets?.[0];
-    if (!asset?.uri) return;
+
     if (
       asset.type &&
       !["image/jpeg", "image/png", "image/webp", "image/gif"].includes(
@@ -286,69 +505,154 @@ export default function PaylasimlarEkrani() {
       setHata("Yalnızca JPEG, PNG, WebP veya GIF fotoğrafı seçebilirsin.");
       return;
     }
+
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
       setHata("Fotoğraf en fazla 10 MB olabilir.");
       return;
     }
+
     setSeciliFotograf(asset);
     setFotografUrl("");
+    setHata("");
   };
-  const fotografiKaldir = () => setSeciliFotograf(null);
-  const gonder = async () => {
-    const token = await AsyncStorage.getItem("token");
-    if (!token) {
-      Alert.alert("Oturum gerekli", "Paylaşım yapmak için giriş yapmalısın.", [
-        { text: "Tamam" },
-      ]);
-      return;
-    }
-    if (yetkiKontrolYukleniyor || paylasimIzni !== true) {
-      Alert.alert(
-        "Paylaşım izni yok",
-        yetkiKontrolYukleniyor
-          ? "Paylaşım yetkisi kontrol ediliyor. Lütfen bekle."
-          : cinsiyet === "ERKEK"
-            ? "Paylaşım oluşturmak için aktif Premium üyeliğin olmalı."
-            : "Paylaşım yetkin doğrulanamadı. Lütfen ekranı yenile.",
-      );
-      return;
-    }
 
-    const temizMetin = metin.trim();
-    const temizFotografUrl = fotografUrl.trim();
-    if (!temizMetin && !temizFotografUrl && !seciliFotograf) {
-      setHata("Bir metin veya fotoğraf eklemelisin.");
-      return;
-    }
-    if (temizMetin.length > 2000 || temizFotografUrl.length > 500) {
-      setHata(
-        "Metin en fazla 2000, fotoğraf bağlantısı 500 karakter olabilir.",
-      );
-      return;
-    }
-    if (temizFotografUrl) {
-      try {
-        const url = new URL(temizFotografUrl);
-        if (!["http:", "https:"].includes(url.protocol)) throw new Error();
-      } catch {
-        setHata("Fotoğraf için geçerli bir HTTP veya HTTPS bağlantısı gir.");
+  const fotografSec = async () => {
+    setHata("");
+
+    try {
+      const sonuc = await launchImageLibrary({
+        mediaType: "photo",
+        selectionLimit: 1,
+        quality: 1,
+      });
+
+      if (sonuc.didCancel) return;
+
+      if (sonuc.errorCode) {
+        console.error(
+          "FOTOĞRAF GALERİSİ HATASI:",
+          sonuc.errorCode,
+          sonuc.errorMessage,
+        );
+        setHata("Fotoğraf galerisi açılamadı. Lütfen tekrar deneyin.");
         return;
       }
+
+      fotografiHazirla(sonuc.assets?.[0]);
+    } catch (err) {
+      console.error("FOTOĞRAF SEÇME HATASI:", err);
+      setHata("Fotoğraf seçilemedi. Lütfen tekrar deneyin.");
     }
+  };
+
+  const fotografCek = async () => {
+    setHata("");
+
+    try {
+      const sonuc = await launchCamera({
+        mediaType: "photo",
+        cameraType: "back",
+        saveToPhotos: true,
+        quality: 1,
+      });
+
+      if (sonuc.didCancel) return;
+
+      if (sonuc.errorCode) {
+        console.error("KAMERA HATASI:", sonuc.errorCode, sonuc.errorMessage);
+        setHata(
+          sonuc.errorCode === "permission"
+            ? "Kamera izni verilmedi. Android ayarlarından kamera iznini aç."
+            : "Kamera açılamadı. Lütfen tekrar deneyin.",
+        );
+        return;
+      }
+
+      fotografiHazirla(sonuc.assets?.[0]);
+    } catch (err) {
+      console.error("FOTOĞRAF ÇEKME HATASI:", err);
+      setHata("Fotoğraf çekilemedi. Lütfen tekrar deneyin.");
+    }
+  };
+
+  const fotografiKaldir = () => setSeciliFotograf(null);
+
+  const gonder = async () => {
+    if (gonderiliyor) return;
+
     setGonderiliyor(true);
     setHata("");
     setBilgi("");
+
     try {
+      const token = await AsyncStorage.getItem("token");
+
+      if (!token) {
+        uyariGoster(
+          "Giriş yapmalısın",
+          "Paylaşım oluşturmak için hesabına giriş yap.",
+        );
+        return;
+      }
+
+      if (yetkiKontrolYukleniyor || paylasimIzni !== true) {
+        uyariGoster(
+          yetkiKontrolYukleniyor
+            ? "Kontrol devam ediyor"
+            : cinsiyet === "ERKEK"
+              ? "Premium üyelik gerekli"
+              : "Paylaşım izni doğrulanamadı",
+          yetkiKontrolYukleniyor
+            ? "Paylaşım yetkin kontrol ediliyor. Biraz sonra tekrar dene."
+            : cinsiyet === "ERKEK"
+              ? "Paylaşım oluşturmak için aktif bir Premium üyeliğin olmalı."
+              : "Paylaşım yetkisi doğrulanamadı. Tekrar kontrol etmeyi dene.",
+        );
+        return;
+      }
+
+      const temizMetin = metin.trim();
+      const temizFotografUrl = fotografUrl.trim();
+
+      if (!temizMetin && !temizFotografUrl && !seciliFotograf) {
+        setHata("Bir metin veya fotoğraf eklemelisin.");
+        return;
+      }
+
+      if (temizMetin.length > 2000 || temizFotografUrl.length > 500) {
+        setHata(
+          "Metin en fazla 2000, fotoğraf bağlantısı 500 karakter olabilir.",
+        );
+        return;
+      }
+
+      if (temizFotografUrl) {
+        try {
+          const url = new URL(temizFotografUrl);
+
+          if (url.protocol !== "https:") {
+            throw new Error();
+          }
+        } catch {
+          setHata("Fotoğraf bağlantısı geçerli bir HTTPS adresi olmalıdır.");
+          return;
+        }
+      }
+
       if (seciliFotograf?.uri) {
         const formData = new FormData();
+
         formData.append("metin", temizMetin);
         formData.append("fotograf", {
           uri: seciliFotograf.uri,
           name:
             seciliFotograf.fileName ||
-            `paylasim-${Date.now()}.${(seciliFotograf.type?.split("/")[1] || "jpg").replace("jpeg", "jpg")}`,
+            `paylasim-${Date.now()}.${(
+              seciliFotograf.type?.split("/")[1] || "jpg"
+            ).replace("jpeg", "jpg")}`,
           type: seciliFotograf.type || "image/jpeg",
         } as unknown as Blob);
+
         const response = await fetch(API_URL, {
           method: "POST",
           headers: {
@@ -357,6 +661,7 @@ export default function PaylasimlarEkrani() {
           },
           body: formData,
         });
+
         await yanitiKontrolEt<Paylasim>(response);
       } else {
         const response = await fetch(API_URL, {
@@ -371,55 +676,89 @@ export default function PaylasimlarEkrani() {
             ...(temizFotografUrl ? { fotografUrl: temizFotografUrl } : {}),
           }),
         });
+
         await yanitiKontrolEt<Paylasim>(response);
       }
+
       setMetin("");
       setFotografUrl("");
       setSeciliFotograf(null);
       setBilgi("Paylaşımın başarıyla yayınlandı.");
-      await paylasimlariYukle(0);
+
+      // Mevcut yükleme devam ediyorsa kilit açıldıktan sonra yenilemeyi dene.
+      if (!yuklemeKilidi.current) {
+        await paylasimlariYukle(0, true);
+      }
     } catch (err) {
-      setHata(err instanceof Error ? err.message : "Paylaşım oluşturulamadı.");
+      console.error("PAYLAŞIM OLUŞTURMA HATASI:", err);
+
+      setHata(
+        err instanceof Error
+          ? err.message
+          : "Paylaşım oluşturulamadı. Lütfen tekrar deneyin.",
+      );
     } finally {
       setGonderiliyor(false);
     }
   };
+
   const paylasimSil = (paylasim: Paylasim) => {
-    if (paylasim.kullaniciId !== kullaniciId) {
+    if (!kullaniciId || String(paylasim.kullaniciId) !== String(kullaniciId)) {
       setHata("Yalnızca kendi paylaşımını silebilirsin.");
       return;
     }
-    Alert.alert("Paylaşımı sil", "Bu paylaşımı silmek istediğine emin misin?", [
-      { text: "Vazgeç", style: "cancel" },
-      {
-        text: "Sil",
-        style: "destructive",
-        onPress: async () => {
-          const token = await AsyncStorage.getItem("token");
-          if (!token) {
-            Alert.alert("Oturum gerekli", "Tekrar giriş yapmalısın.");
-            return;
-          }
-          try {
-            setHata("");
-            const response = await fetch(`${API_URL}/${paylasim.id}`, {
-              method: "DELETE",
-              headers: { Authorization: `Bearer ${token}` },
-            });
-            await yanitiKontrolEt<void>(response);
-            setPaylasimlar((onceki) =>
-              onceki.filter((oge) => oge.id !== paylasim.id),
-            );
-            setBilgi("Paylaşım silindi.");
-          } catch (err) {
-            setHata(
-              err instanceof Error ? err.message : "Paylaşım silinemedi.",
-            );
-          }
+
+    uyariGoster(
+      "Paylaşımı sil",
+      "Bu paylaşımı kalıcı olarak silmek istiyor musun?",
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: "Sil",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setHata("");
+
+              const token = await AsyncStorage.getItem("token");
+
+              if (!token) {
+                uyariGoster(
+                  "Giriş yapmalısın",
+                  "Paylaşımı silmek için tekrar giriş yap.",
+                );
+                return;
+              }
+
+              const response = await fetch(`${API_URL}/${paylasim.id}`, {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+
+              await yanitiKontrolEt<void>(response);
+
+              setPaylasimlar((onceki) =>
+                onceki.filter((oge) => oge.id !== paylasim.id),
+              );
+
+              setBilgi("Paylaşım silindi.");
+            } catch (err) {
+              console.error("PAYLAŞIM SİLME HATASI:", err);
+
+              setHata(
+                err instanceof Error
+                  ? err.message
+                  : "Paylaşım silinemedi. Lütfen tekrar deneyin.",
+              );
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
+
   const renderPaylasim = ({ item }: { item: Paylasim }) => {
     const foto = fotografAdresiniHazirla(item.fotografUrl, item.id);
     const korumaliFotograf = !!foto && foto.startsWith(`${API_URL}/`);
@@ -450,18 +789,10 @@ export default function PaylasimlarEkrani() {
           <Text style={styles.paylasimMetni}>{item.metin}</Text>
         )}
         {!!foto && (
-          <Image
-            source={{
-              uri: foto,
-              ...(korumaliFotograf && oturumToken
-                ? { headers: { Authorization: `Bearer ${oturumToken}` } }
-                : {}),
-            }}
-            style={styles.paylasimFotografi}
-            resizeMode="contain"
-            onError={() =>
-              console.warn("Paylaşım fotoğrafı yüklenemedi:", foto)
-            }
+          <PaylasimFotografi
+            fotografAdresi={foto}
+            korumali={korumaliFotograf}
+            token={oturumToken}
           />
         )}
       </View>
@@ -469,7 +800,60 @@ export default function PaylasimlarEkrani() {
   };
   return (
     <SafeAreaView style={styles.guvenliAlan}>
-      <StatusBar barStyle="dark-content" backgroundColor="#FAF7FF" />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F5FC" />
+      <Modal
+        visible={uyariPenceresi !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setUyariPenceresi(null)}
+      >
+        <View style={styles.uyariArkaPlan}>
+          <View style={styles.uyariKarti}>
+            <View style={styles.uyariIkonAlani}>
+              <Text style={styles.uyariIkon}>
+                {uyariPenceresi?.butonlar.some(
+                  (buton) => buton.style === "destructive",
+                )
+                  ? "!"
+                  : "i"}
+              </Text>
+            </View>
+            <Text style={styles.uyariBaslik}>{uyariPenceresi?.baslik}</Text>
+            <Text style={styles.uyariMesaj}>{uyariPenceresi?.mesaj}</Text>
+            <View style={styles.uyariButonlari}>
+              {uyariPenceresi?.butonlar.map((buton, index) => (
+                <Pressable
+                  key={`${buton.text}-${index}`}
+                  accessibilityRole="button"
+                  style={[
+                    styles.uyariButonu,
+                    buton.style === "destructive" && styles.uyariTehlikeliButon,
+                    buton.style === "cancel" && styles.uyariIptalButon,
+                    uyariPenceresi?.butonlar.length === 1 &&
+                      styles.uyariTekButon,
+                  ]}
+                  onPress={() => {
+                    setUyariPenceresi(null);
+                    buton.onPress?.();
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.uyariButonYazisi,
+                      buton.style === "destructive" &&
+                        styles.uyariTehlikeliYazi,
+                      buton.style === "cancel" && styles.uyariIptalYazi,
+                    ]}
+                  >
+                    {buton.text}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
       <KeyboardAvoidingView
         style={styles.kapsayici}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -568,14 +952,22 @@ export default function PaylasimlarEkrani() {
                   <View style={styles.fotografButonlari}>
                     <Pressable
                       style={styles.galeriButonu}
+                      onPress={() => void fotografCek()}
+                    >
+                      <Text style={styles.galeriButonuYazi}>
+                        📷 Fotoğraf çek
+                      </Text>
+                    </Pressable>
+
+                    <Pressable
+                      style={styles.galeriButonu}
                       onPress={() => void fotografSec()}
                     >
                       <Text style={styles.galeriButonuYazi}>
-                        {seciliFotograf
-                          ? "Fotoğrafı değiştir"
-                          : "▧  Galeriden fotoğraf seç"}
+                        ▧ Galeriden seç
                       </Text>
                     </Pressable>
+
                     {!!seciliFotograf && (
                       <Pressable onPress={fotografiKaldir}>
                         <Text style={styles.fotografiKaldir}>Kaldır</Text>
@@ -688,7 +1080,73 @@ export default function PaylasimlarEkrani() {
   );
 }
 const styles = StyleSheet.create({
-  guvenliAlan: { flex: 1, backgroundColor: "#FAF7FF" },
+  uyariArkaPlan: {
+    flex: 1,
+    backgroundColor: "rgba(25, 16, 45, 0.52)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 24,
+  },
+  uyariKarti: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 26,
+    padding: 24,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#D8B65A",
+    elevation: 12,
+    shadowColor: "#432365",
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    shadowOffset: { width: 0, height: 12 },
+  },
+  uyariIkonAlani: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: "#F0E8FA",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  uyariIkon: { color: "#7541B8", fontSize: 26, fontWeight: "900" },
+  uyariBaslik: {
+    color: "#432365",
+    fontSize: 20,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  uyariMesaj: {
+    color: "#6B7280",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    marginTop: 10,
+  },
+  uyariButonlari: {
+    flexDirection: "row",
+    alignSelf: "stretch",
+    gap: 10,
+    marginTop: 24,
+  },
+  uyariButonu: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: "#7541B8",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 12,
+  },
+  uyariTekButon: { flex: 0, alignSelf: "stretch" },
+  uyariButonYazisi: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  uyariTehlikeliButon: { backgroundColor: "#DC2626" },
+  uyariTehlikeliYazi: { color: "#FFFFFF" },
+  uyariIptalButon: { backgroundColor: "#F3F4F6" },
+  uyariIptalYazi: { color: "#374151" },
+  guvenliAlan: { flex: 1, backgroundColor: "#F8F5FC" },
   kapsayici: { flex: 1 },
   listeIcerigi: { padding: 16, paddingBottom: 36 },
   ustAlan: { marginBottom: 18 },
@@ -698,24 +1156,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#C4B5FD",
+    borderColor: "#D8B65A",
     marginBottom: 12,
   },
   geriButonuYazi: { color: MOR, fontSize: 15, fontWeight: "700" },
-  baslik: { color: "#5B21B6", fontSize: 27, fontWeight: "900" },
+  baslik: { color: "#432365", fontSize: 27, fontWeight: "900" },
   altBaslik: { color: "#6B7280", fontSize: 14, marginTop: 3 },
   yetkiKarti: {
     padding: 18,
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E9D5FF",
+    borderColor: "#D8B65A",
     marginBottom: 24,
     alignItems: "center",
     gap: 10,
   },
   yetkiBaslik: {
-    color: "#4C1D95",
+    color: "#432365",
     fontWeight: "900",
     fontSize: 17,
     textAlign: "center",
@@ -739,7 +1197,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E9D5FF",
+    borderColor: "#D8B65A",
     marginBottom: 24,
     elevation: 2,
   },
@@ -753,22 +1211,22 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: "#7C3AED",
+    backgroundColor: "#7541B8",
     alignItems: "center",
     justifyContent: "center",
   },
   avatarYazi: { color: "#FFFFFF", fontWeight: "900", fontSize: 18 },
   kullaniciBilgisi: { flex: 1 },
-  kullaniciAdi: { color: "#4C1D95", fontWeight: "800", fontSize: 15 },
+  kullaniciAdi: { color: "#432365", fontWeight: "800", fontSize: 15 },
   tarih: { color: "#6B7280", fontSize: 12, marginTop: 3 },
   metinAlani: {
     minHeight: 110,
     maxHeight: 220,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DDD6FE",
+    borderColor: "#D8B65A",
     padding: 12,
-    color: "#29213D",
+    color: "#30243A",
     fontSize: 15,
     backgroundColor: "#FFFFFF",
   },
@@ -781,11 +1239,11 @@ const styles = StyleSheet.create({
   urlAlani: {
     marginTop: 12,
     borderWidth: 1,
-    borderColor: "#DDD6FE",
+    borderColor: "#D8B65A",
     borderRadius: 12,
     paddingHorizontal: 12,
     paddingVertical: 11,
-    color: "#29213D",
+    color: "#30243A",
   },
   fotografButonlari: {
     flexDirection: "row",
@@ -796,7 +1254,7 @@ const styles = StyleSheet.create({
   },
   galeriButonu: {
     borderWidth: 1,
-    borderColor: "#C4B5FD",
+    borderColor: "#D8B65A",
     borderRadius: 12,
     paddingHorizontal: 13,
     paddingVertical: 10,
@@ -808,7 +1266,7 @@ const styles = StyleSheet.create({
     height: 260,
     marginTop: 14,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FCF9FF",
   },
   paylasButonu: {
     marginTop: 16,
@@ -826,12 +1284,12 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 14,
   },
-  listeBaslikMetni: { color: "#4C1D95", fontWeight: "900", fontSize: 21 },
+  listeBaslikMetni: { color: "#432365", fontWeight: "900", fontSize: 21 },
   yenileButonu: {
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: "#EDE9FE",
+    backgroundColor: "#F0E8FA",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -840,7 +1298,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#E9D5FF",
+    borderColor: "#D8B65A",
     padding: 16,
     marginBottom: 14,
     elevation: 1,
@@ -855,7 +1313,7 @@ const styles = StyleSheet.create({
   silButonuYazi: { color: "#DC2626", fontWeight: "800" },
   paylasimMetni: {
     marginTop: 14,
-    color: "#29213D",
+    color: "#30243A",
     fontSize: 15,
     lineHeight: 23,
   },
@@ -864,24 +1322,33 @@ const styles = StyleSheet.create({
     height: 300,
     marginTop: 14,
     borderRadius: 12,
-    backgroundColor: "#F8FAFC",
+    backgroundColor: "#FCF9FF",
+  },
+  paylasimFotografiYukleniyor: {
+    width: "100%",
+    height: 300,
+    marginTop: 14,
+    borderRadius: 12,
+    backgroundColor: "#FCF9FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
   durumAlani: { paddingVertical: 28, alignItems: "center", gap: 12 },
   durumMetni: { color: "#6B7280", fontSize: 14 },
   bosListe: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: "#E9D5FF",
+    borderColor: "#D8B65A",
     borderRadius: 18,
     padding: 26,
     alignItems: "center",
     marginBottom: 14,
   },
-  bosListeIkon: { color: "#A78BFA", fontSize: 42, marginBottom: 6 },
+  bosListeIkon: { color: "#8A5AC4", fontSize: 42, marginBottom: 6 },
   dahaFazlaButonu: {
     alignSelf: "center",
     borderWidth: 1,
-    borderColor: "#C4B5FD",
+    borderColor: "#D8B65A",
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 30,

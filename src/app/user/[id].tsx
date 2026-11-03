@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -13,12 +12,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-// src/app/home.tsx
+// profil gör
 // src/app/user/[id].tsx
+import KimlikDogrulamaliAvatar from "../../components/common/KimlikDogrulamaliAvatar";
 import { API_BASE_URL } from "../../config/api";
-const API_ADRESI = API_BASE_URL + "/api";
 
-const SUNUCU_ADRESI = API_BASE_URL;
+const API_ADRESI = API_BASE_URL + "/api";
 type Kullanıcı = {
   id: number;
   username: string;
@@ -84,7 +83,41 @@ export default function KullanıcıProfil() {
   const [mesajAcik, setMesajAcik] = useState(false);
   const [mesaj, setMesaj] = useState("");
   const [mesajYukleniyor, setMesajYukleniyor] = useState(false);
+  const [sikayetModalAcik, setSikayetModalAcik] = useState(false);
+  const [sikayetNedeni, setSikayetNedeni] = useState("");
+  const [sikayetAciklamasi, setSikayetAciklamasi] = useState("");
+  const [sikayetGonderiliyor, setSikayetGonderiliyor] = useState(false);
 
+  const sikayetNedenleri = [
+    {
+      kod: "MEDENI_DURUMUNU_GIZLEME",
+      metin: "Medeni durumunu gizleme",
+    },
+    {
+      kod: "SAHTE_PROFIL",
+      metin: "Sahte profil veya başkasının fotoğrafı",
+    },
+    {
+      kod: "TACIZ_VE_ISRARLI_MESAJ",
+      metin: "Taciz ve ısrarlı mesajlar",
+    },
+    {
+      kod: "HAKARET_VE_TEHDIT",
+      metin: "Hakaret ve tehdit",
+    },
+    {
+      kod: "UYGUNSUZ_CINSEL_ICERIK",
+      metin: "Uygunsuz cinsel içerik",
+    },
+    {
+      kod: "DOLANDIRICILIK_VE_PARA_ISTEME",
+      metin: "Dolandırıcılık ve para isteme",
+    },
+    {
+      kod: "DIGER",
+      metin: "Diğer",
+    },
+  ];
   useEffect(() => {
     void kullaniciProfiliniGetir();
   }, [id]);
@@ -106,8 +139,7 @@ export default function KullanıcıProfil() {
         return;
       }
 
-      console.log("KULLANICI PROFİLİ AÇILIYOR:", id);
-
+      // Kullanıcı bilgilerini getir.
       const kullaniciResponse = await fetch(`${API_ADRESI}/users/${id}`, {
         method: "GET",
         headers: {
@@ -116,16 +148,40 @@ export default function KullanıcıProfil() {
         },
       });
 
-      console.log("KULLANICI RESPONSE:", kullaniciResponse.status);
-
       if (!kullaniciResponse.ok) {
         throw new Error(
-          `Kullanıcı bilgisi alinamadi. HTTP ${kullaniciResponse.status}`,
+          "Kullanıcı profili şu anda yüklenemiyor. Lütfen tekrar dene.",
         );
       }
 
       const kullaniciVerisi = (await kullaniciResponse.json()) as Kullanıcı;
 
+      // Normal profil görüntüleme bildirimini oluştur.
+      // Bu çağrı yalnızca normal kullanıcı profili ekranında yapılır.
+      // Bildirim başarısız olsa bile profil yüklemesi devam eder.
+      try {
+        const goruntulemeResponse = await fetch(
+          `${API_ADRESI}/profiles/user/${id}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (!goruntulemeResponse.ok) {
+          console.warn("Profil görüntüleme bildirimi oluşturulamadı.");
+        } else {
+          // Yanıt içeriği kullanılmıyor.
+          await goruntulemeResponse.text();
+        }
+      } catch {
+        console.warn("Profil görüntüleme bildirimi gönderilemedi.");
+      }
+
+      // Profil listesini getir.
       const profilResponse = await fetch(`${API_ADRESI}/profiles`, {
         method: "GET",
         headers: {
@@ -134,11 +190,9 @@ export default function KullanıcıProfil() {
         },
       });
 
-      console.log("PROFILLER RESPONSE:", profilResponse.status);
-
       if (!profilResponse.ok) {
         throw new Error(
-          `Profil bilgisi alinamadi. HTTP ${profilResponse.status}`,
+          "Profil bilgileri şu anda yüklenemiyor. Lütfen tekrar dene.",
         );
       }
 
@@ -156,25 +210,20 @@ export default function KullanıcıProfil() {
         (item) => Number(item.userId) === Number(id),
       );
 
-      console.log("BULUNAN PROFIL:", bulunanProfil);
-
+      // Profil bilgilerini ekrana aktar.
       setKullanıcı(kullaniciVerisi);
       setProfil(bulunanProfil || null);
 
+      // Beğeni, favori ve diğer mevcut durumları getir.
       await durumlariGetir(token, Number(id));
     } catch (error) {
-      console.log("KULLANICI PROFILI HATASI:", error);
+      console.error("Kullanıcı profili yüklenemedi.");
 
-      setHata(
-        error instanceof Error
-          ? error.message
-          : "Profil yüklenirken hata oluştu.",
-      );
+      setHata("Profil yüklenirken bir hata oluştu. Lütfen tekrar dene.");
     } finally {
       setYukleniyor(false);
     }
   };
-
   const durumlariGetir = async (token: string, hedefKullanıcıId: number) => {
     try {
       const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
@@ -229,7 +278,7 @@ export default function KullanıcıProfil() {
         setFavoride(mevcutFavori);
       }
     } catch (error) {
-      console.log("BEGENI / FAVORI DURUMU HATASI:", error);
+      console.error("Beğeni/favori durumu alınamadı.");
     }
   };
 
@@ -270,23 +319,20 @@ export default function KullanıcıProfil() {
 
       const responseText = await response.text();
 
-      console.log("BEGENI RESPONSE:", response.status, responseText);
-
+      // Sunucunun yanıt gövdesini konsola yazdırma.
       if (!response.ok) {
-        throw new Error(
-          responseText || `Beğeni gönderilemedi. HTTP ${response.status}`,
-        );
+        throw new Error("Beğeni gönderilemedi. Lütfen tekrar dene.");
       }
 
       setBegendi(true);
 
       Alert.alert("Başarılı", "?? Beğeni gönderildi.");
     } catch (error) {
-      console.log("BEGENI HATASI:", error);
+      console.error("Beğeni işlemi başarısız oldu.");
 
       Alert.alert(
-        "Hata",
-        error instanceof Error ? error.message : "Beğeni gönderilemedi.",
+        "İşlem başarısız",
+        "Beğeni gönderilemedi. Lütfen tekrar dene.",
       );
     } finally {
       setBegeniYukleniyor(false);
@@ -330,23 +376,20 @@ export default function KullanıcıProfil() {
 
       const responseText = await response.text();
 
-      console.log("FAVORI RESPONSE:", response.status, responseText);
-
+      // Sunucunun yanıt gövdesini konsola yazdırma.
       if (!response.ok) {
-        throw new Error(
-          responseText || `Favorilere eklenemedi. HTTP ${response.status}`,
-        );
+        throw new Error("Favorilere eklenemedi. Lütfen tekrar dene.");
       }
 
       setFavoride(true);
 
       Alert.alert("Başarılı", "? Favorilere eklendi.");
     } catch (error) {
-      console.log("FAVORI HATASI:", error);
+      console.error("Favorilere ekleme işlemi başarısız oldu.");
 
       Alert.alert(
-        "Hata",
-        error instanceof Error ? error.message : "Favorilere eklenemedi.",
+        "İşlem başarısız",
+        "Favorilere eklenemedi. Lütfen tekrar dene.",
       );
     } finally {
       setFavoriYukleniyor(false);
@@ -386,8 +429,7 @@ export default function KullanıcıProfil() {
 
       const responseText = await response.text();
 
-      console.log("MESAJ RESPONSE:", response.status, responseText);
-
+      // Sunucunun yanıt gövdesini konsola yazdırma.
       if (!response.ok) {
         let hataMesaji = `Mesaj gönderilemedi. HTTP ${response.status}`;
         let premiumGerekli = false;
@@ -399,13 +441,9 @@ export default function KullanıcıProfil() {
             premiumGerekli = true;
             hataMesaji =
               "Mesaj gönderebilmek için aktif PREMIUM üyeliğiniz bulunmalıdır.";
-          } else if (veri?.mesaj) {
-            hataMesaji = veri.mesaj;
           }
         } catch {
-          if (responseText) {
-            hataMesaji = responseText;
-          }
+          // Ham sunucu yanıtı kullanıcıya gösterilmez.
         }
 
         if (premiumGerekli) {
@@ -430,33 +468,103 @@ export default function KullanıcıProfil() {
 
       Alert.alert("Başarılı", "Mesaj başarıyla gönderildi.");
     } catch (error) {
-      console.log("MESAJ HATASI:", error);
+      console.error("Mesaj gönderme işlemi başarısız oldu.");
 
       Alert.alert(
-        "Hata",
-        error instanceof Error ? error.message : "Mesaj gönderilemedi.",
+        "İşlem başarısız",
+        "Mesaj gönderilemedi. Lütfen tekrar dene.",
       );
     } finally {
       setMesajYukleniyor(false);
     }
   };
-
-  const fotoUrlOlustur = (foto?: string) => {
-    if (!foto) {
-      return "";
+  const sikayetiGonder = async () => {
+    if (sikayetGonderiliyor) {
+      return;
     }
 
-    if (foto.startsWith("http://") || foto.startsWith("https://")) {
-      return foto;
-    }
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
 
-    if (foto.startsWith("/")) {
-      return `${SUNUCU_ADRESI}${foto}`;
-    }
+      if (!token || !mevcutKullaniciId || !kullanici) {
+        Alert.alert("Hata", "Oturum veya kullanıcı bilgisi bulunamadı.");
+        return;
+      }
 
-    return `${SUNUCU_ADRESI}/${foto}`;
+      if (mevcutKullaniciId === kullanici.id) {
+        Alert.alert("Uyarı", "Kendi profilinizi şikâyet edemezsiniz.");
+        return;
+      }
+
+      if (!sikayetNedeni) {
+        Alert.alert("Uyarı", "Lütfen bir şikâyet nedeni seçin.");
+        return;
+      }
+
+      const aciklama = sikayetAciklamasi.trim();
+
+      if (aciklama.length > 2000) {
+        Alert.alert("Uyarı", "Açıklama en fazla 2000 karakter olabilir.");
+        return;
+      }
+
+      setSikayetGonderiliyor(true);
+
+      const response = await fetch(
+        `${API_ADRESI}/sikayetler?sikayetEdilenId=${encodeURIComponent(
+          String(kullanici.id),
+        )}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            neden: sikayetNedeni,
+            aciklama: aciklama || null,
+            mesajId: null,
+          }),
+        },
+      );
+
+      const yanitMetni = await response.text();
+
+      if (!response.ok) {
+        let hataMesaji = "Şikâyet gönderilemedi. Lütfen tekrar deneyin.";
+
+        try {
+          const veri = JSON.parse(yanitMetni);
+
+          if (typeof veri?.message === "string") {
+            hataMesaji = veri.message;
+          } else if (typeof veri?.mesaj === "string") {
+            hataMesaji = veri.mesaj;
+          }
+        } catch {
+          // Sunucunun ham yanıtını kullanıcıya göstermiyoruz.
+        }
+
+        Alert.alert("İşlem başarısız", hataMesaji);
+        return;
+      }
+
+      setSikayetModalAcik(false);
+      setSikayetNedeni("");
+      setSikayetAciklamasi("");
+
+      Alert.alert("Şikâyet Alındı", "Bildiriminiz başarıyla gönderildi.");
+    } catch {
+      Alert.alert(
+        "Bağlantı Hatası",
+        "Şikâyet gönderilemedi. Bağlantınızı kontrol edin.",
+      );
+    } finally {
+      setSikayetGonderiliyor(false);
+    }
   };
-
   const yasHesapla = (dogumTarihi?: string) => {
     if (!dogumTarihi) {
       return null;
@@ -546,13 +654,13 @@ export default function KullanıcıProfil() {
     );
   }
 
-  const foto = fotoUrlOlustur(profil?.profilePhoto || kullanici.profilePhoto);
-
-  const yas = yasHesapla(kullanici.birthDate);
-
   const adSoyad = `${kullanici.firstName || ""} ${
     kullanici.lastName || ""
   }`.trim();
+  const avatarHarf = (adSoyad || kullanici.username || "?")
+    .charAt(0)
+    .toUpperCase();
+  const yas = yasHesapla(kullanici.birthDate);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -568,97 +676,84 @@ export default function KullanıcıProfil() {
             style={styles.backButton}
           >
             <Text style={styles.backIcon}>←</Text>
-
             <Text style={styles.backText}>Geri</Text>
           </Pressable>
 
           <Text style={styles.topTitle}>Profil</Text>
 
           <Pressable
-            onPress={() => navigation.replace("home")}
-            style={styles.homeButton}
+            style={styles.sikayetTopButton}
+            onPress={() => {
+              navigation.navigate("sikayet", {
+                sikayetEdilenId: Number(id),
+              });
+            }}
           >
-            <Text style={styles.homeButtonText}>Ana Sayfa</Text>
+            <Text style={styles.sikayetTopButtonText}>⚑ Şikâyet Et</Text>
           </Pressable>
         </View>
 
-        {/* ANA PROFIL */}
-
+        {/* PROFIL BASLIGI: KÜÇÜK AVATAR + KULLANICI BILGILERI */}
         <View style={styles.profileCard}>
-          <View style={styles.photoContainer}>
-            {foto ? (
-              <Image
-                source={{
-                  uri: foto,
-                }}
-                style={styles.profilePhoto}
+          <View style={styles.profileHeader}>
+            <View style={styles.avatarFrame}>
+              <KimlikDogrulamaliAvatar
+                kullaniciId={kullanici.id}
+                boyut={106}
+                altYazi={avatarHarf}
+                imageStyle={styles.profileAvatar}
               />
-            ) : (
-              <View style={styles.photoPlaceholder}>
-                <Text style={styles.photoPlaceholderText}>
-                  {(kullanici.firstName || kullanici.username || "?")
-                    .charAt(0)
-                    .toUpperCase()}
+              {kullanici.online && <View style={styles.onlineDot} />}
+            </View>
+
+            <View style={styles.profileIdentity}>
+              <Text style={styles.name}>{adSoyad || kullanici.username}</Text>
+              <Text style={styles.username}>@{kullanici.username}</Text>
+              <View style={styles.statusRow}>
+                <View
+                  style={[
+                    styles.statusDot,
+                    !kullanici.online && styles.statusDotOffline,
+                  ]}
+                />
+                <Text style={styles.statusText}>
+                  {kullanici.online ? "Çevrimiçi" : "Şu an çevrimdışı"}
                 </Text>
               </View>
-            )}
-
-            {kullanici.online && <View style={styles.onlineDot} />}
+              {profil?.profileVerified && (
+                <View style={styles.verifiedBadge}>
+                  <Text style={styles.verifiedBadgeText}>
+                    ✓ Doğrulanmış profil
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
 
-          <Text style={styles.name}>{adSoyad || kullanici.username}</Text>
-
-          <Text style={styles.username}>@{kullanici.username}</Text>
-
-          {/* ETIKETLER */}
-
-          <View style={styles.tags}>
+          <View style={styles.tagRow}>
             {yas !== null && (
               <View style={styles.tag}>
-                <Text style={styles.tagText}>📍 {yas} yaşında</Text>
+                <Text style={styles.tagText}>{yas} yaş</Text>
               </View>
             )}
-
+            {kullanici.city && (
+              <View style={styles.tag}>
+                <Text style={styles.tagText}>{kullanici.city}</Text>
+              </View>
+            )}
             {kullanici.gender && (
               <View style={styles.tag}>
                 <Text style={styles.tagText}>{kullanici.gender}</Text>
               </View>
             )}
-
-            {kullanici.city && (
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>📍 {kullanici.city}</Text>
-              </View>
-            )}
-
-            {profil?.profession && (
+            {profil?.maritalStatus !== undefined && (
               <View style={styles.tag}>
                 <Text style={styles.tagText}>
-                  📍 {enumGoster(profil.profession)}
-                </Text>
-              </View>
-            )}
-
-            {profil?.maritalStatus && (
-              <View style={styles.tag}>
-                <Text style={styles.tagText}>
-                  ?? {enumGoster(profil.maritalStatus)}
+                  {enumGoster(profil.maritalStatus)}
                 </Text>
               </View>
             )}
           </View>
-
-          {kullanici.online && (
-            <View style={styles.onlineBadge}>
-              <Text style={styles.onlineBadgeText}>🟢 Çevrimiçi</Text>
-            </View>
-          )}
-
-          {profil?.profileVerified && (
-            <View style={styles.verifiedBadge}>
-              <Text style={styles.verifiedBadgeText}>✓ Profil Doğrulandı</Text>
-            </View>
-          )}
         </View>
 
         {/* BEGENI / FAVORI */}
@@ -741,10 +836,8 @@ export default function KullanıcıProfil() {
         </View>
 
         {/* HAKKINDA */}
-
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hakkinda</Text>
-
+          <Text style={styles.sectionTitle}>Hakkında</Text>
           <View style={styles.aboutBox}>
             <Text style={styles.aboutText}>
               {profil?.about || "Bu kullanıcı hakkında henüz bilgi eklenmemiş."}
@@ -752,58 +845,51 @@ export default function KullanıcıProfil() {
           </View>
         </View>
 
-        {/* KISISEL BILGILER */}
-
+        {/* KİŞİSEL BİLGİLER: İKİLİ GRID */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
-
-          <BilgiKarti
-            baslik="Sehir"
-            deger={kullanici.city || "Belirtilmemiş"}
-            ikon="📏"
-          />
-
-          <BilgiKarti
-            baslik="Yaş"
-            deger={yas !== null ? `${yas} yaşında` : "Belirtilmemiş"}
-            ikon="🎂"
-          />
-
-          <BilgiKarti
-            baslik="Meslek"
-            deger={enumGoster(profil?.profession)}
-            ikon="🎂"
-          />
-
-          <BilgiKarti
-            baslik="Eğitim"
-            deger={enumGoster(profil?.education)}
-            ikon="🎓"
-          />
-
-          <BilgiKarti
-            baslik="Boy"
-            deger={profil?.height ? `${profil.height} cm` : "Belirtilmemiş"}
-            ikon="📏"
-          />
-
-          <BilgiKarti
-            baslik="Kilo"
-            deger={profil?.weight ? `${profil.weight} kg` : "Belirtilmemiş"}
-            ikon="weight"
-          />
-
-          <BilgiKarti
-            baslik="Medeni Durum"
-            deger={enumGoster(profil?.maritalStatus)}
-            ikon="??"
-          />
-
-          <BilgiKarti
-            baslik="Din"
-            deger={enumGoster(profil?.religion)}
-            ikon="gY.O"
-          />
+          <View style={styles.infoGrid}>
+            <BilgiKarti
+              baslik="Şehir"
+              deger={kullanici.city || "Belirtilmemiş"}
+              ikon="⌖"
+            />
+            <BilgiKarti
+              baslik="Yaş"
+              deger={yas !== null ? `${yas} yaş` : "Belirtilmemiş"}
+              ikon="◷"
+            />
+            <BilgiKarti
+              baslik="Meslek"
+              deger={enumGoster(profil?.profession)}
+              ikon="▣"
+            />
+            <BilgiKarti
+              baslik="Eğitim"
+              deger={enumGoster(profil?.education)}
+              ikon="◇"
+            />
+            <BilgiKarti
+              baslik="Boy"
+              deger={profil?.height ? `${profil.height} cm` : "Belirtilmemiş"}
+              ikon="↕"
+            />
+            <BilgiKarti
+              baslik="Kilo"
+              deger={profil?.weight ? `${profil.weight} kg` : "Belirtilmemiş"}
+              ikon="⚖"
+            />
+            <BilgiKarti
+              baslik="Medeni Durum"
+              deger={enumGoster(profil?.maritalStatus)}
+              ikon="♡"
+            />
+            <BilgiKarti
+              baslik="Din"
+              deger={enumGoster(profil?.religion)}
+              ikon="✧"
+            />
+          </View>
         </View>
 
         {/* ILGI ALANLARI */}
@@ -830,6 +916,7 @@ export default function KullanıcıProfil() {
         </View>
 
         {/* DETAYLI PROFIL */}
+
         <View style={styles.section}>
           <Pressable
             style={styles.detailButton}
@@ -838,7 +925,9 @@ export default function KullanıcıProfil() {
                 id: String(id),
               })
             }
-          ></Pressable>
+          >
+            <Text style={styles.detailButtonText}>Profil Detaylarını Gör</Text>
+          </Pressable>
         </View>
 
         {/* ALT BUTONLAR */}
@@ -886,481 +975,319 @@ function BilgiKarti({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f8f5ff",
-  },
-
-  scrollContent: {
-    paddingBottom: 40,
-  },
-
+  container: { flex: 1, backgroundColor: "#10051F" },
+  scrollContent: { paddingBottom: 34, backgroundColor: "#10051F" },
   center: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
+    backgroundColor: "#10051F",
   },
-
   loadingText: {
     marginTop: 14,
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#672036",
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#E8C8FF",
   },
-
   hataBaslik: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#672036",
+    color: "#FFFFFF",
     marginBottom: 10,
     textAlign: "center",
   },
-
   hataText: {
     fontSize: 15,
-    color: "#80666D",
+    color: "#D7B8E8",
     textAlign: "center",
     marginBottom: 20,
   },
-
   primaryButton: {
-    backgroundColor: "#8F2942",
+    backgroundColor: "#E8B85B",
     paddingHorizontal: 24,
     paddingVertical: 13,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 12,
   },
-
-  primaryButtonText: {
-    color: "#FFFCFA",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-
+  primaryButtonText: { color: "#321044", fontWeight: "900", fontSize: 15 },
   secondaryButton: {
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#B34BD1",
     paddingHorizontal: 24,
     paddingVertical: 13,
-    borderRadius: 12,
+    borderRadius: 14,
   },
-
-  secondaryButtonText: {
-    color: "#A12E4A",
-    fontWeight: "800",
-    fontSize: 15,
-  },
-
+  secondaryButtonText: { color: "#F3D9FF", fontWeight: "800", fontSize: 15 },
   topBar: {
-    height: 64,
-    backgroundColor: "#8F2942",
+    height: 62,
+    backgroundColor: "#260638",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#71318B",
   },
-
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: 85,
-  },
-
-  backIcon: {
-    color: "#FFFCFA",
-    fontSize: 38,
-    lineHeight: 40,
-    marginRight: 4,
-  },
-
-  backText: {
-    color: "#FFFCFA",
-    fontSize: 15,
-    fontWeight: "700",
-  },
-
-  topTitle: {
-    color: "#FFFCFA",
-    fontSize: 20,
-    fontWeight: "800",
-  },
-
-  homeButton: {
-    width: 85,
-    alignItems: "flex-end",
-  },
-
-  homeButtonText: {
-    color: "#FFFCFA",
-    fontSize: 13,
-    fontWeight: "700",
-  },
-
+  backButton: { flexDirection: "row", alignItems: "center", width: 85 },
+  backIcon: { color: "#FFFFFF", fontSize: 32, lineHeight: 36, marginRight: 4 },
+  backText: { color: "#F6E8FF", fontSize: 14, fontWeight: "700" },
+  topTitle: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  homeButton: { width: 85, alignItems: "flex-end" },
+  homeButtonText: { color: "#F2D18A", fontSize: 13, fontWeight: "800" },
   profileCard: {
-    margin: 14,
-    padding: 18,
+    marginHorizontal: 15,
+    marginTop: 16,
+    padding: 16,
     borderRadius: 22,
-    backgroundColor: "#FFFCFA",
-    alignItems: "center",
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 5,
-    },
-    elevation: 4,
+    backgroundColor: "#260B38",
+    borderWidth: 1,
+    borderColor: "#79358F",
+    elevation: 5,
   },
-
-  photoContainer: {
-    width: "100%",
-    height: 330,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#F5DCE3",
+  profileHeader: { flexDirection: "row", alignItems: "center" },
+  avatarFrame: {
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    padding: 3,
+    backgroundColor: "#E8B85B",
     position: "relative",
-    alignItems: "center",
-    justifyContent: "center",
   },
-
-  profilePhoto: {
+  profileAvatar: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
+    borderRadius: 53,
+    backgroundColor: "#42145A",
   },
-
   photoPlaceholder: {
-    width: 130,
-    height: 130,
-    borderRadius: 65,
-    backgroundColor: "#E8C5CF",
+    flex: 1,
+    borderRadius: 53,
+    backgroundColor: "#64227D",
     alignItems: "center",
     justifyContent: "center",
   },
-
-  photoPlaceholderText: {
-    color: "#A12E4A",
-    fontSize: 60,
-    fontWeight: "800",
-  },
-
+  photoPlaceholderText: { color: "#FFFFFF", fontSize: 42, fontWeight: "900" },
   onlineDot: {
     position: "absolute",
-    right: 14,
-    top: 14,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#35B779",
+    right: 5,
+    bottom: 5,
+    width: 19,
+    height: 19,
+    borderRadius: 10,
+    backgroundColor: "#39E58C",
     borderWidth: 3,
-    borderColor: "#FFFCFA",
+    borderColor: "#260B38",
   },
-
-  name: {
-    marginTop: 18,
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#672036",
-    textAlign: "center",
+  profileIdentity: { flex: 1, marginLeft: 15, minWidth: 0 },
+  name: { fontSize: 21, fontWeight: "900", color: "#FFFFFF" },
+  username: { marginTop: 4, fontSize: 14, color: "#D9A9EE", fontWeight: "700" },
+  statusRow: { flexDirection: "row", alignItems: "center", marginTop: 9 },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#39E58C",
+    marginRight: 7,
   },
-
-  username: {
-    marginTop: 4,
-    fontSize: 16,
-    color: "#8F2942",
-    fontWeight: "600",
-  },
-
-  tags: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 8,
-    marginTop: 18,
-  },
-
-  tag: {
-    backgroundColor: "#F6EDEF",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-  },
-
-  tagText: {
-    color: "#694650",
-    fontWeight: "600",
-    fontSize: 13,
-  },
-
-  onlineBadge: {
-    marginTop: 14,
-    backgroundColor: "#E5F5EC",
-    paddingHorizontal: 13,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-
-  onlineBadgeText: {
-    color: "#277A54",
-    fontWeight: "800",
-  },
-
+  statusDotOffline: { backgroundColor: "#A78BBA" },
+  statusText: { color: "#DCC8E8", fontSize: 12, fontWeight: "700" },
   verifiedBadge: {
-    marginTop: 10,
-    backgroundColor: "#F5DCE3",
-    paddingHorizontal: 13,
+    alignSelf: "flex-start",
+    marginTop: 9,
+    backgroundColor: "#4B1B66",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E8B85B",
+  },
+  verifiedBadgeText: { color: "#FFE4A1", fontWeight: "800", fontSize: 11 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 15 },
+  tag: {
+    backgroundColor: "#421452",
+    paddingHorizontal: 11,
     paddingVertical: 7,
-    borderRadius: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#71318B",
   },
-
-  verifiedBadgeText: {
-    color: "#A12E4A",
-    fontWeight: "800",
+  tagText: { color: "#F5E8FF", fontWeight: "700", fontSize: 12 },
+  sikayetTopButton: {
+    paddingHorizontal: 9,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#C66CE0",
+    backgroundColor: "#421452",
+    alignItems: "center",
+    justifyContent: "center",
   },
-
+  sikayetTopButtonText: { color: "#FFE7A8", fontSize: 11, fontWeight: "900" },
   actionRow: {
     flexDirection: "row",
     gap: 10,
-    paddingHorizontal: 14,
-    marginBottom: 4,
+    paddingHorizontal: 15,
+    marginTop: 14,
+    marginBottom: 2,
   },
-
   likeButton: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 49,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#db2777",
+    backgroundColor: "#B52D80",
+    borderWidth: 1,
+    borderColor: "#F17CC4",
   },
-
-  likeButtonText: {
-    color: "#FFFCFA",
-    fontWeight: "800",
-    fontSize: 14,
-  },
-
-  disabledActionButton: {
-    opacity: 0.7,
-  },
-
+  likeButtonText: { color: "#FFFFFF", fontWeight: "900", fontSize: 14 },
+  disabledActionButton: { opacity: 0.65 },
   favoriteButton: {
     flex: 1,
-    minHeight: 52,
+    minHeight: 49,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#321044",
   },
-
-  favoriteActive: {
-    backgroundColor: "#faf5ff",
-  },
-
-  favoriteButtonText: {
-    color: "#A12E4A",
-    fontWeight: "800",
-    fontSize: 14,
-  },
-
+  favoriteActive: { backgroundColor: "#4B2860" },
+  favoriteButtonText: { color: "#FFE3A0", fontWeight: "900", fontSize: 13 },
   section: {
-    marginHorizontal: 14,
-    marginTop: 18,
+    marginHorizontal: 15,
+    marginTop: 16,
+    padding: 15,
+    borderRadius: 19,
+    backgroundColor: "#210B31",
+    borderWidth: 1,
+    borderColor: "#57206E",
   },
-
   messageButton: {
-    minHeight: 52,
+    minHeight: 50,
     borderRadius: 14,
-    backgroundColor: "#8F2942",
+    backgroundColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
   },
-
-  messageButtonText: {
-    color: "#FFFCFA",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-
+  messageButtonText: { color: "#321044", fontSize: 15, fontWeight: "900" },
   messageBox: {
-    marginTop: 10,
-    padding: 14,
-    borderRadius: 16,
-    backgroundColor: "#faf5ff",
+    marginTop: 11,
+    padding: 13,
+    borderRadius: 15,
+    backgroundColor: "#321044",
     borderWidth: 1,
-    borderColor: "#E8C5CF",
+    borderColor: "#A43BC0",
   },
-
   messageTitle: {
-    fontSize: 15,
-    color: "#672036",
-    fontWeight: "700",
-    marginBottom: 12,
+    fontSize: 14,
+    color: "#FFFFFF",
+    fontWeight: "800",
+    marginBottom: 10,
   },
-
   messageInput: {
-    minHeight: 120,
-    backgroundColor: "#FFFCFA",
+    minHeight: 105,
+    backgroundColor: "#180725",
     borderWidth: 1,
-    borderColor: "#E8C5CF",
+    borderColor: "#8E3DA8",
     borderRadius: 12,
     padding: 12,
-    color: "#694650",
-    fontSize: 15,
+    color: "#FFFFFF",
+    fontSize: 14,
   },
-
   messageBottom: {
     marginTop: 10,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
-
-  characterCount: {
-    color: "#80666D",
-    fontSize: 12,
-  },
-
+  characterCount: { color: "#D7B8E8", fontSize: 12 },
   sendButton: {
-    backgroundColor: "#8F2942",
+    backgroundColor: "#E8B85B",
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingVertical: 11,
+    borderRadius: 11,
   },
-
-  sendButtonText: {
-    color: "#FFFCFA",
-    fontWeight: "800",
-  },
-
+  sendButtonText: { color: "#321044", fontWeight: "900" },
   sectionTitle: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#7A263C",
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#F5D58F",
     marginBottom: 12,
   },
-
   aboutBox: {
-    padding: 18,
-    borderRadius: 16,
-    backgroundColor: "#faf5ff",
-    borderWidth: 1,
-    borderColor: "#F5DCE3",
-  },
-
-  aboutText: {
-    color: "#80666D",
-    fontSize: 15,
-    lineHeight: 24,
-  },
-
-  infoCard: {
-    minHeight: 95,
-    borderRadius: 16,
-    backgroundColor: "#FFFCFA",
-    borderWidth: 1,
-    borderColor: "#F5DCE3",
     padding: 15,
+    borderRadius: 14,
+    backgroundColor: "#321044",
+    borderWidth: 1,
+    borderColor: "#57206E",
+  },
+  aboutText: { color: "#E5D1EF", fontSize: 14, lineHeight: 22 },
+  infoGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+  infoCard: {
+    width: "48.3%",
+    minHeight: 86,
+    borderRadius: 14,
+    backgroundColor: "#2B103D",
+    borderWidth: 1,
+    borderColor: "#57206E",
+    paddingHorizontal: 11,
+    paddingVertical: 12,
     marginBottom: 10,
     justifyContent: "center",
   },
-
-  infoHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 7,
-  },
-
-  infoIcon: {
-    fontSize: 18,
-    marginRight: 7,
-  },
-
+  infoHeader: { flexDirection: "row", alignItems: "center", marginBottom: 7 },
+  infoIcon: { fontSize: 16, marginRight: 7, color: "#E8B85B" },
   infoTitle: {
-    color: "#8F2942",
-    fontSize: 13,
-    fontWeight: "700",
+    color: "#D9A9EE",
+    fontSize: 11,
+    fontWeight: "800",
+    flexShrink: 1,
   },
-
-  infoValue: {
-    color: "#694650",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-
-  interestsBox: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-
+  infoValue: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  interestsBox: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   interestChip: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 20,
-    backgroundColor: "#f3e8ff",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: "#421452",
     borderWidth: 1,
-    borderColor: "#E8C5CF",
+    borderColor: "#8E3DA8",
   },
-
-  interestText: {
-    color: "#A12E4A",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-
-  emptyText: {
-    color: "#80666D",
-    fontSize: 14,
-  },
-
+  interestText: { color: "#F5DFFF", fontWeight: "800", fontSize: 12 },
+  emptyText: { color: "#D7B8E8", fontSize: 14 },
   detailButton: {
-    minHeight: 54,
+    minHeight: 50,
     borderRadius: 14,
-    backgroundColor: "#A12E4A",
+    backgroundColor: "#4A175F",
+    borderWidth: 1,
+    borderColor: "#C45ADD",
     alignItems: "center",
     justifyContent: "center",
   },
-
-  detailButtonText: {
-    color: "#FFFCFA",
-    fontSize: 16,
-    fontWeight: "800",
-  },
-
-  bottomButtons: {
-    marginHorizontal: 14,
-    marginTop: 22,
-    gap: 10,
-  },
-
+  detailButtonText: { color: "#FFFFFF", fontSize: 15, fontWeight: "900" },
+  bottomButtons: { marginHorizontal: 15, marginTop: 18, gap: 10 },
   bottomBackButton: {
-    minHeight: 50,
+    minHeight: 49,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#9C4AB7",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#210B31",
   },
-
-  bottomBackText: {
-    color: "#A12E4A",
-    fontWeight: "800",
-  },
-
+  bottomBackText: { color: "#F3D9FF", fontWeight: "900" },
   bottomMessageButton: {
-    minHeight: 50,
+    minHeight: 49,
     borderRadius: 13,
-    backgroundColor: "#8F2942",
+    backgroundColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
   },
-
-  bottomMessageText: {
-    color: "#FFFCFA",
-    fontWeight: "800",
-  },
+  bottomMessageText: { color: "#321044", fontWeight: "900" },
 });

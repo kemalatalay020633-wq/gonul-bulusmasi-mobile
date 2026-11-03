@@ -1,7 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import { useNavigation } from "@react-navigation/native";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,14 +9,12 @@ import {
   Text,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 // src/app/home.tsx
-import { API_BASE_URL } from "../config/api";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import KimlikDogrulamaliAvatar from "../components/common/KimlikDogrulamaliAvatar";
+import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = API_BASE_URL + "/api";
-
-const SUNUCU_ADRESI = API_BASE_URL;
 
 type User = {
   id: number;
@@ -91,6 +89,7 @@ type Profil = {
 type FavoriyeEkleyenKullanici = {
   kullanici: Kullanici;
   profil: Profil | null;
+  createdAt: string | null;
 };
 
 /*
@@ -115,31 +114,6 @@ export default function FavorilerimeEkleyenler() {
   const [yukleniyor, setYukleniyor] = useState(true);
 
   const [hata, setHata] = useState("");
-
-  /*
-   * =======================================================
-   * FOTOGRAF URL
-   * =======================================================
-   */
-
-  const fotoUrlOlustur = useCallback(
-    (foto: string | null | undefined): string => {
-      if (!foto) {
-        return "";
-      }
-
-      if (foto.startsWith("http://") || foto.startsWith("https://")) {
-        return foto;
-      }
-
-      if (foto.startsWith("/")) {
-        return `${SUNUCU_ADRESI}${foto}`;
-      }
-
-      return `${SUNUCU_ADRESI}/${foto}`;
-    },
-    [],
-  );
 
   /*
    * =======================================================
@@ -385,16 +359,13 @@ export default function FavorilerimeEkleyenler() {
        * =====================================================
        */
 
-      const response = await fetch(
-        `${API_ADRESI}/favorites/beni-favorilerine-ekleyenler`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
+      const response = await fetch(`${API_ADRESI}/favorites/beni-ekleyenler`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
-      );
+      });
 
       console.log("FAVORILER RESPONSE STATUS:", response.status);
 
@@ -468,9 +439,14 @@ export default function FavorilerimeEkleyenler() {
               (item) => Number(item.userId) === bakanKullaniciId,
             ) ?? null;
 
+          const favoriKaydi = favoriler.find(
+            (favori) => Number(favori.userId) === bakanKullaniciId,
+          );
+
           return {
             kullanici,
             profil,
+            createdAt: favoriKaydi?.createdAt ?? null,
           };
         }),
       );
@@ -549,6 +525,14 @@ export default function FavorilerimeEkleyenler() {
     );
   }
 
+  const yeniEkleyenSayisi = kullanicilar.filter((item) => {
+    if (!item.createdAt) return false;
+    const tarih = new Date(item.createdAt).getTime();
+    return (
+      Number.isFinite(tarih) && Date.now() - tarih <= 7 * 24 * 60 * 60 * 1000
+    );
+  }).length;
+
   /*
    * =======================================================
    * EKRAN
@@ -561,25 +545,42 @@ export default function FavorilerimeEkleyenler() {
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        /* * ================================================= * BASLIK *
-        ================================================= */
-        <View style={styles.ustBar}>
+        {/* =================================================
+            BASLIK
+        ================================================= */}
+        <View style={styles.ustBolum}>
           <Pressable style={styles.geriButonu} onPress={geriDon}>
-            <Text style={styles.geriIcon}>←</Text>
-
-            <Text style={styles.geriText}>Geri</Text>
+            <Text style={styles.geriIcon}>‹</Text>
           </Pressable>
 
           <View style={styles.baslikAlani}>
-            <Text style={styles.baslikIcon}>☆</Text>
-
+            <Text style={styles.baslikIkon}>♡</Text>
             <Text style={styles.baslik}>Favorilerime Ekleyenler</Text>
+            <Text style={styles.altBaslik}>
+              Seni favorilerine ekleyen kullanıcılar
+            </Text>
           </View>
-
-          <View style={styles.ustBosluk} />
+          <Text style={styles.koseKalp}>💗</Text>
         </View>
-        /* * ================================================= * HATA *
-        ================================================= */
+
+        <View style={styles.ozetKart}>
+          <View style={styles.ozetBolum}>
+            <Text style={styles.ozetIkon}>💗</Text>
+            <Text style={styles.ozetEtiket}>Toplam</Text>
+            <Text style={styles.ozetSayi}>{kullanicilar.length}</Text>
+            <Text style={styles.ozetEtiket}>Kişi</Text>
+          </View>
+          <View style={styles.ozetAyirici} />
+          <View style={styles.ozetBolum}>
+            <Text style={styles.ozetIkon}>⭐</Text>
+            <Text style={styles.ozetEtiket}>Yeni</Text>
+            <Text style={styles.ozetSayi}>{yeniEkleyenSayisi}</Text>
+            <Text style={styles.ozetEtiket}>Kişi</Text>
+          </View>
+        </View>
+        {/* =================================================
+            HATA
+        ================================================= */}
         {hata ? (
           <View style={styles.hataKart}>
             <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
@@ -591,23 +592,26 @@ export default function FavorilerimeEkleyenler() {
             </Pressable>
           </View>
         ) : null}
-        /* * ================================================= * KIMSE YOK *
-        ================================================= */
+        {/* =================================================
+            KIMSE YOK
+        ================================================= */}
         {!hata && kullanicilar.length === 0 ? (
           <View style={styles.bosKart}>
-            <Text style={styles.bosYildiz}>☆</Text>
+            <Text style={styles.bosYildiz}>♡</Text>
 
             <Text style={styles.bosBaslik}>
               Henüz seni favorilerine ekleyen yok
             </Text>
 
             <Text style={styles.bosText}>
-              Seni favorilerine ekleyen kullanıcılar burada görünecek.
+              Profilini güçlendirerek daha fazla kişinin seni fark etmesini
+              sağlayabilirsin.
             </Text>
           </View>
         ) : null}
-        /* * ================================================= * LISTE *
-        ================================================= */
+        {/* =================================================
+            LISTE
+        ================================================= */}
         <View style={styles.liste}>
           {kullanicilar.map(({ kullanici, profil }) => {
             /*
@@ -625,14 +629,6 @@ export default function FavorilerimeEkleyenler() {
               .join(" ");
 
             /*
-             * FOTOGRAF
-             */
-
-            const foto = fotoUrlOlustur(
-              profil?.profilePhoto ?? kullanici.profilePhoto ?? null,
-            );
-
-            /*
              * MEDENI DURUM
              */
 
@@ -641,15 +637,16 @@ export default function FavorilerimeEkleyenler() {
             return (
               <View key={kullanici.id} style={styles.kullaniciKart}>
                 <View style={styles.kullaniciUst}>
-                  /* * FOTOGRAF */
+                  {/* FOTOGRAF */}
                   <View style={styles.fotoContainer}>
-                    {foto ? (
-                      <Image
-                        source={{
-                          uri: foto,
-                        }}
-                        style={styles.foto}
-                        resizeMode="cover"
+                    {kullanici.id ? (
+                      <KimlikDogrulamaliAvatar
+                        kullaniciId={kullanici.id}
+                        boyut={82}
+                        altYazi={(adSoyad || kullanici.username || "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                        imageStyle={styles.foto}
                       />
                     ) : (
                       <View style={styles.fotoPlaceholder}>
@@ -661,7 +658,7 @@ export default function FavorilerimeEkleyenler() {
                       </View>
                     )}
                   </View>
-                  /* * BILGILER */
+                  {/* BILGILER */}
                   <View style={styles.bilgiler}>
                     <Text style={styles.adSoyad} numberOfLines={1}>
                       {adSoyad || kullanici.username || "Kullanici"}
@@ -683,9 +680,15 @@ export default function FavorilerimeEkleyenler() {
                       </Text>
                     ) : null}
 
+                    {profil?.profession ? (
+                      <Text style={styles.detay} numberOfLines={1}>
+                        ▣ {String(profil.profession)}
+                      </Text>
+                    ) : null}
+
                     {medeniDurum ? (
                       <Text style={styles.detay} numberOfLines={1}>
-                        Medeni durum: {medeniDurum}
+                        ♡ {medeniDurum}
                       </Text>
                     ) : null}
 
@@ -696,16 +699,17 @@ export default function FavorilerimeEkleyenler() {
                     ) : null}
 
                     <Text style={styles.favoriBilgisi}>
-                      Seni favorilerine ekledi ?
+                      <Text style={styles.cevrimiciNokta}>● </Text>
+                      Seni favorilerine ekledi
                     </Text>
                   </View>
                 </View>
-                /* * PROFİLİ GÖR */
+                {/* PROFİLİ GÖR */}
                 <Pressable
                   style={styles.profilButonu}
                   onPress={() => profileGit(kullanici.id)}
                 >
-                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
+                  <Text style={styles.profilButonuText}>◉ Profili Gör</Text>
                 </Pressable>
               </View>
             );
@@ -723,285 +727,210 @@ export default function FavorilerimeEkleyenler() {
  */
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#FFFCFAaf5",
-  },
-
-  scrollContainer: {
-    paddingBottom: 30,
-  },
-
-  /*
-   * YÜKLENİYOR
-   */
+  container: { flex: 1, backgroundColor: "#180022" },
+  scrollContainer: { paddingBottom: 34, backgroundColor: "#180022" },
 
   yukleniyorContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 30,
+    backgroundColor: "#180022",
   },
-
   yukleniyorText: {
     marginTop: 14,
     fontSize: 15,
-    color: "#92400e",
-    fontWeight: "600",
+    color: "#E8C8FF",
+    fontWeight: "700",
     textAlign: "center",
   },
 
-  /*
-   * ÜST BAR
-   */
-
-  ustBar: {
-    minHeight: 70,
+  ustBolum: {
+    minHeight: 220,
+    paddingTop: 12,
+    paddingHorizontal: 22,
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#EFD2C0",
-    backgroundColor: "#FFFCFAaf5",
+    alignItems: "flex-start",
+    backgroundColor: "#300044",
   },
-
   geriButonu: {
-    width: 80,
-    minHeight: 48,
+    width: 54,
+    height: 54,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#54116C",
+    borderWidth: 1,
+    borderColor: "#F4C45B",
+  },
+  geriIcon: { color: "#FFFFFF", fontSize: 42, lineHeight: 46, marginTop: -5 },
+  baslikAlani: {
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: 4,
+    paddingTop: 0,
+  },
+  baslikIkon: {
+    color: "#F6D477",
+    fontSize: 65,
+    lineHeight: 75,
+    fontWeight: "300",
+  },
+  baslik: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    lineHeight: 29,
+    fontWeight: "900",
+    textAlign: "center",
+  },
+  altBaslik: {
+    color: "#D8A9E8",
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 7,
+    fontWeight: "600",
+  },
+  koseKalp: { fontSize: 38, marginTop: 12 },
+
+  ozetKart: {
+    marginHorizontal: 18,
+    marginTop: -5,
+    marginBottom: 20,
+    minHeight: 76,
+    borderRadius: 38,
+    paddingHorizontal: 15,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-around",
+    backgroundColor: "#54145F",
+    borderWidth: 1.5,
+    borderColor: "#F4C45B",
   },
-
-  geriIcon: {
-    fontSize: 36,
-    lineHeight: 36,
-    color: "#b45309",
-    marginRight: 2,
-  },
-
-  geriText: {
-    fontSize: 15,
-    color: "#b45309",
-    fontWeight: "700",
-  },
-
-  baslikAlani: {
+  ozetBolum: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    gap: 6,
   },
-
-  baslikIcon: {
-    fontSize: 26,
-    color: "#f59e0b",
-    marginRight: 7,
+  ozetIkon: { fontSize: 25, marginRight: 2 },
+  ozetEtiket: { color: "#FFFFFF", fontSize: 13, fontWeight: "700" },
+  ozetSayi: { color: "#F6D477", fontSize: 25, fontWeight: "900" },
+  ozetAyirici: {
+    width: 1,
+    height: 38,
+    backgroundColor: "#D58AE6",
+    marginHorizontal: 5,
   },
-
-  baslik: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#92400e",
-    textAlign: "center",
-  },
-
-  ustBosluk: {
-    width: 80,
-  },
-
-  /*
-   * HATA
-   */
 
   hataKart: {
     marginHorizontal: 16,
-    marginTop: 20,
+    marginTop: 18,
     padding: 18,
-    borderRadius: 16,
-    backgroundColor: "#FCE8EC",
+    borderRadius: 18,
+    backgroundColor: "#42112F",
     borderWidth: 1,
-    borderColor: "#fecdd3",
+    borderColor: "#F4C45B",
   },
-
   hataBaslik: {
     fontSize: 17,
-    fontWeight: "800",
-    color: "#be123c",
+    fontWeight: "900",
+    color: "#FFD5EC",
     marginBottom: 7,
   },
-
-  hataText: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#881337",
-  },
-
+  hataText: { fontSize: 14, lineHeight: 21, color: "#F2CDE5" },
   tekrarButonu: {
     marginTop: 14,
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#be123c",
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: "#F3C45C",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
-
-  tekrarButonuText: {
-    color: "#FFFCFA",
-    fontSize: 14,
-    fontWeight: "700",
-  },
-
-  /*
-   * BOS
-   */
+  tekrarButonuText: { color: "#321044", fontSize: 14, fontWeight: "900" },
 
   bosKart: {
-    marginHorizontal: 16,
-    marginTop: 20,
-    padding: 28,
-    borderRadius: 20,
+    marginHorizontal: 20,
+    marginTop: 22,
+    padding: 25,
+    borderRadius: 25,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#EFD2C0",
-    backgroundColor: "#FFFCFA",
+    borderWidth: 1.5,
+    borderColor: "#F4C45B",
+    backgroundColor: "#40104F",
   },
-
-  bosYildiz: {
-    fontSize: 54,
-    color: "#f59e0b",
-    marginBottom: 8,
-  },
-
+  bosYildiz: { fontSize: 58, color: "#F6D477", marginBottom: 8 },
   bosBaslik: {
     fontSize: 18,
-    fontWeight: "800",
-    color: "#92400e",
+    fontWeight: "900",
+    color: "#FFFFFF",
     textAlign: "center",
   },
-
   bosText: {
-    marginTop: 8,
+    marginTop: 9,
     fontSize: 14,
-    lineHeight: 21,
-    color: "#78716c",
+    lineHeight: 22,
+    color: "#E6C8F1",
     textAlign: "center",
   },
 
-  /*
-   * LISTE
-   */
-
-  liste: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
-  },
-
-  /*
-   * KULLANICI KARTI
-   */
-
+  liste: { paddingHorizontal: 15, paddingTop: 0 },
   kullaniciKart: {
-    marginBottom: 16,
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: "#FFFCFA",
-    borderWidth: 1,
-    borderColor: "#EFD2C0",
+    marginBottom: 15,
+    padding: 14,
+    borderRadius: 24,
+    backgroundColor: "#3A104A",
+    borderWidth: 1.5,
+    borderColor: "#F4C45B",
+    elevation: 5,
   },
-
-  kullaniciUst: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-  },
-
-  /*
-   * FOTOGRAF
-   */
-
+  kullaniciUst: { flexDirection: "row", alignItems: "center" },
   fotoContainer: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 94,
+    height: 112,
+    borderRadius: 20,
     overflow: "hidden",
-    backgroundColor: "#fef3c7",
+    backgroundColor: "#6B2581",
+    borderWidth: 1.5,
+    borderColor: "#F4C45B",
     flexShrink: 0,
   },
-
-  foto: {
-    width: 82,
-    height: 82,
-  },
-
+  foto: { width: "100%", height: "100%", borderRadius: 18 },
   fotoPlaceholder: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: "100%",
+    height: "100%",
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fef3c7",
+    backgroundColor: "#64227D",
   },
-
-  fotoPlaceholderText: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#d97706",
-  },
-
-  /*
-   * BILGILER
-   */
-
-  bilgiler: {
-    flex: 1,
-    minWidth: 0,
-    marginLeft: 14,
-  },
-
-  adSoyad: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#92400e",
-  },
-
+  fotoPlaceholderText: { fontSize: 38, fontWeight: "900", color: "#FFFFFF" },
+  bilgiler: { flex: 1, minWidth: 0, marginLeft: 14 },
+  adSoyad: { fontSize: 19, fontWeight: "900", color: "#FFFFFF" },
   kullaniciAdi: {
     marginTop: 3,
-    fontSize: 14,
-    color: "#78716c",
+    fontSize: 13,
+    color: "#D9A9EE",
+    fontWeight: "600",
   },
-
-  detay: {
-    marginTop: 5,
-    fontSize: 14,
-    color: "#57534e",
-  },
-
+  detay: { marginTop: 7, fontSize: 13, color: "#F0DFF6", fontWeight: "600" },
   favoriBilgisi: {
     marginTop: 8,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#d97706",
+    fontSize: 12,
+    fontWeight: "800",
+    color: "#F4C75E",
   },
-
-  /*
-   * PROFIL BUTONU
-   */
+  cevrimiciNokta: { color: "#55E68A" },
 
   profilButonu: {
-    marginTop: 16,
-    minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#f59e0b",
+    marginTop: 13,
+    minHeight: 46,
+    borderRadius: 24,
+    backgroundColor: "#F4C45B",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
   },
-
-  profilButonuText: {
-    color: "#FFFCFA",
-    fontSize: 15,
-    fontWeight: "800",
-  },
+  profilButonuText: { color: "#351044", fontSize: 15, fontWeight: "900" },
 });

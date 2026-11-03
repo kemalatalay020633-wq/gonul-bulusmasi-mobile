@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -34,6 +34,37 @@ import ConversationPanel from "../components/messages/ConversationPanel";
 
 export default function Messages() {
   const navigation = useNavigation<any>();
+
+  type UyariButonu = {
+    text: string;
+    style?: "default" | "cancel" | "destructive";
+    onPress?: () => void | Promise<void>;
+  };
+
+  const [uyariPenceresi, setUyariPenceresi] = useState<{
+    baslik: string;
+    mesaj: string;
+    butonlar: UyariButonu[];
+  } | null>(null);
+
+  const uyariGoster = (
+    baslik: string,
+    mesaj: string,
+    butonlar?: UyariButonu[],
+  ) => {
+    setUyariPenceresi({
+      baslik,
+      mesaj,
+      butonlar: butonlar?.length ? butonlar : [{ text: "Tamam" }],
+    });
+  };
+
+  const uyariButonunaBas = async (buton: UyariButonu) => {
+    setUyariPenceresi(null);
+    if (buton.onPress) {
+      await buton.onPress();
+    }
+  };
 
   /*
 
@@ -166,6 +197,14 @@ export default function Messages() {
 
   const [premium, setPremium] = useState<boolean | null>(null);
 
+  // Kullanıcı engelleme durumu
+  const [benEngelledim, setBenEngelledim] = useState(false);
+  const [beniEngelledi, setBeniEngelledi] = useState(false);
+  const [engellemeYukleniyor, setEngellemeYukleniyor] = useState(false);
+  const [engellemeIslemiYapiliyor, setEngellemeIslemiYapiliyor] =
+    useState(false);
+  const [engellemeHatasi, setEngellemeHatasi] = useState("");
+
   const [premiumKontrolHatasi, setPremiumKontrolHatasi] = useState("");
 
   /*
@@ -187,6 +226,93 @@ export default function Messages() {
    */
 
   const API_ADRESI = API_BASE_URL + "/api";
+
+  const engellemeIslemi = async (engelle: boolean) => {
+    if (selectedUserId === null || engellemeIslemiYapiliyor) return;
+
+    uyariGoster(
+      engelle ? "Kullanıcıyı engelle" : "Engeli kaldır",
+      engelle
+        ? `${selectedUserName || "Bu kullanıcı"} engellenecek. Bu kullanıcıyla mesajlaşmanız kısıtlanabilir.`
+        : `${selectedUserName || "Bu kullanıcı"} için engeli kaldırmak istiyor musunuz?`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        {
+          text: engelle ? "Engelle" : "Engeli kaldır",
+          style: engelle ? "destructive" : "default",
+          onPress: async () => {
+            setEngellemeIslemiYapiliyor(true);
+            setEngellemeHatasi("");
+
+            try {
+              const token = await AsyncStorage.getItem("token");
+              if (!token) {
+                throw new Error(
+                  "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
+                );
+              }
+
+              const cevap = await fetch(
+                `${API_ADRESI}/messages/users/${selectedUserId}/block`,
+                {
+                  method: engelle ? "POST" : "DELETE",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                  },
+                },
+              );
+
+              if (!cevap.ok) {
+                const metin = await cevap.text().catch(() => "");
+                throw new Error(
+                  metin || `Engelleme işlemi başarısız (${cevap.status}).`,
+                );
+              }
+
+              // İşlem başarılı olduğunda sunucudaki son durumu yeniden oku.
+              const durumCevap = await fetch(
+                `${API_ADRESI}/messages/users/${selectedUserId}/block`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: "application/json",
+                  },
+                },
+              );
+
+              if (!durumCevap.ok) {
+                // POST/DELETE başarılı olduysa, durum yenileme hatası işlemi geri almaz.
+                setBenEngelledim(engelle);
+                if (engelle) setBeniEngelledi(false);
+              } else {
+                const durum = await durumCevap.json();
+                setBenEngelledim(Boolean(durum?.benEngelledim));
+                setBeniEngelledi(Boolean(durum?.beniEngelledi));
+              }
+
+              uyariGoster(
+                engelle ? "Kullanıcı engellendi" : "Engel kaldırıldı",
+                engelle
+                  ? `${selectedUserName || "Bu kullanıcı"} engellendi.`
+                  : `${selectedUserName || "Bu kullanıcı"} için engel kaldırıldı.`,
+              );
+            } catch (hata) {
+              const mesaj =
+                hata instanceof Error
+                  ? hata.message
+                  : "Engelleme işlemi başarısız oldu.";
+              setEngellemeHatasi(mesaj);
+              uyariGoster("İşlem başarısız", mesaj);
+            } finally {
+              setEngellemeIslemiYapiliyor(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   /*
 
@@ -277,6 +403,77 @@ export default function Messages() {
 
     aramaIzniVarMi,
   } = useMessages();
+
+  /*
+   * =========================================================
+   * KULLANICI ENGELLEME DURUMUNU YÜKLE
+   * Web tarafındaki API ile aynı endpoint kullanılır.
+   * =========================================================
+   */
+  useEffect(() => {
+    let aktif = true;
+
+    const engellemeDurumunuYukle = async () => {
+      if (selectedUserId === null) {
+        setBenEngelledim(false);
+        setBeniEngelledi(false);
+        setEngellemeHatasi("");
+        setEngellemeYukleniyor(false);
+        return;
+      }
+
+      setEngellemeYukleniyor(true);
+      setEngellemeHatasi("");
+
+      try {
+        const token = await AsyncStorage.getItem("token");
+        if (!token) {
+          throw new Error(
+            "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
+          );
+        }
+
+        const cevap = await fetch(
+          `${API_ADRESI}/messages/users/${selectedUserId}/block`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (!cevap.ok) {
+          const metin = await cevap.text().catch(() => "");
+          throw new Error(
+            metin || `Engelleme durumu alınamadı (${cevap.status}).`,
+          );
+        }
+
+        const durum = await cevap.json();
+        if (aktif) {
+          setBenEngelledim(Boolean(durum?.benEngelledim));
+          setBeniEngelledi(Boolean(durum?.beniEngelledi));
+        }
+      } catch (hata) {
+        if (aktif) {
+          setEngellemeHatasi(
+            hata instanceof Error
+              ? hata.message
+              : "Engelleme durumu alınamadı.",
+          );
+        }
+      } finally {
+        if (aktif) setEngellemeYukleniyor(false);
+      }
+    };
+
+    void engellemeDurumunuYukle();
+    return () => {
+      aktif = false;
+    };
+  }, [selectedUserId, API_ADRESI]);
 
   /*
 
@@ -471,7 +668,7 @@ export default function Messages() {
       setAramaIzniYukleniyor(true);
 
       if (aramaIzniAktif) {
-        Alert.alert(
+        uyariGoster(
           "Arama iznini geri al",
 
           `${selectedUserName || "Bu kullanıcı"} artık sizi arayamayacak. Mevcut bir görüşme varsa kesilmez.`,
@@ -496,13 +693,13 @@ export default function Messages() {
 
                   setAramaIzniAktif(false);
 
-                  Alert.alert(
+                  uyariGoster(
                     "Arama izni geri alındı",
 
                     `${selectedUserName || "Bu kullanıcı"} artık sizi arayamaz.`,
                   );
                 } catch (hata) {
-                  Alert.alert(
+                  uyariGoster(
                     "İşlem başarısız",
 
                     hata instanceof Error
@@ -524,13 +721,13 @@ export default function Messages() {
 
       setAramaIzniAktif(true);
 
-      Alert.alert(
+      uyariGoster(
         "Arama izni verildi",
 
         `${selectedUserName || "Bu kullanıcı"} artık sizi sesli ve görüntülü arayabilir.`,
       );
     } catch (hata) {
-      Alert.alert(
+      uyariGoster(
         "İşlem başarısız",
 
         hata instanceof Error ? hata.message : "Arama izni verilemedi.",
@@ -573,7 +770,7 @@ export default function Messages() {
       if (!izinVar) {
         console.log("📵 ARAMA ENGELLENDİ: Karşı taraf arama izni vermemiş.");
 
-        Alert.alert(
+        uyariGoster(
           "Arama izni yok",
 
           "Bu kullanıcı size arama izni vermedi. Arama yapabilmek için karşı tarafın size arama izni vermesi gerekiyor.",
@@ -588,7 +785,7 @@ export default function Messages() {
     } catch (hata) {
       console.error("❌ ARAMA İZNİ KONTROL HATASI:", hata);
 
-      Alert.alert(
+      uyariGoster(
         "Arama başlatılamadı",
 
         hata instanceof Error
@@ -2459,6 +2656,31 @@ export default function Messages() {
 
                 selectedUserActive={selectedUserActive}
 
+                benEngelledim={benEngelledim}
+                beniEngelledi={beniEngelledi}
+                engellemeYukleniyor={engellemeYukleniyor}
+                engellemeIslemiYapiliyor={engellemeIslemiYapiliyor}
+                engellemeHatasi={engellemeHatasi}
+                onEngelle={() => void engellemeIslemi(true)}
+                onEngeliKaldir={() => void engellemeIslemi(false)}
+                onSikayetEt={() => {
+                  const sikayetEdilenId = Number(selectedUserId);
+
+                  if (
+                    !Number.isInteger(sikayetEdilenId) ||
+                    sikayetEdilenId <= 0
+                  ) {
+                    uyariGoster(
+                      "Şikâyet yapılamadı",
+                      "Şikâyet edilecek kullanıcı bulunamadı.",
+                    );
+                    return;
+                  }
+
+                  navigation.navigate("sikayet", {
+                    sikayetEdilenId,
+                  });
+                }}
                 conversation={conversation}
 
                 conversationLoading={conversationLoading}
@@ -2549,6 +2771,55 @@ export default function Messages() {
           </View>
         )}
       </KeyboardAvoidingView>
+
+      <Modal
+        visible={uyariPenceresi !== null}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setUyariPenceresi(null)}
+      >
+        <View style={styles.uyariArkaPlan}>
+          <View style={styles.uyariKart}>
+            <View style={styles.uyariIkonAlani}>
+              <Text style={styles.uyariIkon}>✦</Text>
+            </View>
+            <Text style={styles.uyariBaslik}>
+              {uyariPenceresi?.baslik ?? ""}
+            </Text>
+            <Text style={styles.uyariMesaj}>{uyariPenceresi?.mesaj ?? ""}</Text>
+            <View style={styles.uyariButonlar}>
+              {(uyariPenceresi?.butonlar ?? []).map((buton, index) => (
+                <Pressable
+                  key={`${buton.text}-${index}`}
+                  accessibilityRole="button"
+                  style={[
+                    styles.uyariButon,
+                    buton.style === "cancel" && styles.uyariIptalButonu,
+                    buton.style === "destructive" && styles.uyariTehlikeButonu,
+                    (uyariPenceresi?.butonlar.length ?? 0) > 1 &&
+                      styles.uyariCokluButon,
+                  ]}
+                  onPress={() => {
+                    void uyariButonunaBas(buton).catch((hata) => {
+                      console.error("Uyarı butonu işlemi başarısız:", hata);
+                    });
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.uyariButonYazisi,
+                      buton.style === "cancel" && styles.uyariIptalYazisi,
+                    ]}
+                  >
+                    {buton.text}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -3242,5 +3513,95 @@ const styles = StyleSheet.create({
     fontSize: 16,
 
     fontWeight: "800",
+  },
+  uyariArkaPlan: {
+    flex: 1,
+    backgroundColor: "rgba(25, 8, 18, 0.58)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 24,
+  },
+  uyariKart: {
+    width: "100%",
+    maxWidth: 380,
+    borderRadius: 28,
+    backgroundColor: "#FFFCFA",
+    paddingHorizontal: 24,
+    paddingTop: 26,
+    paddingBottom: 22,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#F4DCE5",
+    elevation: 14,
+    shadowColor: "#4A1029",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 18,
+  },
+  uyariIkonAlani: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9DFE8",
+    marginBottom: 16,
+  },
+  uyariIkon: {
+    color: "#8D1746",
+    fontSize: 30,
+    fontWeight: "800",
+  },
+  uyariBaslik: {
+    color: "#421327",
+    fontSize: 21,
+    fontWeight: "800",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+  uyariMesaj: {
+    color: "#6B5360",
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: "center",
+    marginBottom: 24,
+  },
+  uyariButonlar: {
+    width: "100%",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 10,
+  },
+  uyariButon: {
+    minHeight: 48,
+    minWidth: 120,
+    flexGrow: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderRadius: 24,
+    backgroundColor: "#8D1746",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  uyariCokluButon: {
+    flexBasis: "45%",
+  },
+  uyariIptalButonu: {
+    backgroundColor: "#F8EAF0",
+    borderWidth: 1,
+    borderColor: "#EAC8D5",
+  },
+  uyariTehlikeButonu: {
+    backgroundColor: "#B4233A",
+  },
+  uyariButonYazisi: {
+    color: "#FFFCFA",
+    fontSize: 14,
+    fontWeight: "800",
+    textAlign: "center",
+  },
+  uyariIptalYazisi: {
+    color: "#8D1746",
   },
 });

@@ -210,7 +210,14 @@ export default function Register() {
         gender,
       };
 
-      console.log("KAYIT REQUEST:", JSON.stringify(requestBody));
+      console.log("KAYIT REQUEST:", {
+        username: requestBody.username,
+        email: requestBody.email,
+        firstName: requestBody.firstName,
+        lastName: requestBody.lastName,
+        birthDate: requestBody.birthDate,
+        gender: requestBody.gender,
+      });
 
       const response = await fetch(registerUrl, {
         method: "POST",
@@ -251,11 +258,16 @@ export default function Register() {
        */
 
       if (!response.ok) {
+        const durum = response.status;
+
         throw new Error(
-          data.mesaj ||
-            data.message ||
-            data.error ||
-            `Kayıt başarısız. HTTP ${response.status}`,
+          durum === 409
+            ? "Bu kullanıcı adı veya e-posta adresi zaten kullanılıyor."
+            : durum === 400
+              ? "Kayıt bilgilerinizi kontrol edip tekrar deneyin."
+              : durum === 429
+                ? "Çok fazla kayıt denemesi yapıldı. Lütfen biraz bekleyin."
+                : "Kayıt işlemi tamamlanamadı. Lütfen tekrar deneyin.",
         );
       }
 

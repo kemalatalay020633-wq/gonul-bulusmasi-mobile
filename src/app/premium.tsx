@@ -108,17 +108,23 @@ export default function Premium() {
       return;
     }
 
-    const token = await AsyncStorage.getItem("token");
-    const kullaniciId = Number(await AsyncStorage.getItem("userId"));
-
-    if (!token || !kullaniciId || Number.isNaN(kullaniciId)) {
-      setHata("Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.");
-      return;
-    }
-
     setYukleniyor(true);
 
     try {
+      const token = await AsyncStorage.getItem("token");
+      const kayitliKullaniciId = await AsyncStorage.getItem("userId");
+      const kullaniciId = Number(kayitliKullaniciId);
+
+      if (
+        !token ||
+        !kayitliKullaniciId ||
+        !Number.isFinite(kullaniciId) ||
+        kullaniciId <= 0
+      ) {
+        setHata("Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.");
+        return;
+      }
+
       const url =
         `${API_ADRESI}/payments/${kullaniciId}` +
         `?membershipPackage=${encodeURIComponent(secilenPaket)}` +
@@ -133,17 +139,13 @@ export default function Premium() {
       });
 
       if (!cevap.ok) {
-        let hataMesaji = "Ödeme işlemi başlatılamadı.";
-
-        try {
-          const hataVerisi = await cevap.json();
-
-          hataMesaji = hataVerisi.message || hataVerisi.error || hataMesaji;
-        } catch {
-          // Varsayılan hata mesajı
-        }
-
-        throw new Error(hataMesaji);
+        throw new Error(
+          cevap.status === 401 || cevap.status === 403
+            ? "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın."
+            : cevap.status === 429
+              ? "Çok fazla ödeme denemesi yapıldı. Lütfen bekleyin."
+              : "Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.",
+        );
       }
 
       const veri: Odeme = await cevap.json();
@@ -160,9 +162,7 @@ export default function Premium() {
       console.error("PREMIUM ÖDEME HATASI:", hata);
 
       setHata(
-        hata instanceof Error
-          ? hata.message
-          : "Ödeme işlemi başlatılamadı.",
+        hata instanceof Error ? hata.message : "Ödeme işlemi başlatılamadı.",
       );
     } finally {
       setYukleniyor(false);
@@ -230,18 +230,6 @@ export default function Premium() {
         yukleniyor={yukleniyor}
         onGeri={() => setMobilOdemeEkrani(false)}
         onOdemeBaslat={mobilOdemeBaslat}
-      />
-    );
-  }
-
-  if (havaleOdemeEkrani && secilenPaketBilgisi) {
-    return (
-      <HavaleOdeme
-        paketAdi={secilenPaketBilgisi.baslik}
-        tutar={secilenPaketBilgisi.fiyat}
-        yukleniyor={yukleniyor}
-        onGeri={() => setHavaleOdemeEkrani(false)}
-        onOdemeBaslat={havaleOdemeBaslat}
       />
     );
   }

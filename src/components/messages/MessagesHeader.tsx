@@ -1,4 +1,3 @@
-import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type MessagesHeaderProps = {
@@ -25,16 +24,28 @@ export default function MessagesHeader({
           <Pressable
             style={styles.backButton}
             onPress={onBack}
-            android_ripple={{ color: "rgba(91,60,196,0.12)" }}
+            android_ripple={{
+              color: "rgba(214,173,88,0.2)",
+              borderless: true,
+            }}
+            hitSlop={6}
           >
-            <Text style={styles.backIcon}>←</Text>
+            <Text style={styles.backIcon}>‹</Text>
           </Pressable>
         ) : null}
 
         <View style={styles.titleArea}>
-          <Text style={styles.title}>Mesajlar</Text>
+          <Text style={styles.eyebrow}>
+            {kullaniciSecili ? "GÖNÜL BULUŞMASI" : "SOHBETLERİN"}
+          </Text>
 
-          {kullaniciSecili && selectedUserName ? (
+          <Text style={styles.title} numberOfLines={1}>
+            {kullaniciSecili && selectedUserName
+              ? selectedUserName
+              : "Mesajlar"}
+          </Text>
+
+          {kullaniciSecili ? (
             <View style={styles.selectedUserRow}>
               <View
                 style={[
@@ -45,55 +56,65 @@ export default function MessagesHeader({
                 ]}
               />
 
-              <Text style={styles.selectedUserName} numberOfLines={1}>
-                {selectedUserName}
+              <Text
+                style={[
+                  styles.statusText,
+                  selectedUserActive === true
+                    ? styles.onlineText
+                    : styles.offlineText,
+                ]}
+              >
+                {selectedUserActive === null
+                  ? "Sohbet"
+                  : selectedUserActive
+                    ? "Çevrimiçi"
+                    : "Çevrimdışı"}
               </Text>
-
-              {selectedUserActive !== null ? (
-                <Text
-                  style={[
-                    styles.statusText,
-                    selectedUserActive ? styles.onlineText : styles.offlineText,
-                  ]}
-                >
-                  {selectedUserActive ? "Çevrimiçi" : "Çevrimdışı"}
-                </Text>
-              ) : null}
             </View>
           ) : (
-            <Text style={styles.subtitle}>Konuşmalarınız</Text>
+            <Text style={styles.subtitle}>Güzel bir sohbet başlat</Text>
           )}
         </View>
       </View>
 
-      <View style={styles.rightArea}>
-        {yeniMesajSayisi > 0 ? (
-          <View style={styles.notification}>
-            <Text style={styles.notificationIcon}>🔔</Text>
+      {yeniMesajSayisi > 0 ? (
+        <View style={styles.notification}>
+          <Text style={styles.notificationIcon}>✉</Text>
 
-            <View style={styles.notificationBadge}>
-              <Text style={styles.notificationText}>
-                {yeniMesajSayisi > 99 ? "99+" : yeniMesajSayisi}
-              </Text>
-            </View>
+          <View style={styles.notificationBadge}>
+            <Text style={styles.notificationText}>
+              {yeniMesajSayisi > 99 ? "99+" : yeniMesajSayisi}
+            </Text>
           </View>
-        ) : null}
-      </View>
+        </View>
+      ) : (
+        <View style={styles.headerMark}>
+          <Text style={styles.headerMarkText}>♡</Text>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    minHeight: 68,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    backgroundColor: "#FFFCFA",
-    borderBottomWidth: 1,
-    borderBottomColor: "#eeeaff",
+    minHeight: 82,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: "#43152F",
+    borderBottomWidth: 2,
+    borderBottomColor: "#D6AD58",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    shadowColor: "#9A7026",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.16,
+    shadowRadius: 5,
+    elevation: 4,
   },
 
   leftArea: {
@@ -104,20 +125,24 @@ const styles = StyleSheet.create({
   },
 
   backButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: 8,
-    backgroundColor: "#f5f1ff",
+    marginRight: 11,
+    backgroundColor: "rgba(214,173,88,0.12)",
+    borderWidth: 1,
+    borderColor: "#B99043",
+    overflow: "hidden",
   },
 
   backIcon: {
-    fontSize: 24,
-    lineHeight: 28,
-    color: "#5b3cc4",
-    fontWeight: "700",
+    fontSize: 34,
+    lineHeight: 38,
+    marginTop: -4,
+    color: "#E5C477",
+    fontWeight: "500",
   },
 
   titleArea: {
@@ -125,16 +150,25 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
+  eyebrow: {
+    color: "#D9B96F",
+    fontSize: 9,
+    letterSpacing: 1.7,
+    fontWeight: "800",
+    marginBottom: 3,
+  },
+
   title: {
     fontSize: 20,
+    lineHeight: 25,
     fontWeight: "800",
-    color: "#24164f",
+    color: "#FFF7E8",
   },
 
   subtitle: {
-    marginTop: 2,
-    fontSize: 12,
-    color: "#77718a",
+    marginTop: 3,
+    fontSize: 11,
+    color: "#E7D5B5",
     fontWeight: "500",
   },
 
@@ -142,81 +176,89 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     marginTop: 4,
-    minWidth: 0,
   },
 
   statusDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
-    marginRight: 5,
+    marginRight: 6,
   },
 
   onlineDot: {
-    backgroundColor: "#35B779",
+    backgroundColor: "#43C58B",
   },
 
   offlineDot: {
-    backgroundColor: "#A88F95",
-  },
-
-  selectedUserName: {
-    flexShrink: 1,
-    maxWidth: 150,
-    fontSize: 12,
-    color: "#4b4164",
-    fontWeight: "700",
+    backgroundColor: "#B9A88C",
   },
 
   statusText: {
-    marginLeft: 7,
     fontSize: 10,
     fontWeight: "700",
   },
 
   onlineText: {
-    color: "#277A54",
+    color: "#65D7A3",
   },
 
   offlineText: {
-    color: "#80666D",
-  },
-
-  rightArea: {
-    marginLeft: 10,
-    alignItems: "center",
-    justifyContent: "center",
+    color: "#D7C8AD",
   },
 
   notification: {
-    minWidth: 42,
-    height: 38,
-    paddingHorizontal: 7,
-    borderRadius: 19,
-    backgroundColor: "#f5f1ff",
+    minWidth: 44,
+    height: 42,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    backgroundColor: "#54203D",
+    borderWidth: 1,
+    borderColor: "#D6AD58",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    marginLeft: 10,
   },
 
   notificationIcon: {
-    fontSize: 17,
+    color: "#E5C477",
+    fontSize: 19,
+    fontWeight: "700",
   },
 
   notificationBadge: {
     minWidth: 19,
     height: 19,
     paddingHorizontal: 4,
-    marginLeft: 3,
+    marginLeft: 4,
     borderRadius: 10,
-    backgroundColor: "#B72F4B",
+    backgroundColor: "#D6AD58",
     alignItems: "center",
     justifyContent: "center",
   },
 
   notificationText: {
-    color: "#FFFCFA",
+    color: "#43152F",
     fontSize: 9,
-    fontWeight: "800",
+    fontWeight: "900",
+  },
+
+  headerMark: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "#54203D",
+    borderWidth: 1.3,
+    borderColor: "#D6AD58",
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+  },
+
+  headerMarkText: {
+    color: "#E5C477",
+    fontSize: 27,
+    lineHeight: 31,
+    fontWeight: "500",
   },
 });

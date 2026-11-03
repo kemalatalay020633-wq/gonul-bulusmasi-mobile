@@ -7,6 +7,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   View,
@@ -14,6 +15,59 @@ import {
 import { API_BASE_URL } from "../config/api";
 
 const API_ADRESI = `${API_BASE_URL}/api`;
+
+const RENK = {
+  arkaPlan: "#F7F5FA",
+  kart: "#FFFFFF",
+  ana: "#432365",
+  mor: "#7541B8",
+  acikMor: "#F1EAF8",
+  altin: "#D8B65A",
+  metin: "#292333",
+  ikincil: "#81798C",
+  cizgi: "#EEE9F2",
+  kirmizi: "#C43D58",
+  acikKirmizi: "#FFF0F2",
+};
+
+type AyarSatiriProps = {
+  ikon: string;
+  baslik: string;
+  aciklama: string;
+  onPress: () => void;
+  son?: boolean;
+};
+
+function AyarSatiri({
+  ikon,
+  baslik,
+  aciklama,
+  onPress,
+  son = false,
+}: AyarSatiriProps) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.ayarSatiri,
+        pressed && styles.ayarSatiriBasili,
+      ]}
+    >
+      <View style={styles.ayarIkonAlani}>
+        <Text style={styles.ayarIkon}>{ikon}</Text>
+      </View>
+      <View style={styles.ayarMetinAlani}>
+        <Text style={styles.ayarBaslik}>{baslik}</Text>
+        <Text style={styles.ayarAciklama}>{aciklama}</Text>
+      </View>
+      <View style={styles.okAlani}>
+        <Text style={styles.okIsareti}>›</Text>
+      </View>
+      {!son && <View style={styles.satirCizgisi} />}
+    </Pressable>
+  );
+}
 
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
@@ -28,16 +82,14 @@ export default function SettingsScreen() {
   const silmeOnayiniAc = () => {
     setHata("");
     Alert.alert(
-      "Hesabı Sil",
-      "Hesabınızı silmek istediğinizden emin misiniz?\n\nBu işlem geri alınamaz. Profiliniz, mesajlarınız, medya dosyalarınız ve hesabınıza ait diğer veriler silinebilir.",
+      "Hesabını silmek istiyor musun?",
+      "Bu işlem geri alınamaz. Profilin, mesajların, medya dosyaların ve hesabına ait diğer veriler silinebilir.",
       [
         { text: "Vazgeç", style: "cancel" },
         {
-          text: "Hesabı Sil",
+          text: "Hesabı kalıcı sil",
           style: "destructive",
-          onPress: () => {
-            void hesabimiSil();
-          },
+          onPress: () => void hesabimiSil(),
         },
       ],
     );
@@ -54,7 +106,7 @@ export default function SettingsScreen() {
       if (!token) {
         const mesaj = "Oturum bulunamadı. Lütfen tekrar giriş yapın.";
         setHata(mesaj);
-        Alert.alert("Oturum Bulunamadı", mesaj);
+        Alert.alert("Oturum bulunamadı", mesaj);
         return;
       }
 
@@ -66,17 +118,17 @@ export default function SettingsScreen() {
         },
       });
 
-      const metin = await response.text();
+      const yanitMetni = await response.text();
 
       if (!response.ok) {
         let hataMesaji = "Hesap silinemedi.";
-        if (metin.trim()) {
+        if (yanitMetni.trim()) {
           try {
-            const veri = JSON.parse(metin);
+            const veri = JSON.parse(yanitMetni);
             hataMesaji =
               veri?.message || veri?.error || veri?.mesaj || hataMesaji;
           } catch {
-            hataMesaji = metin;
+            hataMesaji = yanitMetni;
           }
         }
         throw new Error(hataMesaji);
@@ -91,7 +143,7 @@ export default function SettingsScreen() {
         "role",
       ]);
 
-      Alert.alert("Hesap Silindi", "Hesabınız başarıyla silindi.", [
+      Alert.alert("Hesap silindi", "Hesabınız başarıyla silindi.", [
         {
           text: "Tamam",
           onPress: () => navigation.replace("index"),
@@ -102,164 +154,160 @@ export default function SettingsScreen() {
       const hataMesaji =
         error instanceof Error
           ? error.message
-          : "Hesap silinirken beklenmeyen bir hata oluştu.";
+          : "Hesabınız silinemedi. Lütfen tekrar deneyin.";
       setHata(hataMesaji);
-      Alert.alert("Hata", hataMesaji);
+      Alert.alert("Hesap silinemedi", hataMesaji);
     } finally {
       setSiliniyor(false);
     }
   };
 
-  const hatayiTemizle = () => setHata("");
-
-  const ayarSatiri = (
-    ikon: string,
-    baslik: string,
-    aciklama: string,
-    tiklama: () => void,
-  ) => (
-    <Pressable
-      style={({ pressed }) => [
-        styles.settingsItem,
-        pressed && styles.settingsItemPressed,
-      ]}
-      onPress={tiklama}
-    >
-      <View style={styles.settingsIconBox}>
-        <Text style={styles.settingsIcon}>{ikon}</Text>
-      </View>
-      <View style={styles.settingsItemContent}>
-        <Text style={styles.settingsItemTitle}>{baslik}</Text>
-        <Text style={styles.settingsItemDescription}>{aciklama}</Text>
-      </View>
-      <Text style={styles.settingsArrow}>›</Text>
-    </Pressable>
-  );
-
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor={RENK.ana} />
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
-          <Pressable style={styles.anaSayfaButonu} onPress={anaSayfayaGit}>
-            <Text style={styles.anaSayfaIcon}>‹</Text>
-            <Text style={styles.anaSayfaText}>Ana Sayfa</Text>
-          </Pressable>
+        <View style={styles.ustBolum}>
+          <View style={styles.ustSatir}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Ana sayfaya dön"
+              style={({ pressed }) => [
+                styles.geriButonu,
+                pressed && styles.geriButonuBasili,
+              ]}
+              onPress={anaSayfayaGit}
+            >
+              <Text style={styles.geriIkon}>‹</Text>
+              <Text style={styles.geriYazi}>Ana Sayfa</Text>
+            </Pressable>
+            <View style={styles.ustRozet}>
+              <Text style={styles.ustRozetYazi}>HESAP</Text>
+            </View>
+          </View>
 
-          <View style={styles.baslikAlani}>
-            <View style={styles.baslikIconKutusu}>
-              <Text style={styles.baslikIcon}>⚙️</Text>
+          <View style={styles.baslikSatiri}>
+            <View style={styles.baslikIkonKutusu}>
+              <Text style={styles.baslikIkon}>⚙</Text>
             </View>
             <View style={styles.baslikMetni}>
               <Text style={styles.baslik}>Ayarlar</Text>
               <Text style={styles.baslikAciklama}>
-                Hesap ve uygulama ayarlarınız
+                Hesabını ve uygulama tercihlerini yönet.
               </Text>
             </View>
           </View>
-          <View style={styles.headerBosluk} />
+          <View style={styles.ustAltCizgi} />
         </View>
 
-        <View style={styles.divider} />
-
-        {hata ? (
-          <Pressable style={styles.hataKart} onPress={hatayiTemizle}>
-            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
-            <Text style={styles.hataText}>{hata}</Text>
-            <Text style={styles.hataKapat}>Kapatmak için dokunun</Text>
-          </Pressable>
-        ) : null}
-
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Hesap</Text>
-          <Text style={styles.sectionDescription}>
-            Profilinizi ve mesajlaşma seçeneklerinizi yönetin.
-          </Text>
-        </View>
-
-        <View style={styles.settingsList}>
-          {ayarSatiri("👤", "Profilim", "Profilinizi görüntüleyin", profileGit)}
-          <View style={styles.itemDivider} />
-          {ayarSatiri(
-            "✏️",
-            "Profili Düzenle",
-            "Profil bilgilerinizi güncelleyin",
-            profilDuzenleyeGit,
+        <View style={styles.icerik}>
+          {!!hata && (
+            <Pressable style={styles.hataKart} onPress={() => setHata("")}>
+              <View style={styles.hataIkon}>
+                <Text style={styles.hataIkonYazi}>!</Text>
+              </View>
+              <View style={styles.hataMetinAlani}>
+                <Text style={styles.hataBaslik}>Bir sorun oluştu</Text>
+                <Text style={styles.hataMetni}>{hata}</Text>
+                <Text style={styles.hataKapat}>Kapatmak için dokun</Text>
+              </View>
+            </Pressable>
           )}
-          <View style={styles.itemDivider} />
-          {ayarSatiri(
-            "✉️",
-            "Mesajlar",
-            "Mesajlaşmalarınızı görüntüleyin",
-            mesajlaraGit,
-          )}
-        </View>
 
-        <View style={styles.infoBox}>
-          <View style={styles.infoIconBox}>
-            <Text style={styles.infoIcon}>🔒</Text>
-          </View>
-          <View style={styles.infoContent}>
-            <Text style={styles.infoTitle}>Hesap güvenliği</Text>
-            <Text style={styles.infoText}>
-              Hesap bilgilerinizi güncel tutun ve profilinizde yalnızca
-              paylaşmak istediğiniz bilgileri bulundurun.
+          <View style={styles.bolumBasligi}>
+            <Text style={styles.bolumBaslik}>Hesap yönetimi</Text>
+            <Text style={styles.bolumAciklama}>
+              Profiline ve iletişim alanlarına hızlı erişim.
             </Text>
           </View>
-        </View>
 
-        <View style={styles.dangerSection}>
-          <View style={styles.dangerHeader}>
-            <View style={styles.dangerIconBox}>
-              <Text style={styles.dangerIcon}>🗑️</Text>
+          <View style={styles.ayarKarti}>
+            <AyarSatiri
+              ikon="♙"
+              baslik="Profilim"
+              aciklama="Profilini görüntüle ve bilgilerini incele"
+              onPress={profileGit}
+            />
+            <AyarSatiri
+              ikon="✎"
+              baslik="Profili düzenle"
+              aciklama="Kişisel bilgilerini ve profil detaylarını güncelle"
+              onPress={profilDuzenleyeGit}
+            />
+            <AyarSatiri
+              ikon="✉"
+              baslik="Mesajlar"
+              aciklama="Sohbetlerini ve mesajlarını görüntüle"
+              onPress={mesajlaraGit}
+              son
+            />
+          </View>
+
+          <View style={styles.guvenlikKarti}>
+            <View style={styles.guvenlikIkonKutusu}>
+              <Text style={styles.guvenlikIkon}>⌑</Text>
             </View>
-            <View style={styles.dangerHeaderContent}>
-              <Text style={styles.dangerTitle}>Tehlikeli Bölge</Text>
-              <Text style={styles.dangerDescription}>
-                Hesabınızı kalıcı olarak silme işlemi
+            <View style={styles.guvenlikMetinAlani}>
+              <Text style={styles.guvenlikBaslik}>Gizlilik ve güvenlik</Text>
+              <Text style={styles.guvenlikMetni}>
+                Hesap bilgilerini güncel tut. Profilinde yalnızca paylaşmak
+                istediğin bilgileri bulundur ve kişisel bilgilerini koru.
               </Text>
             </View>
           </View>
 
-          <View style={styles.dangerContent}>
-            <Text style={styles.dangerText}>
-              Hesabınızı sildiğinizde profil bilgileriniz, mesajlarınız, medya
-              dosyalarınız ve hesabınıza ait diğer veriler kalıcı olarak
+          <View style={styles.tehlikeBolumu}>
+            <View style={styles.tehlikeBaslikSatiri}>
+              <View style={styles.tehlikeIkonKutusu}>
+                <Text style={styles.tehlikeIkon}>⌫</Text>
+              </View>
+              <View style={styles.tehlikeBaslikMetni}>
+                <Text style={styles.tehlikeBaslik}>Hesabı sil</Text>
+                <Text style={styles.tehlikeAltBaslik}>
+                  Geri alınamayan işlem
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.tehlikeAciklama}>
+              Hesabını sildiğinde profil bilgilerin, mesajların, medya
+              dosyaların ve hesabına ait diğer veriler kalıcı olarak
               silinebilir.
             </Text>
             <Pressable
-              style={({ pressed }) => [
-                styles.deleteButton,
-                siliniyor && styles.deleteButtonDisabled,
-                pressed && !siliniyor && styles.deleteButtonPressed,
-              ]}
+              accessibilityRole="button"
               onPress={silmeOnayiniAc}
               disabled={siliniyor}
+              style={({ pressed }) => [
+                styles.silButonu,
+                siliniyor && styles.silButonuPasif,
+                pressed && !siliniyor && styles.silButonuBasili,
+              ]}
             >
               {siliniyor ? (
                 <>
-                  <ActivityIndicator size="small" color="#be123c" />
-                  <Text style={styles.deleteButtonText}>
-                    Hesap siliniyor...
-                  </Text>
+                  <ActivityIndicator size="small" color={RENK.kirmizi} />
+                  <Text style={styles.silButonuYazi}>Hesap siliniyor...</Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.deleteButtonIcon}>🗑️</Text>
-                  <Text style={styles.deleteButtonText}>
-                    Hesabımı Kalıcı Olarak Sil
+                  <Text style={styles.silButonuIkon}>⌫</Text>
+                  <Text style={styles.silButonuYazi}>
+                    Hesabımı kalıcı olarak sil
                   </Text>
                 </>
               )}
             </Pressable>
           </View>
-        </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.footerBrand}>Gönül Buluşması</Text>
-          <Text style={styles.footerText}>Hesap Ayarları</Text>
+          <View style={styles.altBilgi}>
+            <View style={styles.altLogo}>
+              <Text style={styles.altLogoYazi}>G</Text>
+            </View>
+            <Text style={styles.altMarka}>Gönül Buluşması</Text>
+            <Text style={styles.altAciklama}>Güzel başlangıçlar burada.</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -269,296 +317,372 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFCFAaf5",
+    backgroundColor: RENK.arkaPlan,
   },
   scrollContainer: {
-    paddingBottom: 40,
+    paddingBottom: 34,
   },
-  header: {
-    minHeight: 82,
+  ustBolum: {
+    backgroundColor: RENK.ana,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 26,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  ustSatir: {
+    minHeight: 42,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    backgroundColor: "#FFFCFAaf5",
   },
-  anaSayfaButonu: {
-    width: 90,
-    minHeight: 48,
+  geriButonu: {
+    minHeight: 40,
     flexDirection: "row",
     alignItems: "center",
+    paddingRight: 12,
   },
-  anaSayfaIcon: {
-    fontSize: 36,
-    lineHeight: 36,
-    color: "#b45309",
-    marginRight: 2,
+  geriButonuBasili: {
+    opacity: 0.7,
   },
-  anaSayfaText: {
-    fontSize: 14,
+  geriIkon: {
+    color: "#FFFFFF",
+    fontSize: 30,
+    lineHeight: 32,
+    marginRight: 5,
+  },
+  geriYazi: {
+    color: "#FFFFFF",
+    fontSize: 13,
     fontWeight: "700",
-    color: "#b45309",
   },
-  baslikAlani: {
-    flex: 1,
+  ustRozet: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  ustRozetYazi: {
+    color: "#F4DFA0",
+    fontSize: 10,
+    fontWeight: "900",
+    letterSpacing: 1.5,
+  },
+  baslikSatiri: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 8,
+    marginTop: 24,
   },
-  baslikIconKutusu: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  baslikIkonKutusu: {
+    width: 58,
+    height: 58,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fef3c7",
-    marginRight: 10,
+    backgroundColor: "rgba(255,255,255,0.13)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
   },
-  baslikIcon: {
-    fontSize: 24,
+  baslikIkon: {
+    color: "#F4DFA0",
+    fontSize: 30,
+    fontWeight: "500",
   },
   baslikMetni: {
-    flexShrink: 1,
+    flex: 1,
+    marginLeft: 15,
   },
   baslik: {
-    fontSize: 20,
-    fontWeight: "800",
-    color: "#92400e",
+    color: "#FFFFFF",
+    fontSize: 28,
+    fontWeight: "900",
+    letterSpacing: -0.5,
   },
   baslikAciklama: {
-    marginTop: 2,
-    fontSize: 12,
-    color: "#78716c",
+    color: "#D9CDE7",
+    fontSize: 13,
+    marginTop: 4,
+    lineHeight: 19,
   },
-  headerBosluk: {
-    width: 90,
+  ustAltCizgi: {
+    height: 3,
+    width: 54,
+    borderRadius: 3,
+    backgroundColor: RENK.altin,
+    marginTop: 23,
+    marginLeft: 73,
   },
-  divider: {
-    height: 1,
-    backgroundColor: "#EFD2C0",
+  icerik: {
+    paddingHorizontal: 18,
   },
   hataKart: {
-    marginHorizontal: 16,
+    flexDirection: "row",
     marginTop: 18,
-    padding: 16,
-    borderRadius: 16,
-    backgroundColor: "#FCE8EC",
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: RENK.acikKirmizi,
     borderWidth: 1,
-    borderColor: "#fecdd3",
+    borderColor: "#F3C5CE",
+  },
+  hataIkon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F9DCE2",
+  },
+  hataIkonYazi: {
+    color: RENK.kirmizi,
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  hataMetinAlani: {
+    flex: 1,
+    marginLeft: 10,
   },
   hataBaslik: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#be123c",
-    marginBottom: 6,
-  },
-  hataText: {
+    color: "#9F2942",
     fontSize: 14,
-    lineHeight: 21,
-    color: "#881337",
+    fontWeight: "900",
+  },
+  hataMetni: {
+    color: "#8D4052",
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 3,
   },
   hataKapat: {
-    marginTop: 8,
-    fontSize: 12,
-    color: "#be123c",
-    fontWeight: "600",
+    color: RENK.kirmizi,
+    fontSize: 11,
+    fontWeight: "700",
+    marginTop: 7,
   },
-  sectionHeader: {
-    paddingHorizontal: 18,
-    paddingTop: 24,
-    paddingBottom: 12,
+  bolumBasligi: {
+    marginTop: 27,
+    marginBottom: 13,
   },
-  sectionTitle: {
+  bolumBaslik: {
+    color: RENK.metin,
     fontSize: 20,
-    fontWeight: "800",
-    color: "#292524",
+    fontWeight: "900",
+    letterSpacing: -0.3,
   },
-  sectionDescription: {
+  bolumAciklama: {
+    color: RENK.ikincil,
+    fontSize: 13,
+    lineHeight: 19,
     marginTop: 5,
-    fontSize: 14,
-    lineHeight: 20,
-    color: "#78716c",
   },
-  settingsList: {
-    marginHorizontal: 16,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#FFFCFA",
+  ayarKarti: {
+    backgroundColor: RENK.kart,
+    borderRadius: 22,
+    paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: "#EFD2C0",
+    borderColor: RENK.cizgi,
+    shadowColor: "#302044",
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
   },
-  settingsItem: {
-    minHeight: 82,
+  ayarSatiri: {
+    minHeight: 86,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    backgroundColor: "#FFFCFA",
+    position: "relative",
+    paddingVertical: 12,
   },
-  settingsItemPressed: {
-    backgroundColor: "#FFFCFA7ed",
+  ayarSatiriBasili: {
+    opacity: 0.68,
   },
-  settingsIconBox: {
+  ayarIkonAlani: {
     width: 48,
     height: 48,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: RENK.acikMor,
+  },
+  ayarIkon: {
+    color: RENK.mor,
+    fontSize: 24,
+    fontWeight: "700",
+  },
+  ayarMetinAlani: {
+    flex: 1,
+    marginLeft: 13,
+    paddingRight: 8,
+  },
+  ayarBaslik: {
+    color: RENK.metin,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  ayarAciklama: {
+    color: RENK.ikincil,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 4,
+  },
+  okAlani: {
+    width: 26,
+    alignItems: "center",
+  },
+  okIsareti: {
+    color: "#B6AFC0",
+    fontSize: 29,
+    lineHeight: 32,
+  },
+  satirCizgisi: {
+    position: "absolute",
+    bottom: 0,
+    left: 61,
+    right: 2,
+    height: 1,
+    backgroundColor: RENK.cizgi,
+  },
+  guvenlikKarti: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 20,
+    padding: 17,
+    borderRadius: 21,
+    backgroundColor: "#F0EBF7",
+    borderWidth: 1,
+    borderColor: "#E5D9F0",
+  },
+  guvenlikIkonKutusu: {
+    width: 43,
+    height: 43,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#fef3c7",
+    backgroundColor: "#E4D8F1",
   },
-  settingsIcon: {
-    fontSize: 22,
-  },
-  settingsItemContent: {
-    flex: 1,
-    marginLeft: 14,
-  },
-  settingsItemTitle: {
-    fontSize: 16,
+  guvenlikIkon: {
+    color: RENK.ana,
+    fontSize: 25,
     fontWeight: "800",
-    color: "#292524",
   },
-  settingsItemDescription: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#78716c",
+  guvenlikMetinAlani: {
+    flex: 1,
+    marginLeft: 12,
   },
-  settingsArrow: {
-    marginLeft: 10,
-    fontSize: 28,
-    fontWeight: "400",
-    color: "#a8a29e",
+  guvenlikBaslik: {
+    color: RENK.ana,
+    fontSize: 14,
+    fontWeight: "900",
   },
-  itemDivider: {
-    height: 1,
-    marginLeft: 78,
-    backgroundColor: "#f5f5f4",
+  guvenlikMetni: {
+    color: "#6F617E",
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 5,
   },
-  infoBox: {
-    marginHorizontal: 16,
-    marginTop: 22,
-    padding: 16,
-    flexDirection: "row",
-    borderRadius: 18,
-    backgroundColor: "#F8E9ED",
+  tehlikeBolumu: {
+    marginTop: 25,
+    padding: 18,
+    borderRadius: 22,
+    backgroundColor: RENK.kart,
     borderWidth: 1,
-    borderColor: "#E9C9D2",
+    borderColor: "#F1D7DD",
   },
-  infoIconBox: {
-    width: 42,
-    height: 42,
+  tehlikeBaslikSatiri: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  tehlikeIkonKutusu: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: RENK.acikKirmizi,
+  },
+  tehlikeIkon: {
+    color: RENK.kirmizi,
+    fontSize: 25,
+    fontWeight: "800",
+  },
+  tehlikeBaslikMetni: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  tehlikeBaslik: {
+    color: "#922D45",
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  tehlikeAltBaslik: {
+    color: "#B66A7B",
+    fontSize: 12,
+    marginTop: 3,
+  },
+  tehlikeAciklama: {
+    color: "#786B72",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 15,
+  },
+  silButonu: {
+    minHeight: 50,
+    marginTop: 17,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#E9AEBB",
+    backgroundColor: RENK.acikKirmizi,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+  },
+  silButonuBasili: {
+    backgroundColor: "#FADDE3",
+  },
+  silButonuPasif: {
+    opacity: 0.6,
+  },
+  silButonuIkon: {
+    color: RENK.kirmizi,
+    fontSize: 20,
+    fontWeight: "900",
+    marginRight: 8,
+  },
+  silButonuYazi: {
+    color: RENK.kirmizi,
+    fontSize: 13,
+    fontWeight: "900",
+  },
+  altBilgi: {
+    alignItems: "center",
+    paddingTop: 30,
+    paddingBottom: 8,
+  },
+  altLogo: {
+    width: 36,
+    height: 36,
     borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F6E6EB",
+    backgroundColor: RENK.ana,
   },
-  infoIcon: {
-    fontSize: 20,
-  },
-  infoContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#1e3a8a",
-  },
-  infoText: {
-    marginTop: 5,
-    fontSize: 13,
-    lineHeight: 20,
-    color: "#1e40af",
-  },
-  dangerSection: {
-    marginHorizontal: 16,
-    marginTop: 24,
-    borderRadius: 20,
-    backgroundColor: "#FCE8EC",
-    borderWidth: 1,
-    borderColor: "#fecdd3",
-    overflow: "hidden",
-  },
-  dangerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 16,
-    backgroundColor: "#ffe4e6",
-  },
-  dangerIconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#fecdd3",
-  },
-  dangerIcon: {
+  altLogoYazi: {
+    color: "#F4DFA0",
     fontSize: 21,
+    fontWeight: "900",
   },
-  dangerHeaderContent: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  dangerTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#9f1239",
-  },
-  dangerDescription: {
-    marginTop: 3,
-    fontSize: 13,
-    color: "#be123c",
-  },
-  dangerContent: {
-    padding: 16,
-  },
-  dangerText: {
+  altMarka: {
+    color: RENK.ana,
     fontSize: 14,
-    lineHeight: 21,
-    color: "#881337",
+    fontWeight: "900",
+    marginTop: 9,
   },
-  deleteButton: {
-    marginTop: 16,
-    minHeight: 50,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#be123c",
-    backgroundColor: "#FFFCFA",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 16,
-  },
-  deleteButtonPressed: {
-    backgroundColor: "#ffe4e6",
-  },
-  deleteButtonDisabled: {
-    opacity: 0.65,
-  },
-  deleteButtonIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
-  deleteButtonText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#be123c",
-  },
-  footer: {
-    alignItems: "center",
-    paddingTop: 28,
-    paddingBottom: 10,
-  },
-  footerBrand: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: "#92400e",
-  },
-  footerText: {
+  altAciklama: {
+    color: "#A49BAE",
+    fontSize: 11,
     marginTop: 4,
-    fontSize: 12,
-    color: "#a8a29e",
   },
 });

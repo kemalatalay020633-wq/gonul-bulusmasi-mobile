@@ -5,11 +5,11 @@ import { Platform } from "react-native";
 // ============================================
 
 // Bilgisayarın yerel ağ IP adresi
-export const SUNUCU_IP = "192.168.1.6";
+export const SUNUCU_IP = "192.168.1.8";
 
 // Backend portu.
 // Bu port için backend port-forward komutu açık olmalıdır.
-export const SUNUCU_PORT = 18081;
+export const SUNUCU_PORT = 18082;
 
 // ============================================
 // API ADRESLERİ
@@ -21,7 +21,7 @@ export const WS_BASE_URL = `ws://${SUNUCU_IP}:${SUNUCU_PORT}`;
 // API ana adresi
 export const API_URL = API_BASE_URL;
 export const API_ADRESI = `${API_BASE_URL}/api`;
-
+export const FCM_API_URL = `${API_ADRESI}/fcm`;
 // Kimlik doğrulama
 export const AUTH_API_URL = `${API_ADRESI}/auth`;
 
@@ -63,7 +63,6 @@ export const PLATFORM = Platform.OS;
 // ============================================
 // DIŞA AKTARIM
 // ============================================
-
 export default {
   SUNUCU_IP,
   SUNUCU_PORT,
@@ -71,6 +70,7 @@ export default {
   WS_BASE_URL,
   API_URL,
   API_ADRESI,
+  FCM_API_URL,
   AUTH_API_URL,
   USER_API_URL,
   PROFILE_API_URL,

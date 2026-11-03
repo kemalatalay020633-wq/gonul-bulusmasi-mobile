@@ -1,32 +1,29 @@
-import { Slot } from "expo-router";
-import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { View, NativeModules } from "react-native";
+import { NativeModules, View } from "react-native";
+import AppNavigator from "../navigation/AppNavigator";
 
 export default function RootLayout() {
-  console.log(
-    "🔍 TÜM INCALL NATIVE:",
-    Object.keys(NativeModules).filter(
-      (isim) =>
-        isim.toLowerCase().includes("call") ||
-        isim.toLowerCase().includes("incall"),
-    ),
-  );
-
-  console.log("🔍 INCALL NATIVE:", NativeModules.InCallManager);
-
-  console.log(
-    "🔊 INCALL START TEST:",
-    typeof NativeModules.InCallManager?.start,
-  );
-
   useEffect(() => {
-    SplashScreen.hideAsync();
+    console.log(
+      "🔍 TÜM INCALL NATIVE:",
+      Object.keys(NativeModules).filter(
+        (isim) =>
+          isim.toLowerCase().includes("call") ||
+          isim.toLowerCase().includes("incall"),
+      ),
+    );
+
+    console.log("🔍 INCALL NATIVE:", NativeModules.InCallManager);
+
+    console.log(
+      "🔊 INCALL START TEST:",
+      typeof NativeModules.InCallManager?.start,
+    );
   }, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFFCFA" }}>
-      <Slot />
+      <AppNavigator />
     </View>
   );
 }

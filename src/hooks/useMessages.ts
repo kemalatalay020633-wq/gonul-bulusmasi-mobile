@@ -6,12 +6,23 @@ import {
   types,
 } from "@react-native-documents/picker";
 import { Client, IMessage } from "@stomp/stompjs";
-import { Alert, NativeModules } from "react-native";
-import { launchImageLibrary } from "react-native-image-picker";
+import {
+  Alert,
+  NativeModules,
+  PermissionsAndroid,
+  Platform,
+} from "react-native";
+import Geolocation from "react-native-geolocation-service";
+import { launchCamera, launchImageLibrary } from "react-native-image-picker";
 import type { MessageMediaDto } from "../types/messageMedia";
 
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Sound, {
+  AudioEncoderAndroidType,
+  AudioSourceAndroidType,
+  OutputFormatAndroidType,
+} from "react-native-nitro-sound";
 import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
 import aramaWebRTC from "../services/AramaWebRTC";
 const API_ADRESI = API_BASE_URL + "/api";
@@ -22,16 +33,6 @@ const { SesKayitModule } = NativeModules as {
     stopRecorder: () => Promise<string | null>;
   };
 };
-
-function sesKayitModuluGetir() {
-  if (!SesKayitModule) {
-    throw new Error(
-      "SesKayitModule bulunamadı. Android native ses kayıt modülü eklenmelidir.",
-    );
-  }
-
-  return SesKayitModule;
-}
 
 const SUNUCU_ADRESI = API_BASE_URL;
 
@@ -59,13 +60,15 @@ type UserInfo = {
   active?: boolean;
   isActive?: boolean;
   enabled?: boolean;
+  online?: boolean;
 };
 
 type UserInfoMap = Record<number, UserInfo>;
 
 type MessageMediaMap = Record<number, MessageMediaDto[]>;
 
-type MediaType = "image" | "video" | "audio" | "file";
+export type MediaType =
+  "image" | "video" | "audio" | "file" | "camera" | "location";
 
 type MediaAsset = {
   uri: string;
@@ -346,26 +349,14 @@ function useMessages() {
    */
 
   const getUserActive = useCallback(
-    (userId: number) => {
+    (userId: number): boolean | null => {
       const user = userInfoMap[userId];
 
-      if (!user) {
+      if (!user || typeof user.online !== "boolean") {
         return null;
       }
 
-      if (typeof user.active === "boolean") {
-        return user.active;
-      }
-
-      if (typeof user.isActive === "boolean") {
-        return user.isActive;
-      }
-
-      if (typeof user.enabled === "boolean") {
-        return user.enabled;
-      }
-
-      return null;
+      return user.online;
     },
     [userInfoMap],
   );
@@ -574,45 +565,31 @@ function useMessages() {
         return false;
       }
 
-      // Önce oturum açmış kullanıcının cinsiyetini kontrol et.
-      // Kadın kullanıcılar için Premium zorunluluğu yoktur.
-      const mevcutKullaniciId = await getCurrentUserId();
-      if (mevcutKullaniciId !== null) {
-        try {
-          const kullaniciResponse = await fetch(
-            `${API_ADRESI}/users/${mevcutKullaniciId}`,
-            {
-              method: "GET",
-              headers: {
-                Authorization: `Bearer ${token}`,
-                Accept: "application/json",
-              },
-            },
-          );
+      try {
+        const kullaniciResponse = await fetch(`${API_ADRESI}/users/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/json",
+          },
+        });
 
-          if (kullaniciResponse.ok) {
-            const kullanici = await kullaniciResponse.json();
-            const cinsiyet = String(
-              kullanici?.gender ?? kullanici?.cinsiyet ?? "",
-            )
-              .trim()
-              .toLocaleUpperCase("tr-TR");
+        if (kullaniciResponse.ok) {
+          const kullanici = await kullaniciResponse.json();
+          const cinsiyet = String(
+            kullanici?.gender ?? kullanici?.cinsiyet ?? "",
+          )
+            .trim()
+            .toLocaleUpperCase("tr-TR");
 
-            console.log("PREMIUM KONTROL KULLANICI CİNSİYETİ:", cinsiyet);
-
-            if (cinsiyet === "KADIN") {
-              console.log("KADIN KULLANICI: PREMIUM KONTROLÜ ATLANDI.");
-              return true;
-            }
+          if (cinsiyet === "KADIN") {
+            return true;
           }
-        } catch (cinsiyetHatasi) {
-          // Cinsiyet endpoint'i yanıt vermezse erkeklere ait Premium
-          // kontrolünü yanlışlıkla atlamamak için normal kontrole devam et.
-          console.warn("KULLANICI CİNSİYETİ ALINAMADI:", cinsiyetHatasi);
         }
+      } catch (error) {
+        console.warn("Kullanıcı bilgisi alınamadı:", error);
       }
 
-      // Erkek kullanıcılar için mevcut Premium endpoint'i aynen korunur.
       const response = await fetch(`${API_ADRESI}/memberships/me/premium`, {
         method: "GET",
         headers: {
@@ -622,9 +599,6 @@ function useMessages() {
       });
 
       const responseText = await response.text();
-
-      console.log("PREMIUM KONTROL HTTP:", response.status);
-      console.log("PREMIUM KONTROL CEVABI:", responseText);
 
       if (!response.ok) {
         throw new Error(
@@ -658,8 +632,6 @@ function useMessages() {
         premium = responseText.trim().toLowerCase() === "true";
       }
 
-      console.log("PREMIUM KONTROL SONUCU:", premium);
-
       if (!premium) {
         Alert.alert(
           "🔒 Premium Üyelik Gerekli",
@@ -672,17 +644,17 @@ function useMessages() {
             },
           ],
         );
+
         return false;
       }
 
       return true;
     } catch (error) {
-      console.error("PREMIUM KONTROL HATASI:", error);
+      console.error("Premium kontrol hatası:", error);
       Alert.alert("Hata", "Premium üyelik durumu kontrol edilemedi.");
       return false;
     }
-  }, [getToken, getCurrentUserId, navigation]);
-
+  }, [getToken, navigation]);
   const stompFrameGonder = useCallback(
     async (destination: string, body: any): Promise<boolean> => {
       console.log("📡 STOMP MESAJ GÖNDERİLMEK ÜZERE:", destination);
@@ -1278,123 +1250,130 @@ function useMessages() {
    * =========================================================
    */
 
-  const websocketBaglan = useCallback(async () => {
-    const token = await getToken();
-    const currentUserId = await getCurrentUserId();
+  const websocketBaglan = useCallback(
+    async (iptalEdildi: () => boolean) => {
+      const token = await getToken();
+      const currentUserId = await getCurrentUserId();
+      if (iptalEdildi()) {
+        console.log("🟡 STOMP BAĞLANTISI İPTAL EDİLDİ: EFEKT TEMİZLENDİ.");
+        return;
+      }
 
-    console.log("STOMP KİMLİK KONTROLÜ:", {
-      tokenVarMi: Boolean(token),
-      currentUserId,
-      websocketAdresi: WEBSOCKET_ADRESI,
-    });
+      console.log("STOMP KİMLİK KONTROLÜ:", {
+        tokenVarMi: Boolean(token),
+        currentUserId,
+        websocketAdresi: WEBSOCKET_ADRESI,
+      });
 
-    if (!token || currentUserId === null) {
-      console.log(
-        "STOMP BAĞLANTI ATLADI: token veya currentUserId bulunamadı.",
-      );
-      return;
-    }
-
-    const mevcutClient = stompClientRef.current;
-
-    if (mevcutClient?.active || mevcutClient?.connected) {
-      console.log("🟡 STOMP ZATEN AKTİF. YENİ BAĞLANTI AÇILMAYACAK.");
-      return;
-    }
-
-    console.log("🔌 STOMP BAĞLANTISI BAŞLATILIYOR:", WEBSOCKET_ADRESI);
-
-    const client = new Client({
-      webSocketFactory: () => {
-        console.log("🔌 NATIVE WEBSOCKET OLUŞTURULUYOR:", WEBSOCKET_ADRESI);
-
-        return new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
-      },
-
-      connectHeaders: {
-        Authorization: `Bearer ${token}`,
-      },
-      forceBinaryWSFrames: true,
-      appendMissingNULLonIncoming: true,
-      reconnectDelay: 3000,
-
-      heartbeatIncoming: 0,
-      heartbeatOutgoing: 0,
-
-      debug: (str) => {
-        console.log("🟣 STOMP:", str);
-      },
-
-      onConnect: (frame) => {
-        console.log("🟢🟢🟢 STOMP CONNECTED 🟢🟢🟢");
-
-        console.log("STOMP FRAME:", frame);
-
-        /*
-         * Önce bağlantıyı hazır kabul et.
-         */
-        stompBagliRef.current = true;
-        stompClientRef.current = client;
-
-        console.log("🟢 STOMP CLIENT HAZIR:", {
-          connected: client.connected,
-          active: client.active,
-        });
-
-        /*
-         * =====================================================
-         * SUBSCRIPTIONS
-         * =====================================================
-         */
-
-        stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
-
-        stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
-
-        stompSubscribe(`/topic/yaziyor/${currentUserId}`);
-
-        stompSubscribe(`/topic/arama/${currentUserId}`);
-
-        console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
-      },
-      onStompError: (frame) => {
-        console.error(
-          "❌ STOMP SUNUCU HATASI:",
-          frame.headers["message"],
-          frame.body,
+      if (!token || currentUserId === null) {
+        console.log(
+          "STOMP BAĞLANTI ATLADI: token veya currentUserId bulunamadı.",
         );
+        return;
+      }
 
-        stompBagliRef.current = false;
-      },
+      const mevcutClient = stompClientRef.current;
 
-      onWebSocketError: (event) => {
-        console.error("❌ WEBSOCKET HATASI:", event);
+      if (mevcutClient?.active || mevcutClient?.connected) {
+        console.log("🟡 STOMP ZATEN AKTİF. YENİ BAĞLANTI AÇILMAYACAK.");
+        return;
+      }
 
-        stompBagliRef.current = false;
-      },
+      console.log("🔌 STOMP BAĞLANTISI BAŞLATILIYOR:", WEBSOCKET_ADRESI);
 
-      onWebSocketClose: (event) => {
-        console.log("🔴 WEBSOCKET KAPANDI:", event);
+      const client = new Client({
+        webSocketFactory: () => {
+          console.log("🔌 NATIVE WEBSOCKET OLUŞTURULUYOR:", WEBSOCKET_ADRESI);
 
-        stompBagliRef.current = false;
-      },
+          return new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
+        },
 
-      onDisconnect: () => {
-        console.log("🔴 STOMP DISCONNECT");
+        connectHeaders: {
+          Authorization: `Bearer ${token}`,
+        },
+        forceBinaryWSFrames: true,
+        appendMissingNULLonIncoming: true,
+        reconnectDelay: 3000,
 
-        stompBagliRef.current = false;
-      },
-    });
+        heartbeatIncoming: 0,
+        heartbeatOutgoing: 0,
 
-    /*
-     * Client'ı activate etmeden önce ref'e koy.
-     */
-    stompClientRef.current = client;
+        debug: (str) => {
+          console.log("🟣 STOMP:", str);
+        },
 
-    console.log("🚀🚀🚀 STOMP CLIENT ACTIVATE ÇAĞRILIYOR 🚀🚀🚀");
+        onConnect: (frame) => {
+          console.log("🟢🟢🟢 STOMP CONNECTED 🟢🟢🟢");
 
-    client.activate();
-  }, [getToken, getCurrentUserId, stompSubscribe]);
+          console.log("STOMP FRAME:", frame);
+
+          /*
+           * Önce bağlantıyı hazır kabul et.
+           */
+          stompBagliRef.current = true;
+          stompClientRef.current = client;
+
+          console.log("🟢 STOMP CLIENT HAZIR:", {
+            connected: client.connected,
+            active: client.active,
+          });
+
+          /*
+           * =====================================================
+           * SUBSCRIPTIONS
+           * =====================================================
+           */
+
+          stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
+
+          stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
+
+          stompSubscribe(`/topic/yaziyor/${currentUserId}`);
+
+          stompSubscribe(`/topic/arama/${currentUserId}`);
+
+          console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
+        },
+        onStompError: (frame) => {
+          console.error(
+            "❌ STOMP SUNUCU HATASI:",
+            frame.headers["message"],
+            frame.body,
+          );
+
+          stompBagliRef.current = false;
+        },
+
+        onWebSocketError: (event) => {
+          console.error("❌ WEBSOCKET HATASI:", event);
+
+          stompBagliRef.current = false;
+        },
+
+        onWebSocketClose: (event) => {
+          console.log("🔴 WEBSOCKET KAPANDI:", event);
+
+          stompBagliRef.current = false;
+        },
+
+        onDisconnect: () => {
+          console.log("🔴 STOMP DISCONNECT");
+
+          stompBagliRef.current = false;
+        },
+      });
+
+      /*
+       * Client'ı activate etmeden önce ref'e koy.
+       */
+      stompClientRef.current = client;
+
+      console.log("🚀🚀🚀 STOMP CLIENT ACTIVATE ÇAĞRILIYOR 🚀🚀🚀");
+
+      client.activate();
+    },
+    [getToken, getCurrentUserId, stompSubscribe],
+  );
   /*
    * =========================================================
    * KULLANICI BİLGİLERİ
@@ -1413,7 +1392,9 @@ function useMessages() {
         const sonuclar = await Promise.all(
           kullaniciIdleri.map(async (id) => {
             try {
-              return await apiGetir(`/users/${id}`);
+              const user = await apiGetir(`/users/${id}`);
+              console.log("KULLANICI API YANITI:", JSON.stringify(user));
+              return user;
             } catch {
               return null;
             }
@@ -2027,7 +2008,6 @@ function useMessages() {
 
       try {
         setMediaSending(true);
-
         setError("");
 
         const token = await getToken();
@@ -2039,13 +2019,32 @@ function useMessages() {
         const fileName = asset.fileName || `medya-${Date.now()}`;
 
         const mimeType =
-          asset.mimeType || (type === "image" ? "image/jpeg" : "video/mp4");
+          asset.mimeType ||
+          (type === "image"
+            ? "image/jpeg"
+            : type === "audio"
+              ? "audio/mpeg"
+              : "video/mp4");
 
-        const medyaTipi = getMediaType(mimeType, fileName);
+        const medyaTipi: MessageMediaDto["type"] =
+          type === "audio" ? "AUDIO" : getMediaType(mimeType, fileName);
+
+        console.log("========================================");
+        console.log("MEDYA YÜKLEME BAŞLADI");
+        console.log("ALICI ID:", selectedId);
+        console.log("DOSYA URI:", asset.uri);
+        console.log("DOSYA ADI:", fileName);
+        console.log("MIME TYPE:", mimeType);
+        console.log("MEDYA TÜRÜ:", medyaTipi);
+        console.log("========================================");
 
         /*
-         * Önce gerçek mesaj oluştur.
+         * =====================================================
+         * 1. ÖNCE MESAJ OLUŞTUR
+         * =====================================================
          */
+
+        console.log("MESAJ OLUŞTURMA İSTEĞİ GÖNDERİLİYOR.");
 
         const mesajResponse = await fetch(`${API_ADRESI}/messages/send`, {
           method: "POST",
@@ -2056,28 +2055,57 @@ function useMessages() {
           },
           body: JSON.stringify({
             receiverId: selectedId,
-            content: fileName,
+            content:
+              type === "image"
+                ? "Fotoğraf"
+                : type === "video"
+                  ? "Video"
+                  : type === "audio"
+                    ? "Ses dosyası"
+                    : "Dosya",
           }),
         });
 
+        const mesajResponseText = await mesajResponse.text();
+
+        console.log("========================================");
+        console.log("MESAJ OLUŞTURMA HTTP SONUCU");
+        console.log("HTTP STATUS:", mesajResponse.status);
+        console.log("HTTP OK:", mesajResponse.ok);
+        console.log("STATUS TEXT:", mesajResponse.statusText);
+        console.log("RESPONSE:", mesajResponseText);
+        console.log("========================================");
+
         if (!mesajResponse.ok) {
-          throw new Error("Medya mesajı oluşturulamadı.");
+          throw new Error(
+            `Mesaj oluşturulamadı. HTTP ${mesajResponse.status}: ${mesajResponseText}`,
+          );
         }
 
-        const yeniMesaj = (await mesajResponse.json()) as MessageDto;
+        let yeniMesaj: MessageDto;
+
+        try {
+          yeniMesaj = JSON.parse(mesajResponseText) as MessageDto;
+        } catch (jsonError) {
+          console.error("MESAJ JSON PARSE HATASI:", jsonError);
+
+          throw new Error(
+            `Mesaj oluşturuldu ancak sunucu JSON dönmedi: ${mesajResponseText}`,
+          );
+        }
+
+        if (!yeniMesaj?.id) {
+          throw new Error("Oluşturulan mesajın ID bilgisi bulunamadı.");
+        }
+
+        console.log("MESAJ BAŞARIYLA OLUŞTURULDU. ID:", yeniMesaj.id);
 
         /*
-         * =========================================================
-         * MEDYA UPLOAD
-         * =========================================================
-         *
-         * React Native / Expo ortamında FormData'ya düz JS nesnesi
-         * vermek yerine expo-file-system File kullanıyoruz.
-         *
-         * Ayrıca gerçek mesaj ID'sini ve HTTP cevabını ayrıntılı
-         * olarak logluyoruz. Böylece messages.id ile
-         * message_media.message_id eşleşmesini kontrol edebiliriz.
+         * =====================================================
+         * 2. MEDYA UPLOAD
+         * =====================================================
          */
+
         const formData = new FormData();
 
         const dosya = {
@@ -2086,18 +2114,9 @@ function useMessages() {
           type: mimeType,
         };
 
-        console.log("========================================");
-        console.log("MEDYA DOSYASI HAZIR");
-        console.log("DOSYA URI:", dosya.uri);
-        console.log("DOSYA ADI:", dosya.name);
-        console.log("DOSYA TYPE:", dosya.type);
-        console.log("MESAJ ID:", yeniMesaj.id);
-        console.log("ALICI ID:", selectedId);
-        console.log("MEDYA TÜRÜ:", medyaTipi);
-        console.log("========================================");
-
         formData.append("file", dosya as any);
         formData.append("type", medyaTipi);
+
         const medyaUploadUrl =
           `${API_ADRESI}/message-media/upload` +
           `?messageId=${encodeURIComponent(String(yeniMesaj.id))}` +
@@ -2107,7 +2126,9 @@ function useMessages() {
         console.log("MEDYA UPLOAD BAŞLIYOR");
         console.log("URL:", medyaUploadUrl);
         console.log("MESSAGE ID:", yeniMesaj.id);
-        console.log("TYPE:", medyaTipi);
+        console.log("DOSYA URI:", asset.uri);
+        console.log("DOSYA ADI:", fileName);
+        console.log("MIME TYPE:", mimeType);
         console.log("========================================");
 
         const medyaResponse = await fetch(medyaUploadUrl, {
@@ -2119,7 +2140,6 @@ function useMessages() {
           body: formData,
         });
 
-        // Response sadece bir kez okunuyor.
         const medyaResponseText = await medyaResponse.text();
 
         console.log("========================================");
@@ -2133,7 +2153,7 @@ function useMessages() {
 
         if (!medyaResponse.ok) {
           throw new Error(
-            `Medya yüklenemedi. HTTP ${medyaResponse.status} - ${medyaResponseText}`,
+            `Medya yüklenemedi. HTTP ${medyaResponse.status}: ${medyaResponseText}`,
           );
         }
 
@@ -2145,7 +2165,7 @@ function useMessages() {
           console.error("MEDYA RESPONSE JSON PARSE HATASI:", jsonError);
 
           throw new Error(
-            `Medya yükleme başarılı görünüyor ancak sunucu JSON dönmedi: ${medyaResponseText}`,
+            `Medya yükleme başarılı ancak sunucu JSON dönmedi: ${medyaResponseText}`,
           );
         }
 
@@ -2158,6 +2178,12 @@ function useMessages() {
         console.log("MEDYA URL:", yeniMedya?.mediaUrl);
         console.log("MEDYA TYPE:", yeniMedya?.type);
         console.log("========================================");
+
+        /*
+         * =====================================================
+         * 3. EKRANI GÜNCELLE
+         * =====================================================
+         */
 
         setConversation((previous) =>
           mesajEkleVeyaGuncelle(previous, yeniMesaj),
@@ -2174,7 +2200,9 @@ function useMessages() {
 
         void mesajMedyalariniGetir(yeniMesaj.id);
       } catch (err) {
+        console.error("========================================");
         console.error("MEDYA YÜKLEME HATASI:", err);
+        console.error("========================================");
 
         setError(hataMesaji(err, "Medya gönderilemedi."));
       } finally {
@@ -2205,11 +2233,176 @@ function useMessages() {
   const openMediaPicker = useCallback(
     async (type: MediaType) => {
       setMediaMenuOpen(false);
+      let konumGonderimiBasladi = false;
 
       try {
         /*
          * =====================================================
-         * FOTOĞRAF
+         * GPS KONUM PAYLAŞIMI
+         * =====================================================
+         */
+
+        if (type === "location") {
+          if (Platform.OS !== "android") {
+            throw new Error(
+              "Konum paylaşımı şu anda Android için yapılandırılmıştır.",
+            );
+          }
+
+          if (!(await premiumKontrolEt())) {
+            return;
+          }
+
+          const hedefKullaniciId = selectedUserIdRef.current;
+
+          if (hedefKullaniciId === null) {
+            throw new Error("Konum göndermek için önce bir konuşma seçin.");
+          }
+
+          if (sending || mediaSending || recording) {
+            return;
+          }
+
+          const izinler = await PermissionsAndroid.requestMultiple([
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+            PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION,
+          ]);
+
+          const hassasKonumIzni =
+            izinler[PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+          const yaklasikKonumIzni =
+            izinler[PermissionsAndroid.PERMISSIONS.ACCESS_COARSE_LOCATION] ===
+            PermissionsAndroid.RESULTS.GRANTED;
+
+          if (!hassasKonumIzni && !yaklasikKonumIzni) {
+            throw new Error(
+              "Konum paylaşabilmek için uygulamaya konum izni vermelisiniz.",
+            );
+          }
+
+          setSending(true);
+          konumGonderimiBasladi = true;
+          setError("");
+
+          const konum = await new Promise<{
+            latitude: number;
+            longitude: number;
+          }>((resolve, reject) => {
+            Geolocation.getCurrentPosition(
+              (position) => {
+                resolve({
+                  latitude: position.coords.latitude,
+                  longitude: position.coords.longitude,
+                });
+              },
+              (hata) => {
+                let mesaj = "Mevcut konum alınamadı.";
+                if (hata.code === 1) {
+                  mesaj = "Konum izni verilmedi.";
+                } else if (hata.code === 2) {
+                  mesaj = "Konum belirlenemedi. GPS ayarlarını kontrol edin.";
+                } else if (hata.code === 3) {
+                  mesaj = "Konum isteği zaman aşımına uğradı. Tekrar deneyin.";
+                }
+                reject(new Error(mesaj));
+              },
+              {
+                enableHighAccuracy: hassasKonumIzni,
+                timeout: 20000,
+                maximumAge: 10000,
+                forceRequestLocation: true,
+                showLocationDialog: true,
+              },
+            );
+          });
+
+          const haritaBaglantisi =
+            `https://www.google.com/maps/search/?api=1&query=` +
+            `${konum.latitude},${konum.longitude}`;
+          const konumMesaji = `📍 Konumum\n${haritaBaglantisi}`;
+
+          const gonderildi = await stompFrameGonder("/app/mesaj", {
+            receiverId: hedefKullaniciId,
+            content: konumMesaji,
+          });
+
+          if (!gonderildi) {
+            throw new Error(
+              "Konum gönderilemedi. WebSocket/STOMP bağlantısı hazır değil.",
+            );
+          }
+
+          Alert.alert("Başarılı", "Konumunuz mesaj olarak gönderildi.");
+          return;
+        }
+
+        /*
+         * =====================================================
+         * KAMERA
+         * =====================================================
+         */
+
+        if (type === "camera") {
+          const result = await launchCamera({
+            mediaType: "photo",
+            cameraType: "back",
+            saveToPhotos: true,
+            includeBase64: false,
+            maxWidth: 1920,
+            maxHeight: 1920,
+          });
+
+          if (result.didCancel) {
+            console.log("KAMERA: Fotoğraf çekimi iptal edildi.");
+            return;
+          }
+
+          if (!result.assets || result.assets.length === 0) {
+            Alert.alert(
+              "Kamera Hatası",
+              "Fotoğraf çekilemedi veya fotoğraf bilgisi alınamadı.",
+            );
+            return;
+          }
+
+          const asset = result.assets[0];
+
+          if (!asset.uri) {
+            Alert.alert(
+              "Kamera Hatası",
+              "Çekilen fotoğrafın URI bilgisi alınamadı.",
+            );
+            return;
+          }
+
+          const fileName = asset.fileName || `kamera-${Date.now()}.jpg`;
+
+          const mimeType = asset.type || "image/jpeg";
+
+          console.log("================================");
+          console.log("KAMERA FOTOĞRAFI ALINDI");
+          console.log("URI:", asset.uri);
+          console.log("DOSYA ADI:", fileName);
+          console.log("MIME TYPE:", mimeType);
+          console.log("DOSYA BOYUTU:", asset.fileSize);
+          console.log("================================");
+
+          await medyaYukle(
+            {
+              uri: asset.uri,
+              fileName,
+              mimeType,
+            },
+            "image",
+          );
+
+          return;
+        }
+
+        /*
+         * =====================================================
+         * FOTOĞRAF GALERİSİ
          * =====================================================
          */
 
@@ -2228,7 +2421,6 @@ function useMessages() {
 
           if (!asset.uri) {
             Alert.alert("Hata", "Fotoğraf dosyasının URI bilgisi alınamadı.");
-
             return;
           }
 
@@ -2265,7 +2457,6 @@ function useMessages() {
 
           if (!asset.uri) {
             Alert.alert("Hata", "Video dosyasının URI bilgisi alınamadı.");
-
             return;
           }
 
@@ -2293,7 +2484,6 @@ function useMessages() {
 
         if (!result.uri) {
           Alert.alert("Hata", "Dosyanın URI bilgisi alınamadı.");
-
           return;
         }
 
@@ -2319,10 +2509,27 @@ function useMessages() {
 
         console.error("MEDYA SEÇİCİ HATASI:", err);
 
-        setError(hataMesaji(err, "Medya seçilemedi."));
+        const mesaj = hataMesaji(err, "Medya seçilemedi.");
+        setError(mesaj);
+
+        if (type === "location") {
+          Alert.alert("Konum Paylaşımı", mesaj);
+        }
+      } finally {
+        if (konumGonderimiBasladi) {
+          setSending(false);
+        }
       }
     },
-    [medyaYukle, hataMesaji],
+    [
+      medyaYukle,
+      hataMesaji,
+      premiumKontrolEt,
+      sending,
+      mediaSending,
+      recording,
+      stompFrameGonder,
+    ],
   );
   /*
    * =========================================================
@@ -2357,7 +2564,25 @@ function useMessages() {
       /*
        * Native Android mikrofon kaydı
        */
-      const uri = await sesKayitModuluGetir().startRecorder();
+      if (Platform.OS === "android") {
+        const izin = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+        );
+
+        if (izin !== PermissionsAndroid.RESULTS.GRANTED) {
+          throw new Error("Ses kaydı için mikrofon izni verilmedi.");
+        }
+      }
+
+      const uri = await Sound.startRecorder(undefined, {
+        AudioSourceAndroid: AudioSourceAndroidType.MIC,
+
+        OutputFormatAndroid: OutputFormatAndroidType.MPEG_4,
+        AudioEncoderAndroid: AudioEncoderAndroidType.AAC,
+
+        AudioSamplingRate: 44100,
+        AudioEncodingBitRate: 128000,
+      });
 
       audioKayitUriRef.current = uri;
 
@@ -2412,36 +2637,75 @@ function useMessages() {
     try {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
-
         recordingTimerRef.current = null;
       }
 
       /*
-       * Native Android mikrofon kaydı durdur
+       * Native Android mikrofon kaydını durdur.
        */
-      const uri = await sesKayitModuluGetir().stopRecorder();
+      const kayitUri = await Sound.stopRecorder();
+
+      if (!kayitUri) {
+        audioKayitUriRef.current = null;
+        setRecording(false);
+        setRecordingSeconds(0);
+        setError("Ses kaydı oluşturulamadı.");
+        return;
+      }
+
+      const uri = kayitUri.split("?")[0];
+      const dosyaYolu = uri.toLowerCase();
+
+      /*
+       * Dosya uzantısını gerçek kayıt URI'sinden belirle.
+       * Dosya içeriğinin MIME doğrulaması backend'de korunur.
+       */
+      const aacAdtsMi =
+        dosyaYolu.endsWith(".aac") || dosyaYolu.endsWith(".aac.adts");
+
+      const mp4KaydiMi = dosyaYolu.endsWith(".mp4");
+      const m4aKaydiMi = dosyaYolu.endsWith(".m4a");
+
+      if (!aacAdtsMi && !mp4KaydiMi && !m4aKaydiMi) {
+        throw new Error(
+          `Desteklenmeyen ses kayıt uzantısı: ${dosyaYolu.split(".").pop() || "bilinmiyor"}`,
+        );
+      }
+
+      const sesUzantisi = aacAdtsMi ? ".aac" : mp4KaydiMi ? ".mp4" : ".m4a";
+
+      const sesDosyaAdi = `ses-${Date.now()}${sesUzantisi}`;
+
+      /*
+       * MP4 kapsayıcısı Android'de AAC ses taşıyabilir.
+       * Backend gerçek dosya içeriğini doğruladığından,
+       * bu MIME seçimini sunucudaki izin listesiyle eşleştirmek gerekir.
+       */
+      const sesMimeType = aacAdtsMi
+        ? "audio/aac"
+        : mp4KaydiMi
+          ? "video/mp4"
+          : "audio/x-m4a";
+
+      console.log("SES DOSYASI KONTROLÜ", {
+        uri,
+        fileName: sesDosyaAdi,
+        mimeType: sesMimeType,
+        uzanti: sesUzantisi,
+      });
 
       console.log("🎙️ SES KAYDI DURDU:", uri);
 
       audioKayitUriRef.current = null;
-
       setRecording(false);
-
-      if (!uri) {
-        setRecordingSeconds(0);
-
-        setError("Ses kaydı oluşturulamadı.");
-
-        return;
-      }
 
       const sure = recordingSeconds;
 
       await medyaYukle(
         {
           uri,
-          fileName: `ses-${Date.now()}.m4a`,
-          mimeType: "audio/mp4",
+          fileName: sesDosyaAdi,
+          mimeType: sesMimeType,
         },
         "audio",
       );
@@ -2449,23 +2713,22 @@ function useMessages() {
       console.log(`SES KAYDI GÖNDERİLDİ: ${sure} saniye`);
 
       setRecordingSeconds(0);
+      setError("");
     } catch (err) {
       console.error("❌ SES KAYDI DURDURULAMADI:", err);
 
+      audioKayitUriRef.current = null;
       setRecording(false);
-
       setRecordingSeconds(0);
 
       setError(hataMesaji(err, "Ses kaydı gönderilemedi."));
     } finally {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current);
-
         recordingTimerRef.current = null;
       }
     }
   }, [recording, recordingSeconds, medyaYukle, hataMesaji]);
-
   /*
    * =========================================================
    * İLK YÜKLEME
@@ -2501,7 +2764,13 @@ function useMessages() {
         return;
       }
 
-      await websocketBaglan();
+      try {
+        await websocketBaglan(() => temizlendi);
+      } catch (hata) {
+        if (!temizlendi) {
+          console.error("❌ STOMP BAĞLANTI BAŞLATMA HATASI:", hata);
+        }
+      }
     };
 
     void baslat();
@@ -2513,29 +2782,28 @@ function useMessages() {
 
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current);
-
         reconnectTimerRef.current = null;
       }
 
       const client = stompClientRef.current;
 
+      stompBagliRef.current = false;
+
       if (!client) {
-        stompBagliRef.current = false;
+        console.log("🟡 STOMP CLEANUP: KAPATILACAK CLIENT BULUNAMADI.");
         return;
       }
 
-      /*
-       * Gerçek component kapanıyorsa STOMP kapatılır.
-       */
       console.log("🔴 STOMP CLIENT DEACTIVATE ÇAĞRILIYOR.");
-
-      stompBagliRef.current = false;
 
       stompClientRef.current = null;
 
-      void client.deactivate();
+      void client.deactivate().catch((hata) => {
+        console.error("❌ STOMP CLIENT KAPATMA HATASI:", hata);
+      });
     };
   }, [websocketBaglan]);
+
   /*
    * =========================================================
    * SEÇİLİ KULLANICI DEĞİŞİNCE

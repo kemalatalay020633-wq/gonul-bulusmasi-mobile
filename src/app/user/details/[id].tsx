@@ -11,6 +11,7 @@ import {
 } from "react-native";
 // src/app/home.tsx
 // src/app/user/details/[id].tsx
+import KimlikDogrulamaliAvatar from "../../../components/common/KimlikDogrulamaliAvatar";
 import { API_BASE_URL } from "../../../config/api";
 const API_ADRESI = API_BASE_URL + "/api";
 
@@ -75,7 +76,8 @@ export default function ProfilDetay() {
 
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
 
-  const hedefKullanıcıId = id ? Number(id) : null;
+  const hedefKullanıcıId =
+    id && Number.isFinite(Number(id)) && Number(id) > 0 ? Number(id) : null;
 
   const [user, setUser] = useState<User | null>(null);
 
@@ -111,7 +113,7 @@ export default function ProfilDetay() {
     const text = await response.text();
 
     if (!response.ok) {
-      throw new Error(text || `İstek başarısız. HTTP ${response.status}`);
+      throw new Error("Profil bilgileri alınamadı.");
     }
 
     if (!text.trim()) {
@@ -178,25 +180,13 @@ export default function ProfilDetay() {
 
         const token = await AsyncStorage.getItem("token");
 
-        console.log("========================================");
-
-        console.log("MOBIL PROFIL DETAY");
-
-        console.log("ROUTE PARAMETRESI:", params);
-
-        console.log("HEDEF KULLANICI:", hedefKullanıcıId);
-
         if (!token) {
-          console.log("TOKEN BULUNAMADI");
-
           if (aktif) {
             navigation.replace("index");
           }
 
           return;
         }
-
-        console.log("TOKEN VAR");
 
         if (!hedefKullanıcıId) {
           throw new Error("Kullanıcı profili bulunamadi.");
@@ -214,8 +204,6 @@ export default function ProfilDetay() {
 
         setUser(kullanici);
 
-        console.log("KULLANICI RESPONSE:", kullanici);
-
         // ========================================
         // 2. PROFILLER
         // ========================================
@@ -226,8 +214,6 @@ export default function ProfilDetay() {
           return;
         }
 
-        console.log("PROFILLER:", profiller);
-
         const hedefProfil =
           profiller.find(
             (profil: Profile) =>
@@ -235,8 +221,6 @@ export default function ProfilDetay() {
           ) || null;
 
         setProfile(hedefProfil);
-
-        console.log("BULUNAN PROFIL:", hedefProfil);
 
         // ========================================
         // 3. AKTIF PROFIL SORULARI
@@ -250,8 +234,6 @@ export default function ProfilDetay() {
         }
 
         setSorular(yuklenenSorular);
-
-        console.log("SORULAR:", yuklenenSorular);
 
         // ========================================
         // 4. PROFIL CEVAPLARI
@@ -274,8 +256,6 @@ export default function ProfilDetay() {
           );
 
           setCevaplar(doluCevaplar);
-
-          console.log("CEVAPLAR:", doluCevaplar);
         } else {
           setCevaplar([]);
         }
@@ -310,35 +290,13 @@ export default function ProfilDetay() {
           setMezhepler(mezhep || []);
 
           setIlgiAlanlari(ilgi || []);
-
-          console.log("MESLEKLER:", meslek);
-
-          console.log("EGITIMLER:", egitim);
-
-          console.log("MEDENI DURUMLAR:", medeni);
-
-          console.log("MEZHEPLER:", mezhep);
-
-          console.log("ILGI ALANLARI:", ilgi);
-        } catch (enumHatasi) {
-          console.log("ENUM YÜKLEME HATASI:", enumHatasi);
-        }
-
-        console.log("PROFİL DETAY YÜKLEME TAMAMLANDI");
-
-        console.log("========================================");
+        } catch (enumHatasi) {}
       } catch (error) {
-        console.error("MOBIL PROFIL DETAY HATASI:", error);
-
         if (!aktif) {
           return;
         }
 
-        if (error instanceof Error) {
-          setHata(error.message);
-        } else {
-          setHata("Profil detayları alinamadi.");
-        }
+        setHata("Profil detayları şu anda alınamıyor. Lütfen tekrar deneyin.");
       } finally {
         if (aktif) {
           setYukleniyor(false);
@@ -391,6 +349,13 @@ export default function ProfilDetay() {
 
   const yas = user?.birthDate ? yasHesapla(user.birthDate) : null;
 
+  const avatarHarf =
+    `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toLocaleUpperCase(
+      "tr-TR",
+    ) ||
+    user?.username?.charAt(0)?.toLocaleUpperCase("tr-TR") ||
+    "?";
+
   // ========================================
   // ILGI ALANLARI
   // ========================================
@@ -432,6 +397,28 @@ export default function ProfilDetay() {
 
         {user && (
           <View style={styles.sectionCard}>
+            <View style={styles.profilKimlikAlani}>
+              <View style={styles.avatarFrame}>
+                <KimlikDogrulamaliAvatar
+                  kullaniciId={user.id}
+                  boyut={96}
+                  altYazi={avatarHarf}
+                  imageStyle={styles.profileAvatar}
+                />
+              </View>
+
+              <View style={styles.profilKimlikMetni}>
+                <Text style={styles.profilAdSoyad}>
+                  {`${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+                    user.username}
+                </Text>
+                <Text style={styles.profilKullaniciAdi}>@{user.username}</Text>
+                {user.city ? (
+                  <Text style={styles.profilSehir}>📍 {user.city}</Text>
+                ) : null}
+              </View>
+            </View>
+
             <Text style={styles.sectionTitle}>Profil Bilgileri</Text>
 
             <View style={styles.summaryBox}>
@@ -635,7 +622,7 @@ export default function ProfilDetay() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#10051F",
   },
 
   scrollContent: {
@@ -648,40 +635,40 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#10051F",
   },
 
   yukleniyorText: {
     marginTop: 14,
     fontSize: 15,
-    color: "#80666D",
+    color: "#D7B8E8",
   },
 
   hataContainer: {
     flex: 1,
     justifyContent: "center",
     padding: 20,
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#210B31",
   },
 
   hataCard: {
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#10051F",
     borderRadius: 18,
     padding: 24,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
   },
 
   hataBaslik: {
     fontSize: 22,
     fontWeight: "800",
-    color: "#7A263C",
+    color: "#F5D58F",
     marginBottom: 12,
   },
 
   hataText: {
     fontSize: 15,
-    color: "#B72F4B",
+    color: "#FF9AAE",
     lineHeight: 22,
     marginBottom: 22,
   },
@@ -697,7 +684,7 @@ const styles = StyleSheet.create({
     height: 46,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#C45ADD",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -705,7 +692,7 @@ const styles = StyleSheet.create({
 
   backText: {
     fontSize: 25,
-    color: "#A12E4A",
+    color: "#E8B85B",
     fontWeight: "700",
   },
 
@@ -716,12 +703,12 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: 24,
     fontWeight: "900",
-    color: "#7A263C",
+    color: "#F5D58F",
   },
 
   topSubtitle: {
     fontSize: 13,
-    color: "#80666D",
+    color: "#D7B8E8",
     marginTop: 3,
   },
 
@@ -729,18 +716,69 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  profilKimlikAlani: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#260B38",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#57206E",
+    padding: 14,
+    marginBottom: 18,
+  },
+
+  avatarFrame: {
+    width: 102,
+    height: 102,
+    borderRadius: 51,
+    padding: 3,
+    backgroundColor: "#E8B85B",
+    marginRight: 14,
+  },
+
+  profileAvatar: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 48,
+    backgroundColor: "#57206E",
+  },
+
+  profilKimlikMetni: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  profilAdSoyad: {
+    fontSize: 19,
+    fontWeight: "900",
+    color: "#F5D58F",
+    marginBottom: 5,
+  },
+
+  profilKullaniciAdi: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#E8B85B",
+    marginBottom: 5,
+  },
+
+  profilSehir: {
+    fontSize: 13,
+    color: "#D7B8E8",
+  },
+
   sectionTitle: {
     fontSize: 21,
     fontWeight: "900",
-    color: "#7A263C",
+    color: "#F5D58F",
     marginBottom: 12,
   },
 
   summaryBox: {
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#2B103D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
     padding: 16,
   },
 
@@ -755,7 +793,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: "700",
-    color: "#80666D",
+    color: "#D7B8E8",
   },
 
   value: {
@@ -763,20 +801,20 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontSize: 15,
     fontWeight: "800",
-    color: "#694650",
+    color: "#E5D1EF",
   },
 
   aboutBox: {
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#2B103D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
     padding: 18,
   },
 
   aboutText: {
     fontSize: 15,
-    color: "#694650",
+    color: "#E5D1EF",
     lineHeight: 25,
   },
 
@@ -788,10 +826,10 @@ const styles = StyleSheet.create({
 
   infoCard: {
     width: "48%",
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#2B103D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
     padding: 16,
     marginBottom: 12,
   },
@@ -799,14 +837,14 @@ const styles = StyleSheet.create({
   infoLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#8F2942",
+    color: "#E8B85B",
     marginBottom: 6,
   },
 
   infoValue: {
     fontSize: 15,
     fontWeight: "800",
-    color: "#694650",
+    color: "#E5D1EF",
   },
 
   questionHeader: {
@@ -821,18 +859,18 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     textAlign: "center",
     textAlignVertical: "center",
-    backgroundColor: "#F5DCE3",
-    color: "#8F2942",
+    backgroundColor: "#57206E",
+    color: "#E8B85B",
     fontSize: 19,
     fontWeight: "900",
     marginRight: 8,
   },
 
   questionCard: {
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#2B103D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
     padding: 18,
     marginBottom: 12,
   },
@@ -840,29 +878,29 @@ const styles = StyleSheet.create({
   questionNumber: {
     fontSize: 12,
     fontWeight: "800",
-    color: "#8b5cf6",
+    color: "#C45ADD",
     marginBottom: 7,
   },
 
   questionText: {
     fontSize: 16,
     fontWeight: "900",
-    color: "#7A263C",
+    color: "#F5D58F",
     lineHeight: 23,
     marginBottom: 10,
   },
 
   answerText: {
     fontSize: 15,
-    color: "#694650",
+    color: "#E5D1EF",
     lineHeight: 24,
   },
 
   emptyBox: {
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#2B103D",
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#57206E",
     padding: 24,
     alignItems: "center",
   },
@@ -871,7 +909,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 14,
     fontWeight: "600",
-    color: "#80666D",
+    color: "#D7B8E8",
     lineHeight: 22,
   },
 
@@ -879,20 +917,20 @@ const styles = StyleSheet.create({
     minHeight: 48,
     borderRadius: 13,
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#C45ADD",
     alignItems: "center",
     justifyContent: "center",
   },
 
   outlineButtonText: {
-    color: "#A12E4A",
+    color: "#E8B85B",
     fontSize: 15,
     fontWeight: "800",
   },
 
   bottomArea: {
     borderTopWidth: 1,
-    borderTopColor: "#F5DCE3",
+    borderTopColor: "#57206E",
     paddingTop: 20,
     gap: 12,
   },
@@ -901,13 +939,13 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#8b5cf6",
+    borderColor: "#C45ADD",
     alignItems: "center",
     justifyContent: "center",
   },
 
   bottomOutlineText: {
-    color: "#A12E4A",
+    color: "#E8B85B",
     fontSize: 15,
     fontWeight: "800",
   },
@@ -915,13 +953,13 @@ const styles = StyleSheet.create({
   bottomPrimaryButton: {
     minHeight: 52,
     borderRadius: 14,
-    backgroundColor: "#A12E4A",
+    backgroundColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
   },
 
   bottomPrimaryText: {
-    color: "#FFFCFA",
+    color: "#10051F",
     fontSize: 15,
     fontWeight: "800",
   },

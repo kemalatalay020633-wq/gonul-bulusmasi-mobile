@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -9,14 +10,10 @@ import {
   Text,
   View,
 } from "react-native";
-// src/app/home.tsx
+import KimlikDogrulamaliAvatar from "../components/common/KimlikDogrulamaliAvatar";
 import { API_BASE_URL } from "../config/api";
-import { useNavigation } from "@react-navigation/native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const API_ADRESI = API_BASE_URL + "/api";
-
-const SUNUCU_ADRESI = API_BASE_URL;
 
 /*
  * =========================================================
@@ -26,11 +23,12 @@ const SUNUCU_ADRESI = API_BASE_URL;
 
 type Bildirim = {
   id?: number;
-  kullaniciId?: number | null;
-  ilgiliId?: number | null;
-  tip?: string | null;
-  mesaj?: string | null;
-  okundu?: boolean;
+  userId?: number | null;
+  relatedId?: number | null;
+  type?: string | null;
+  title?: string | null;
+  content?: string | null;
+  read?: boolean;
   createdAt?: string | null;
 };
 
@@ -85,28 +83,6 @@ type Profil = {
 type BakanKullanici = {
   kullanici: Kullanici;
   profil: Profil | null;
-};
-
-/*
- * =========================================================
- * FOTOGRAF URL
- * =========================================================
- */
-
-const fotoUrlOlustur = (foto: string | null | undefined): string => {
-  if (!foto) {
-    return "";
-  }
-
-  if (foto.startsWith("http://") || foto.startsWith("https://")) {
-    return foto;
-  }
-
-  if (foto.startsWith("/")) {
-    return `${SUNUCU_ADRESI}${foto}`;
-  }
-
-  return `${SUNUCU_ADRESI}/${foto}`;
 };
 
 /*
@@ -172,8 +148,12 @@ const medeniDurumGetir = (
   const metinselDegerler: Record<string, string> = {
     BEKAR: "Bekar",
     EVLI: "Evli",
-    BOSANMIS: "Bosanmis",
+    BOSANMIS: "Boşanmış",
     DUL: "Dul",
+    Bekar: "Bekar",
+    Evli: "Evli",
+    Boşanmış: "Boşanmış",
+    Dul: "Dul",
   };
 
   if (metinselDegerler[deger]) {
@@ -197,9 +177,7 @@ export default function ProfilimeBakanlar() {
   const navigation = useNavigation<any>();
 
   const [kullanicilar, setKullanicilar] = useState<BakanKullanici[]>([]);
-
   const [yukleniyor, setYukleniyor] = useState(true);
-
   const [hata, setHata] = useState("");
 
   /*
@@ -239,7 +217,6 @@ export default function ProfilimeBakanlar() {
         return JSON.parse(responseText) as Kullanici;
       } catch (error) {
         console.error("KULLANICI BILGISI HATASI:", error);
-
         return null;
       }
     },
@@ -288,7 +265,6 @@ export default function ProfilimeBakanlar() {
         return [];
       } catch (error) {
         console.error("PROFILLER HATASI:", error);
-
         return [];
       }
     },
@@ -389,13 +365,13 @@ export default function ProfilimeBakanlar() {
       const kullaniciIdleri = Array.from(
         new Set(
           bildirimler
-            .map((bildirim) => Number(bildirim.ilgiliId))
+            .filter((bildirim) => bildirim.type === "PROFILE_VIEW")
+            .map((bildirim) => Number(bildirim.relatedId))
             .filter((id) => Number.isFinite(id) && id > 0),
         ),
       );
-
       /*
-       * HİÇ KİMSE YOK
+       * HIC KIMSE YOK
        */
 
       if (kullaniciIdleri.length === 0) {
@@ -448,7 +424,7 @@ export default function ProfilimeBakanlar() {
       setHata(
         error instanceof Error
           ? error.message
-          : "Profilinize bakan kullanıcılar alınırken bir hata oluştu.",
+          : "Profilinize bakan kullanıcılar yüklenemedi.",
       );
     } finally {
       setYukleniyor(false);
@@ -457,7 +433,7 @@ export default function ProfilimeBakanlar() {
 
   /*
    * =======================================================
-   * SAYFA AÇILINCA
+   * SAYFA ACILINCA
    * =======================================================
    */
 
@@ -487,7 +463,7 @@ export default function ProfilimeBakanlar() {
 
   /*
    * =======================================================
-   * YÜKLENİYOR
+   * YUKLENIYOR
    * =======================================================
    */
 
@@ -518,31 +494,34 @@ export default function ProfilimeBakanlar() {
         contentContainerStyle={styles.scrollContainer}
       >
         {/*
-         * =================================================
          * BASLIK
-         * =================================================
          */}
 
         <View style={styles.ustBar}>
           <Pressable style={styles.geriButonu} onPress={geriDon}>
-            <Text style={styles.geriIcon}>←</Text>
-
-            <Text style={styles.geriText}>Geri</Text>
+            <Text style={styles.geriIcon}>‹</Text>
           </Pressable>
 
           <View style={styles.baslikAlani}>
-            <Text style={styles.baslikIcon}>gY'?</Text>
-
+            <Text style={styles.baslikIcon}>👀</Text>
             <Text style={styles.baslik}>Profilime Bakanlar</Text>
+            <Text style={styles.altBaslik}>
+              Profilini görüntüleyen kullanıcılar
+            </Text>
           </View>
 
           <View style={styles.ustBosluk} />
         </View>
 
+        <View style={styles.ozetKart}>
+          <Text style={styles.ozetIkon}>👁</Text>
+          <Text style={styles.ozetMetin}>Toplam</Text>
+          <Text style={styles.ozetSayi}>{kullanicilar.length}</Text>
+          <Text style={styles.ozetMetin}>kişi profilini görüntüledi</Text>
+        </View>
+
         {/*
-         * =================================================
          * HATA
-         * =================================================
          */}
 
         {hata ? (
@@ -558,14 +537,12 @@ export default function ProfilimeBakanlar() {
         ) : null}
 
         {/*
-         * =================================================
          * KIMSE YOK
-         * =================================================
          */}
 
         {!hata && kullanicilar.length === 0 ? (
           <View style={styles.bosKart}>
-            <Text style={styles.bosIcon}>gY'?</Text>
+            <Text style={styles.bosIcon}>👀</Text>
 
             <Text style={styles.bosBaslik}>Henüz profilinize bakan yok</Text>
 
@@ -576,9 +553,7 @@ export default function ProfilimeBakanlar() {
         ) : null}
 
         {/*
-         * =================================================
          * KULLANICI LISTESI
-         * =================================================
          */}
 
         <View style={styles.liste}>
@@ -598,14 +573,6 @@ export default function ProfilimeBakanlar() {
               .join(" ");
 
             /*
-             * FOTOGRAF
-             */
-
-            const foto = fotoUrlOlustur(
-              profil?.profilePhoto ?? kullanici.profilePhoto ?? null,
-            );
-
-            /*
              * MEDENI DURUM
              */
 
@@ -619,13 +586,14 @@ export default function ProfilimeBakanlar() {
                    */}
 
                   <View style={styles.fotoContainer}>
-                    {foto ? (
-                      <Image
-                        source={{
-                          uri: foto,
-                        }}
-                        style={styles.foto}
-                        resizeMode="cover"
+                    {kullanici.id ? (
+                      <KimlikDogrulamaliAvatar
+                        kullaniciId={kullanici.id}
+                        boyut={82}
+                        altYazi={(adSoyad || kullanici.username || "?")
+                          .charAt(0)
+                          .toUpperCase()}
+                        imageStyle={styles.foto}
                       />
                     ) : (
                       <View style={styles.fotoPlaceholder}>
@@ -656,9 +624,7 @@ export default function ProfilimeBakanlar() {
                     {yas !== null || kullanici.city ? (
                       <Text style={styles.detay} numberOfLines={1}>
                         {yas !== null ? `${yas} yaş` : ""}
-
                         {yas !== null && kullanici.city ? " · " : ""}
-
                         {kullanici.city || ""}
                       </Text>
                     ) : null}
@@ -680,7 +646,7 @@ export default function ProfilimeBakanlar() {
                 </View>
 
                 {/*
-                 * PROFİLİ GÖR
+                 * PROFILI GOR
                  */}
 
                 <Pressable
@@ -707,281 +673,253 @@ export default function ProfilimeBakanlar() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FFF8F4",
+    backgroundColor: "#10051F",
   },
-
   scrollContainer: {
-    paddingBottom: 30,
+    paddingBottom: 34,
   },
-
-  /*
-   * YÜKLENİYOR
-   */
-
   yukleniyorContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 30,
+    backgroundColor: "#10051F",
   },
-
   yukleniyorText: {
     marginTop: 14,
     fontSize: 15,
-    color: "#7A263C",
+    color: "#E8C8FF",
     fontWeight: "600",
     textAlign: "center",
   },
-
-  /*
-   * ÜST BAR
-   */
-
   ustBar: {
-    minHeight: 70,
+    minHeight: 112,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
+    paddingTop: 12,
+    backgroundColor: "#260638",
     borderBottomWidth: 1,
-    borderBottomColor: "#E8C5CF",
-    backgroundColor: "#FFF8F4",
+    borderBottomColor: "#F4C45B",
   },
-
   geriButonu: {
-    width: 80,
-    minHeight: 48,
-    flexDirection: "row",
+    width: 48,
+    height: 48,
+    borderRadius: 15,
     alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#421452",
+    borderWidth: 1,
+    borderColor: "#F4C45B",
   },
-
   geriIcon: {
-    fontSize: 36,
-    lineHeight: 36,
-    color: "#A12E4A",
-    marginRight: 2,
+    fontSize: 38,
+    lineHeight: 40,
+    color: "#FFFFFF",
   },
-
-  geriText: {
-    fontSize: 15,
-    color: "#A12E4A",
-    fontWeight: "700",
-  },
-
   baslikAlani: {
     flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  baslikIcon: {
+    fontSize: 25,
+    marginBottom: 2,
+    color: "#E8B85B",
+  },
+  baslik: {
+    fontSize: 21,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    textAlign: "center",
+  },
+  altBaslik: {
+    marginTop: 5,
+    fontSize: 13,
+    color: "#D9A9EE",
+    textAlign: "center",
+  },
+  ustBosluk: {
+    width: 48,
+  },
+  ozetKart: {
+    marginHorizontal: 18,
+    marginTop: 18,
+    marginBottom: 4,
+    minHeight: 70,
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 28,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
+    flexWrap: "wrap",
+    backgroundColor: "#421452",
+    borderWidth: 1,
+    borderColor: "#F4C45B",
   },
-
-  baslikIcon: {
+  ozetIkon: {
     fontSize: 25,
-    marginRight: 7,
+    marginRight: 10,
   },
-
-  baslik: {
-    fontSize: 19,
-    fontWeight: "800",
-    color: "#7A263C",
-    textAlign: "center",
+  ozetMetin: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
-
-  ustBosluk: {
-    width: 80,
+  ozetSayi: {
+    color: "#FFD978",
+    fontSize: 29,
+    fontWeight: "900",
+    marginHorizontal: 8,
   },
-
-  /*
-   * HATA
-   */
-
   hataKart: {
     marginHorizontal: 16,
     marginTop: 20,
     padding: 18,
-    borderRadius: 16,
-    backgroundColor: "#FCE8EC",
+    borderRadius: 18,
+    backgroundColor: "#42152F",
     borderWidth: 1,
-    borderColor: "#fecdd3",
+    borderColor: "#F4C45B",
   },
-
   hataBaslik: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#be123c",
+    color: "#FFD5E8",
     marginBottom: 7,
   },
-
   hataText: {
     fontSize: 14,
     lineHeight: 21,
-    color: "#881337",
+    color: "#F3D9FF",
   },
-
   tekrarButonu: {
     marginTop: 14,
     minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#8F2942",
+    borderRadius: 13,
+    backgroundColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
-
   tekrarButonuText: {
-    color: "#FFFCFA",
+    color: "#321044",
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "900",
   },
-
-  /*
-   * BOS
-   */
-
   bosKart: {
-    marginHorizontal: 16,
-    marginTop: 20,
+    marginHorizontal: 18,
+    marginTop: 24,
     padding: 28,
-    borderRadius: 20,
+    borderRadius: 24,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#E8C5CF",
-    backgroundColor: "#FFFCFA",
+    borderColor: "#F4C45B",
+    backgroundColor: "#321044",
   },
-
   bosIcon: {
     fontSize: 54,
-    marginBottom: 8,
+    marginBottom: 10,
+    color: "#FFD978",
   },
-
   bosBaslik: {
     fontSize: 18,
-    fontWeight: "800",
-    color: "#7A263C",
+    fontWeight: "900",
+    color: "#FFFFFF",
     textAlign: "center",
   },
-
   bosText: {
-    marginTop: 8,
+    marginTop: 9,
     fontSize: 14,
-    lineHeight: 21,
-    color: "#78716c",
+    lineHeight: 22,
+    color: "#E5D1EF",
     textAlign: "center",
   },
-
-  /*
-   * LISTE
-   */
-
   liste: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 15,
     paddingTop: 18,
   },
-
-  /*
-   * KULLANICI KARTI
-   */
-
   kullaniciKart: {
     marginBottom: 16,
-    padding: 16,
-    borderRadius: 20,
-    backgroundColor: "#FFFCFA",
+    padding: 14,
+    borderRadius: 22,
+    backgroundColor: "#260B38",
     borderWidth: 1,
-    borderColor: "#E8C5CF",
+    borderColor: "#F4C45B",
+    elevation: 5,
   },
-
   kullaniciUst: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
   },
-
-  /*
-   * FOTOGRAF
-   */
-
   fotoContainer: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 96,
+    height: 96,
+    borderRadius: 19,
     overflow: "hidden",
-    backgroundColor: "#F5DCE3",
+    backgroundColor: "#E8B85B",
+    borderWidth: 2,
+    borderColor: "#F4C45B",
     flexShrink: 0,
   },
-
   foto: {
-    width: 82,
-    height: 82,
+    width: 96,
+    height: 96,
   },
-
   fotoPlaceholder: {
-    width: 82,
-    height: 82,
-    borderRadius: 41,
+    width: 96,
+    height: 96,
+    borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5DCE3",
+    backgroundColor: "#64227D",
   },
-
   fotoPlaceholderText: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: "#8F2942",
+    fontSize: 36,
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
-
-  /*
-   * BILGILER
-   */
-
   bilgiler: {
     flex: 1,
     minWidth: 0,
     marginLeft: 14,
   },
-
   adSoyad: {
     fontSize: 19,
-    fontWeight: "800",
-    color: "#7A263C",
+    fontWeight: "900",
+    color: "#FFFFFF",
   },
-
   kullaniciAdi: {
-    marginTop: 3,
-    fontSize: 14,
-    color: "#78716c",
+    marginTop: 4,
+    fontSize: 13,
+    color: "#D9A9EE",
+    fontWeight: "700",
   },
-
   detay: {
-    marginTop: 5,
-    fontSize: 14,
-    color: "#57534e",
+    marginTop: 6,
+    fontSize: 13,
+    color: "#F0E1F7",
   },
-
   bakanBilgisi: {
     marginTop: 8,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#8F2942",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#69E98C",
   },
-
-  /*
-   * PROFIL BUTONU
-   */
-
   profilButonu: {
-    marginTop: 16,
+    marginTop: 14,
     minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#8F2942",
+    borderRadius: 24,
+    backgroundColor: "#E8B85B",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
   },
-
   profilButonuText: {
-    color: "#FFFCFA",
+    color: "#321044",
     fontSize: 15,
-    fontWeight: "800",
+    fontWeight: "900",
   },
 });

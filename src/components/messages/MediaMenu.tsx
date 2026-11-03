@@ -1,6 +1,8 @@
 import {
+  Camera,
   FileText,
   Image as ImageIcon,
+  MapPin,
   Music,
   Plus,
   Video,
@@ -8,7 +10,7 @@ import {
 } from "lucide-react-native";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-type MediaType = "image" | "video" | "audio" | "file";
+type MediaType = "image" | "video" | "audio" | "file" | "camera" | "location";
 
 type MediaMenuProps = {
   mediaMenuOpen: boolean;
@@ -70,7 +72,7 @@ function MediaMenu({
               <View>
                 <Text style={styles.menuTitle}>Paylaş</Text>
                 <Text style={styles.menuSubtitle}>
-                  Sohbete medya veya dosya ekle
+                  Sohbete medya, dosya veya konum ekle
                 </Text>
               </View>
 
@@ -89,67 +91,72 @@ function MediaMenu({
 
             <View style={styles.options}>
               <Pressable
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.option,
-                  pressed && styles.optionPressed,
-                  disabled && styles.optionDisabled,
-                ]}
+                style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("image")}
               >
                 <View style={[styles.iconContainer, styles.imageIcon]}>
-                  <ImageIcon size={25} color="#852B49" strokeWidth={1.9} />
+                  <ImageIcon size={25} color="#852B49" />
                 </View>
                 <Text style={styles.optionTitle}>Fotoğraf</Text>
               </Pressable>
 
               <Pressable
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.option,
-                  pressed && styles.optionPressed,
-                  disabled && styles.optionDisabled,
-                ]}
+                style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("video")}
               >
                 <View style={[styles.iconContainer, styles.videoIcon]}>
-                  <Video size={25} color="#6241B7" strokeWidth={1.9} />
+                  <Video size={25} color="#6241B7" />
                 </View>
                 <Text style={styles.optionTitle}>Video</Text>
               </Pressable>
 
               <Pressable
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.option,
-                  pressed && styles.optionPressed,
-                  disabled && styles.optionDisabled,
-                ]}
+                style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("audio")}
               >
                 <View style={[styles.iconContainer, styles.audioIcon]}>
-                  <Music size={25} color="#287B55" strokeWidth={1.9} />
+                  <Music size={25} color="#287B55" />
                 </View>
                 <Text style={styles.optionTitle}>Ses</Text>
               </Pressable>
 
               <Pressable
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.option,
-                  pressed && styles.optionPressed,
-                  disabled && styles.optionDisabled,
-                ]}
+                style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("file")}
               >
                 <View style={[styles.iconContainer, styles.fileIcon]}>
-                  <FileText size={25} color="#9A6718" strokeWidth={1.9} />
+                  <FileText size={25} color="#9A6718" />
                 </View>
                 <Text style={styles.optionTitle}>Belge</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.option}
+                disabled={disabled}
+                onPress={() => medyaSec("camera")}
+              >
+                <View style={[styles.iconContainer, styles.cameraIcon]}>
+                  <Camera size={25} color="#287B55" />
+                </View>
+                <Text style={styles.optionTitle}>Kamera</Text>
+              </Pressable>
+
+              {/* KONUM PAYLAŞIMI */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Konum paylaş"
+                style={styles.option}
+                disabled={disabled}
+                onPress={() => medyaSec("location")}
+              >
+                <View style={[styles.iconContainer, styles.locationIcon]}>
+                  <MapPin size={25} color="#2875B8" />
+                </View>
+                <Text style={styles.optionTitle}>Konum</Text>
               </Pressable>
             </View>
 
@@ -184,7 +191,7 @@ const styles = StyleSheet.create({
   },
 
   attachButtonPressed: {
-    backgroundColor: "#F8E8ED",
+    backgroundColor: "#F9E3EB",
   },
 
   disabledButton: {
@@ -197,23 +204,19 @@ const styles = StyleSheet.create({
   },
 
   overlay: {
-    position: "absolute",
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: "rgba(25, 14, 22, 0.42)",
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "rgba(180, 25, 55, 0.45)",
   },
   sheet: {
     width: "100%",
-    backgroundColor: "#FFFCFA",
+    backgroundColor: "#FFFBFC",
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,
     paddingTop: 10,
     paddingBottom: 28,
     paddingHorizontal: 20,
     borderWidth: 1,
-    borderColor: "#F1E4E9",
+    borderColor: "#EEDBE3",
   },
 
   handle: {
@@ -250,7 +253,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F5EDF1",
+    backgroundColor: "#FCEAF0",
   },
 
   closeButtonPressed: {
@@ -259,26 +262,20 @@ const styles = StyleSheet.create({
 
   options: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 8,
   },
 
   option: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: "28%",
     minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: 12,
     borderRadius: 16,
-    backgroundColor: "#FFF8FA",
-  },
-
-  optionPressed: {
-    backgroundColor: "#F8E8ED",
-  },
-
-  optionDisabled: {
-    opacity: 0.4,
+    backgroundColor: "#FFF5F8",
   },
 
   iconContainer: {
@@ -299,11 +296,19 @@ const styles = StyleSheet.create({
   },
 
   audioIcon: {
-    backgroundColor: "#DFF3E8",
+    backgroundColor: "#F8E3EA",
   },
 
   fileIcon: {
     backgroundColor: "#FCEBCF",
+  },
+
+  cameraIcon: {
+    backgroundColor: "#DDF3E7",
+  },
+
+  locationIcon: {
+    backgroundColor: "#DFEDFA",
   },
 
   optionTitle: {
@@ -327,12 +332,12 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: "#7C2948",
+    backgroundColor: "#852B49",
     marginRight: 8,
   },
 
   loadingText: {
-    color: "#7C2948",
+    color: "#852B49",
     fontSize: 12,
     fontWeight: "600",
   },

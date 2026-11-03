@@ -174,33 +174,35 @@ ${String(hata)}`);
           setYukleniyor(false);
         }
       } else if (xhr.status === 401) {
-        setMesaj("Kullanıcı adı veya Şifre hatalı.");
+        console.log("LOGIN REDDEDİLDİ: HTTP 401");
 
-        setDebugMesaj(
-          `Login reddedildi
-HTTP: 401
-${xhr.responseText}`,
-        );
+        setMesaj("Kullanıcı adı veya şifre hatalı.");
+        setDebugMesaj("Giriş reddedildi. HTTP: 401");
 
         setYukleniyor(false);
       } else if (xhr.status === 400) {
-        setMesaj("Gönderilen bilgiler geçersiz.");
+        console.log("LOGIN GEÇERSİZ İSTEK: HTTP 400");
 
-        setDebugMesaj(
-          `Geçersiz istek
-HTTP: 400
-${xhr.responseText}`,
-        );
+        setMesaj("Girdiğiniz bilgileri kontrol edip tekrar deneyin.");
+        setDebugMesaj("Geçersiz giriş isteği. HTTP: 400");
 
         setYukleniyor(false);
       } else {
-        setMesaj(`Giriş başarısız. HTTP ${xhr.status}`);
+        console.log("LOGIN HTTP HATASI:", xhr.status);
 
-        setDebugMesaj(
-          `Backend hatası
-HTTP: ${xhr.status}
-${xhr.responseText}`,
-        );
+        if (xhr.status === 0) {
+          setMesaj(
+            "Sunucuya ulaşılamıyor. Bağlantınızı kontrol edip tekrar deneyin.",
+          );
+        } else if (xhr.status >= 500) {
+          setMesaj(
+            "Sunucuda geçici bir sorun oluştu. Lütfen biraz sonra tekrar deneyin.",
+          );
+        } else {
+          setMesaj("Giriş işlemi gerçekleştirilemedi. Lütfen tekrar deneyin.");
+        }
+
+        setDebugMesaj(`Giriş isteği başarısız. HTTP: ${xhr.status}`);
 
         setYukleniyor(false);
       }
@@ -213,9 +215,11 @@ ${xhr.responseText}`,
     xhr.onerror = () => {
       console.log("LOGIN NETWORK HATASI");
 
-      setDebugMesaj("4 - Login network hatası");
+      setDebugMesaj("Login bağlantı hatası");
 
-      setMesaj("Backend'e bağlanırken network hatası oluştu.");
+      setMesaj(
+        "Sunucuya ulaşılamıyor. İnternet bağlantınızı kontrol edip tekrar deneyin.",
+      );
 
       setYukleniyor(false);
     };
@@ -227,9 +231,9 @@ ${xhr.responseText}`,
     xhr.ontimeout = () => {
       console.log("LOGIN TIMEOUT");
 
-      setDebugMesaj("4 - Login isteği 10 saniyede cevap vermedi");
+      setDebugMesaj("Login isteği zaman aşımına uğradı");
 
-      setMesaj("Sunucu zaman aşımına uğradı.");
+      setMesaj("Sunucudan yanıt alınamadı. Lütfen tekrar deneyin.");
 
       setYukleniyor(false);
     };

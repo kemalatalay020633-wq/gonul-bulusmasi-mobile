@@ -1,4 +1,3 @@
-import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 type EnumSecenegi = {
@@ -36,7 +35,6 @@ export default function ProfileInfo({
   egitimler = [],
   medeniDurumlar = [],
   mezhepler = [],
-  ilgiAlanlari = [],
 }: ProfileInfoProps) {
   const aciklamaGetir = (
     liste: EnumSecenegi[],
@@ -47,102 +45,67 @@ export default function ProfileInfo({
     }
 
     const bulunan = liste.find((item) => Number(item.kod) === Number(kod));
-
-    return bulunan?.aciklama ?? "-";
+    return bulunan?.aciklama ?? String(kod);
   };
 
-  const ilgiAlanlariniGetir = (): string => {
-    if (
-      profile.interests === null ||
-      profile.interests === undefined ||
-      String(profile.interests).trim() === ""
-    ) {
-      return "-";
-    }
-
-    const deger = String(profile.interests);
-
-    const parcalar = deger
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean);
-
-    if (parcalar.length === 0) {
-      return "-";
-    }
-
-    const aciklamalar = parcalar.map((item) => {
-      const bulunan = ilgiAlanlari.find(
-        (alan) => Number(alan.kod) === Number(item),
-      );
-
-      return bulunan?.aciklama ?? item;
-    });
-
-    return aciklamalar.join(", ");
-  };
+  const bilgiler = [
+    {
+      etiket: "Meslek",
+      deger: aciklamaGetir(meslekler, profile.profession),
+      ikon: "✧",
+    },
+    {
+      etiket: "Eğitim",
+      deger: aciklamaGetir(egitimler, profile.education),
+      ikon: "◇",
+    },
+    {
+      etiket: "Boy",
+      deger: profile.height ? `${profile.height} cm` : "-",
+      ikon: "↕",
+    },
+    {
+      etiket: "Kilo",
+      deger: profile.weight ? `${profile.weight} kg` : "-",
+      ikon: "◉",
+    },
+    {
+      etiket: "Medeni Durum",
+      deger: aciklamaGetir(medeniDurumlar, profile.maritalStatus),
+      ikon: "♡",
+    },
+    {
+      etiket: "Mezhep",
+      deger: aciklamaGetir(mezhepler, profile.religion),
+      ikon: "✥",
+    },
+    {
+      etiket: "Profil Durumu",
+      deger: profile.profileVerified ? "Doğrulanmış" : "Doğrulanmamış",
+      ikon: "✓",
+    },
+  ];
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Profil Bilgilerim</Text>
-
       <View style={styles.card}>
-        <BilgiSatiri etiket="Hakkımda" deger={profile.about || "-"} />
-
-        <BilgiSatiri
-          etiket="Meslek"
-          deger={aciklamaGetir(meslekler, profile.profession)}
-        />
-
-        <BilgiSatiri
-          etiket="Eğitim"
-          deger={aciklamaGetir(egitimler, profile.education)}
-        />
-
-        <BilgiSatiri
-          etiket="Boy"
-          deger={profile.height ? `${profile.height} cm` : "-"}
-        />
-
-        <BilgiSatiri
-          etiket="Kilo"
-          deger={profile.weight ? `${profile.weight} kg` : "-"}
-        />
-
-        <BilgiSatiri
-          etiket="Medeni Durum"
-          deger={aciklamaGetir(medeniDurumlar, profile.maritalStatus)}
-        />
-
-        <BilgiSatiri
-          etiket="Din"
-          deger={aciklamaGetir(mezhepler, profile.religion)}
-        />
-
-        <BilgiSatiri etiket="İlgi Alanları" deger={ilgiAlanlariniGetir()} />
-
-        <BilgiSatiri
-          etiket="Profil Durumu"
-          deger={profile.profileVerified ? "Doğrulanmış" : "Doğrulanmamış"}
-          son
-        />
+        {bilgiler.map((bilgi, index) => (
+          <View
+            key={`${bilgi.etiket}-${index}`}
+            style={[
+              styles.item,
+              index % 2 === 0 ? styles.itemLeft : styles.itemRight,
+            ]}
+          >
+            <Text style={styles.icon}>{bilgi.ikon}</Text>
+            <View style={styles.itemText}>
+              <Text style={styles.label}>{bilgi.etiket}</Text>
+              <Text style={styles.value}>{bilgi.deger}</Text>
+            </View>
+          </View>
+        ))}
       </View>
-    </View>
-  );
-}
-
-type BilgiSatiriProps = {
-  etiket: string;
-  deger: string;
-  son?: boolean;
-};
-
-function BilgiSatiri({ etiket, deger, son = false }: BilgiSatiriProps) {
-  return (
-    <View style={[styles.row, !son && styles.rowBorder]}>
-      <Text style={styles.label}>{etiket}</Text>
-
-      <Text style={styles.value}>{deger}</Text>
     </View>
   );
 }
@@ -150,50 +113,64 @@ function BilgiSatiri({ etiket, deger, son = false }: BilgiSatiriProps) {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    marginBottom: 24,
+    marginBottom: 4,
   },
-
   title: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#7A263C",
-    marginBottom: 12,
+    fontSize: 17,
+    fontWeight: "900",
+    color: "#F4C45B",
+    marginBottom: 11,
   },
-
   card: {
     width: "100%",
-    backgroundColor: "#faf5ff",
+    backgroundColor: "#410052",
     borderWidth: 1,
-    borderColor: "#F5DCE3",
+    borderColor: "#8E4B9E",
     borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-
-  row: {
-    width: "100%",
-    paddingVertical: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
+    flexWrap: "wrap",
   },
-
-  rowBorder: {
+  item: {
+    width: "50%",
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 5,
+    paddingVertical: 8,
+    gap: 8,
     borderBottomWidth: 1,
-    borderBottomColor: "#F5DCE3",
+    borderBottomColor: "#704078",
   },
-
-  label: {
-    width: 115,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#7A263C",
+  itemLeft: {
+    borderRightWidth: 1,
+    borderRightColor: "#F4C45B",
+    paddingRight: 9,
   },
-
-  value: {
+  itemRight: {
+    paddingLeft: 10,
+  },
+  icon: {
+    width: 24,
+    textAlign: "center",
+    color: "#F4C45B",
+    fontSize: 21,
+    fontWeight: "900",
+  },
+  itemText: {
     flex: 1,
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#694650",
+    minWidth: 0,
+  },
+  label: {
+    color: "#E8C8F0",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 3,
+  },
+  value: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "900",
   },
 });

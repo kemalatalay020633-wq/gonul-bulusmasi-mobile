@@ -1,6 +1,6 @@
-import React from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
+import KimlikDogrulamaliAvatar from "../../components/common/KimlikDogrulamaliAvatar";
 import type { MessageDto } from "../../types/message";
 
 type ConversationUser = {
@@ -26,9 +26,7 @@ function ConversationList({
   userInfoLoading = false,
 }: ConversationListProps) {
   const tarihFormatla = (tarih?: string) => {
-    if (!tarih) {
-      return "";
-    }
+    if (!tarih) return "";
 
     const tarihNesnesi = new Date(tarih);
 
@@ -36,27 +34,36 @@ function ConversationList({
       return tarih;
     }
 
-    return tarihNesnesi.toLocaleString("tr-TR", {
+    const simdi = new Date();
+
+    const ayniGun =
+      tarihNesnesi.getDate() === simdi.getDate() &&
+      tarihNesnesi.getMonth() === simdi.getMonth() &&
+      tarihNesnesi.getFullYear() === simdi.getFullYear();
+
+    if (ayniGun) {
+      return tarihNesnesi.toLocaleTimeString("tr-TR", {
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    return tarihNesnesi.toLocaleDateString("tr-TR", {
       day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+      month: "short",
     });
   };
 
   const renderConversation = ({ item }: { item: ConversationUser }) => {
     const aktif = getUserActive(item.userId);
-
     const secili = selectedUserId === item.userId;
-
     const kullaniciAdi = getUserDisplayName(item.userId);
 
-    const sonMesaj = item.lastMessage?.content?.trim() || "Medya mesajı";
+    const sonMesaj = item.lastMessage?.content?.trim() || "📎 Medya mesajı";
 
     const avatarHarf =
       kullaniciAdi && kullaniciAdi.length > 0
-        ? kullaniciAdi.charAt(0).toUpperCase()
+        ? kullaniciAdi.charAt(0).toLocaleUpperCase("tr-TR")
         : "?";
 
     return (
@@ -66,72 +73,82 @@ function ConversationList({
           secili && styles.conversationItemSelected,
         ]}
         onPress={() => onSelectUser(item.userId)}
-        android_ripple={{
-          color: "#eeeaff",
-        }}
+        android_ripple={{ color: "#F4E4C1" }}
       >
-        {/* AVATAR */}
-        <View style={[styles.avatar, secili && styles.avatarSelected]}>
-          <Text
-            style={[styles.avatarText, secili && styles.avatarTextSelected]}
-          >
-            {userInfoLoading ? "?" : avatarHarf}
-          </Text>
+        {/* PROFİL FOTOĞRAFI */}
+        <View style={styles.avatarWrapper}>
+          <View style={[styles.avatar, secili && styles.avatarSelected]}>
+            <KimlikDogrulamaliAvatar
+              kullaniciId={item.userId}
+              boyut={56}
+              altYazi={userInfoLoading ? "…" : avatarHarf}
+              imageStyle={styles.avatarImage}
+            />
+          </View>
+
+          {/* ÇEVRİMİÇİ GÖSTERGESİ */}
+          {aktif === true ? <View style={styles.avatarOnlineDot} /> : null}
         </View>
 
-        {/* ANA İÇERİK */}
+        {/* KONUŞMA BİLGİLERİ */}
         <View style={styles.conversationContent}>
-          {/* İSİM */}
-          <Text
-            style={[styles.name, secili && styles.nameSelected]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {userInfoLoading ? "Yükleniyor..." : kullaniciAdi}
-          </Text>
+          <View style={styles.topLine}>
+            <Text
+              style={[styles.name, secili && styles.nameSelected]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {userInfoLoading ? "Yükleniyor..." : kullaniciAdi}
+            </Text>
 
-          {/* DURUM */}
-          {aktif !== null ? (
-            <View style={styles.statusContainer}>
-              <View
-                style={[
-                  styles.statusDot,
-                  aktif ? styles.activeDot : styles.inactiveDot,
-                ]}
-              />
+            <Text
+              style={[styles.date, secili && styles.dateSelected]}
+              numberOfLines={1}
+            >
+              {tarihFormatla(item.lastMessage?.sentAt)}
+            </Text>
+          </View>
+
+          <View style={styles.bottomLine}>
+            <View style={styles.messageInfo}>
+              {aktif !== null ? (
+                <View style={styles.statusContainer}>
+                  <View
+                    style={[
+                      styles.statusDot,
+                      aktif ? styles.activeDot : styles.inactiveDot,
+                    ]}
+                  />
+
+                  <Text
+                    style={[
+                      styles.statusText,
+                      aktif ? styles.activeText : styles.inactiveText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {aktif ? "Çevrimiçi" : "Çevrimdışı"}
+                  </Text>
+                </View>
+              ) : null}
 
               <Text
                 style={[
-                  styles.statusText,
-                  aktif ? styles.activeText : styles.inactiveText,
+                  styles.lastMessage,
+                  secili && styles.lastMessageSelected,
                 ]}
                 numberOfLines={1}
+                ellipsizeMode="tail"
               >
-                {aktif ? "Çevrimiçi" : "Çevrimdışı"}
+                {sonMesaj}
               </Text>
             </View>
-          ) : null}
 
-          {/* SON MESAJ */}
-          <Text
-            style={[styles.lastMessage, secili && styles.lastMessageSelected]}
-            numberOfLines={2}
-            ellipsizeMode="tail"
-          >
-            {sonMesaj}
-          </Text>
-
-          {/* TARİH */}
-          <Text
-            style={[styles.date, secili && styles.dateSelected]}
-            numberOfLines={1}
-          >
-            {tarihFormatla(item.lastMessage?.sentAt)}
-          </Text>
+            <Text style={[styles.arrow, secili && styles.arrowSelected]}>
+              ›
+            </Text>
+          </View>
         </View>
-
-        {/* SAĞ OK */}
-        <Text style={styles.arrow}>›</Text>
       </Pressable>
     );
   };
@@ -141,7 +158,7 @@ function ConversationList({
       {users.length === 0 ? (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconContainer}>
-            <Text style={styles.emptyIcon}>💬</Text>
+            <Text style={styles.emptyIcon}>♡</Text>
           </View>
 
           <Text style={styles.emptyTitle}>Henüz mesajınız yok</Text>
@@ -159,6 +176,7 @@ function ConversationList({
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
           keyboardShouldPersistTaps="handled"
+          removeClippedSubviews={false}
         />
       )}
     </View>
@@ -168,251 +186,237 @@ function ConversationList({
 export default ConversationList;
 
 const styles = StyleSheet.create({
-  /*
-   * ANA CONTAINER
-   */
   container: {
     flex: 1,
     width: "100%",
-    backgroundColor: "#faf9ff",
+    backgroundColor: "#FFF9F0",
   },
 
-  /*
-   * LİSTE
-   */
   listContent: {
-    paddingTop: 4,
-    paddingBottom: 20,
+    paddingTop: 14,
+    paddingHorizontal: 12,
+    paddingBottom: 24,
   },
 
-  /*
-   * KONUŞMA KARTI
-   */
   conversationItem: {
     width: "100%",
-    minHeight: 92,
-
-    paddingHorizontal: 16,
+    minHeight: 88,
+    marginBottom: 12,
+    paddingHorizontal: 13,
     paddingVertical: 12,
-
     flexDirection: "row",
     alignItems: "center",
-
-    backgroundColor: "#FFFCFA",
-
-    borderBottomWidth: 1,
-    borderBottomColor: "#eeeaf8",
+    backgroundColor: "#FFFEFC",
+    borderRadius: 20,
+    borderWidth: 1.3,
+    borderColor: "#D6AD58",
+    shadowColor: "#9A7026",
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 7,
+    elevation: 3,
   },
 
-  /*
-   * SEÇİLİ KONUŞMA
-   */
   conversationItemSelected: {
-    backgroundColor: "#f0ecff",
-
-    borderLeftWidth: 4,
-    borderLeftColor: "#5b3cc4",
-
-    paddingLeft: 12,
+    backgroundColor: "#FFF5DF",
+    borderWidth: 1.8,
+    borderColor: "#B8862D",
+    shadowOpacity: 0.2,
+    elevation: 4,
   },
 
-  /*
-   * AVATAR
-   */
-  avatar: {
-    width: 58,
-    height: 58,
-
-    borderRadius: 29,
-
+  avatarWrapper: {
+    width: 60,
+    height: 60,
+    marginRight: 13,
+    position: "relative",
     alignItems: "center",
     justifyContent: "center",
+  },
 
-    marginRight: 14,
+  avatar: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F7EBD2",
+    borderWidth: 2,
+    borderColor: "#D4A84F",
+    padding: 2,
+  },
 
-    backgroundColor: "#eeeaff",
+  avatarImage: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
 
   avatarSelected: {
-    backgroundColor: "#5b3cc4",
+    borderColor: "#A97920",
+    borderWidth: 2.5,
   },
 
-  avatarText: {
-    color: "#5b3cc4",
-    fontSize: 21,
-    fontWeight: "800",
+  avatarOnlineDot: {
+    position: "absolute",
+    right: 0,
+    bottom: 1,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#35A978",
+    borderWidth: 2,
+    borderColor: "#FFFEFC",
   },
 
-  avatarTextSelected: {
-    color: "#FFFCFA",
-  },
-
-  /*
-   * KONUŞMA İÇERİĞİ
-   */
   conversationContent: {
     flex: 1,
     minWidth: 0,
-
     justifyContent: "center",
   },
 
-  /*
-   * KULLANICI ADI
-   */
+  topLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minWidth: 0,
+  },
+
   name: {
-    color: "#29252f",
-
-    fontSize: 17,
-    lineHeight: 22,
-
+    flex: 1,
+    minWidth: 0,
+    color: "#42152F",
+    fontSize: 15,
+    lineHeight: 21,
     fontWeight: "800",
-
-    marginBottom: 3,
+    marginRight: 8,
   },
 
   nameSelected: {
-    color: "#4d35a8",
+    color: "#7A1D43",
   },
 
-  /*
-   * DURUM
-   */
+  date: {
+    color: "#92774C",
+    fontSize: 10,
+    fontWeight: "700",
+  },
+
+  dateSelected: {
+    color: "#A77820",
+  },
+
+  bottomLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 6,
+  },
+
+  messageInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
   statusContainer: {
     flexDirection: "row",
     alignItems: "center",
-
-    marginBottom: 3,
+    marginBottom: 4,
   },
 
   statusDot: {
-    width: 8,
-    height: 8,
-
+    width: 7,
+    height: 7,
     borderRadius: 4,
-
-    marginRight: 5,
+    marginRight: 6,
   },
 
   activeDot: {
-    backgroundColor: "#2e9d55",
+    backgroundColor: "#35A978",
   },
 
   inactiveDot: {
-    backgroundColor: "#999999",
+    backgroundColor: "#B9A88C",
   },
 
   statusText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: "600",
   },
 
   activeText: {
-    color: "#218838",
+    color: "#279B70",
   },
 
   inactiveText: {
-    color: "#888888",
+    color: "#917F70",
   },
 
-  /*
-   * SON MESAJ
-   */
   lastMessage: {
-    color: "#707070",
-
-    fontSize: 14,
-    lineHeight: 19,
-
-    marginTop: 1,
-
-    paddingRight: 4,
+    color: "#81716C",
+    fontSize: 12,
+    lineHeight: 18,
+    paddingRight: 5,
   },
 
   lastMessageSelected: {
-    color: "#5b3cc4",
+    color: "#71334B",
     fontWeight: "600",
   },
 
-  /*
-   * TARİH
-   */
-  date: {
-    color: "#999999",
-
-    fontSize: 10,
-
-    marginTop: 4,
-  },
-
-  dateSelected: {
-    color: "#7b61c9",
-  },
-
-  /*
-   * SAĞ OK
-   */
   arrow: {
-    color: "#aaa3bd",
-
-    fontSize: 30,
-    fontWeight: "300",
-
-    marginLeft: 8,
-
-    width: 20,
-
+    color: "#C3973F",
+    fontSize: 29,
+    fontWeight: "400",
+    marginLeft: 7,
+    width: 16,
     textAlign: "center",
   },
 
-  /*
-   * BOŞ LİSTE
-   */
+  arrowSelected: {
+    color: "#95651A",
+  },
+
   emptyContainer: {
     flex: 1,
-
     alignItems: "center",
     justifyContent: "center",
-
     paddingHorizontal: 35,
   },
 
   emptyIconContainer: {
-    width: 78,
-    height: 78,
-
-    borderRadius: 39,
-
+    width: 80,
+    height: 80,
+    borderRadius: 27,
     alignItems: "center",
     justifyContent: "center",
-
-    backgroundColor: "#eeeaff",
-
+    backgroundColor: "#FFF3D9",
+    borderWidth: 1.8,
+    borderColor: "#D6AD58",
     marginBottom: 18,
   },
 
   emptyIcon: {
-    fontSize: 38,
+    color: "#A97920",
+    fontSize: 45,
+    lineHeight: 50,
   },
 
   emptyTitle: {
-    color: "#5b3cc4",
-
-    fontSize: 19,
-
+    color: "#42152F",
+    fontSize: 18,
     fontWeight: "800",
-
     textAlign: "center",
-
-    marginBottom: 8,
+    marginBottom: 9,
   },
 
   emptyText: {
-    color: "#888888",
-
-    fontSize: 14,
+    color: "#917F70",
+    fontSize: 13,
     lineHeight: 21,
-
     textAlign: "center",
   },
 });

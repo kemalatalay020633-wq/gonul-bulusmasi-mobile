@@ -2,9 +2,8 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import BegenenlerScreen from "../app/begenenler";
-
+import BildirimlerScreen from "../app/bildirimler";
 import EmailDogrulamaScreen from "../app/email-dogrulama";
-
 import FavorilerimeEkleyenlerScreen from "../app/favorilerime-ekleyenler";
 import HomeScreen from "../app/home";
 import IndexScreen from "../app/index";
@@ -16,18 +15,19 @@ import ProfileEditScreen from "../app/profile/edit";
 import ProfilimeBakanlarScreen from "../app/profilime-bakanlar";
 import RegisterScreen from "../app/register";
 import SettingsScreen from "../app/settings";
+import SifreSifirlamaScreen from "../app/sifre-sifirlama";
+import SikayetEkrani from "../app/sikayet";
 import UserScreen from "../app/user/[id]";
 import UserDetailsScreen from "../app/user/details/[id]";
 
+import { navigationRef } from "./navigationService";
 import type { RootStackParamList } from "./types";
-
-import SifreSifirlamaScreen from "../app/sifre-sifirlama";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function AppNavigator() {
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef}>
       <Stack.Navigator
         initialRouteName="index"
         screenOptions={{
@@ -35,17 +35,25 @@ export default function AppNavigator() {
         }}
       >
         <Stack.Screen name="index" component={IndexScreen} />
+
         <Stack.Screen name="home" component={HomeScreen} />
+
         <Stack.Screen name="register" component={RegisterScreen} />
+
+        <Stack.Screen name="bildirimler" component={BildirimlerScreen} />
 
         <Stack.Screen name="emailDogrulama" component={EmailDogrulamaScreen} />
 
         <Stack.Screen name="sifreSifirlama" component={SifreSifirlamaScreen} />
 
         <Stack.Screen name="messages" component={MessagesScreen} />
+
         <Stack.Screen name="premium" component={PremiumScreen} />
+
         <Stack.Screen name="profile" component={ProfileScreen} />
+
         <Stack.Screen name="profileEdit" component={ProfileEditScreen} />
+
         <Stack.Screen name="settings" component={SettingsScreen} />
 
         <Stack.Screen name="begenenler" component={BegenenlerScreen} />
@@ -65,6 +73,8 @@ export default function AppNavigator() {
         <Stack.Screen name="user" component={UserScreen} />
 
         <Stack.Screen name="userDetails" component={UserDetailsScreen} />
+
+        <Stack.Screen name="sikayet" component={SikayetEkrani} />
       </Stack.Navigator>
     </NavigationContainer>
   );

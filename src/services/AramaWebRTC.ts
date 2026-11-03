@@ -635,7 +635,9 @@ class AramaWebRTC {
     console.log(" Arama türü:", aramaTuru);
 
     console.log("======================================");
-  } /*\*
+  }
+
+  /*\*
 
 
 
@@ -1641,7 +1643,9 @@ class AramaWebRTC {
 
       this.olayCalistir("hata", error);
     }
-  } /*\*
+  }
+
+  /*\*
 
 
 
@@ -1673,16 +1677,12 @@ class AramaWebRTC {
 
       const stream = await mediaDevices.getUserMedia({
         audio: true,
-
         video:
           this.aramaTuru === "VIDEO"
             ? {
                 facingMode: "user",
-
                 width: 640,
-
                 height: 480,
-
                 frameRate: 30,
               }
             : false,
@@ -1870,15 +1870,26 @@ class AramaWebRTC {
     };
 
     peerConnection.onicecandidate = (event: any) => {
-      if (!event.candidate) {
-        console.log(" ICE Candidate üretimi tamamlandı.");
+      // Eski veya kapatılmış aramanın ICE sinyalini gönderme.
+      if (
+        this.aramaSonlandiriliyor ||
+        this.peerConnection !== peerConnection ||
+        !this.aramaOturumId
+      ) {
+        console.log(
+          "ICE adayı yok sayıldı: arama kapalı veya oturum değişmiş.",
+        );
+        return;
+      }
 
+      if (!event.candidate) {
+        console.log("ICE Candidate üretimi tamamlandı.");
         return;
       }
 
       const aday = event.candidate.toJSON();
 
-      console.log(" ICE Candidate üretildi.");
+      console.log("ICE Candidate üretildi.");
 
       this.iceGonder(aday);
     };
@@ -1924,29 +1935,37 @@ class AramaWebRTC {
     peerConnection.oniceconnectionstatechange = () => {
       const durum = peerConnection.iceConnectionState;
 
-      console.log(" ICE durumu:", durum);
+      console.log("📡 ICE DURUMU:", durum);
+      console.log("📡 PEER CONNECTION DURUMU:", peerConnection.connectionState);
+      console.log("📡 SIGNALING DURUMU:", peerConnection.signalingState);
+      console.log("📡 ICE GATHERING DURUMU:", peerConnection.iceGatheringState);
 
       if (durum === "connected" || durum === "completed") {
-        console.log(" ICE BAĞLANTISI KURULDU:", durum);
+        console.log("✅ ICE BAĞLANTISI KURULDU:", durum);
       }
 
       if (durum === "failed") {
-        console.error(" ICE BAĞLANTISI BAŞARISIZ.");
+        console.error("❌ ICE BAĞLANTISI BAŞARISIZ.");
 
         this.olayCalistir(
           "hata",
-
           new Error("WebRTC ICE bağlantısı kurulamadı."),
         );
+      }
+
+      if (durum === "disconnected") {
+        console.warn("⚠️ ICE BAĞLANTISI KESİLDİ.");
+      }
+
+      if (durum === "checking") {
+        console.log("⏳ ICE bağlantı yolu kontrol ediliyor.");
       }
     };
 
     peerConnection.onicecandidateerror = (event: any) => {
-      console.error(" ICE CANDIDATE ERROR:", {
+      console.error("❌ ICE CANDIDATE ERROR:", {
         errorCode: event?.errorCode,
-
         errorText: event?.errorText,
-
         url: event?.url,
       });
     };
@@ -2198,8 +2217,12 @@ class AramaWebRTC {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
       throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
-
     console.log(" Gelen teklif kabul ediliyor.");
+    if (!this.aramaOturumId) {
+      throw new Error("Gelen arama oturum kimliği bulunamadı.");
+    }
+
+    console.log("Gelen arama oturum kimliği mevcut.");
 
     if (!this.hariciSinyalGonderici) {
       await this.webSocketBaglantisiAc();
@@ -2257,7 +2280,9 @@ class AramaWebRTC {
 
       sdp: answer.sdp,
     };
-  } /*\*
+  }
+
+  /*\*
 
 
 

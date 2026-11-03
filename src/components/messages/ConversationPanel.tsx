@@ -5,6 +5,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Linking,
   Modal,
   Pressable,
   StyleSheet,
@@ -13,8 +14,8 @@ import {
 } from "react-native";
 import * as RNFS from "react-native-fs";
 import Video from "react-native-video";
-
 import { RTCView } from "react-native-webrtc";
+import type { MediaType } from "../../hooks/useMessages";
 import aramaWebRTC, { type AramaTuru } from "../../services/AramaWebRTC";
 
 import type { MessageDto } from "../../types/message";
@@ -22,8 +23,6 @@ import type { MessageMediaDto } from "../../types/messageMedia";
 
 import { Hoparlor } from "../../services/Hoparlor";
 import MessageInput from "./MessageInput";
-
-type MediaType = "image" | "video" | "audio" | "file";
 
 type RTCSessionDescriptionInit = {
   type: "offer" | "answer" | "pranswer" | "rollback";
@@ -79,6 +78,15 @@ type ConversationPanelProps = {
 
   onStopRecording: () => void;
 
+  // Kullanıcı engelleme
+  benEngelledim: boolean;
+  beniEngelledi: boolean;
+  engellemeYukleniyor: boolean;
+  engellemeIslemiYapiliyor: boolean;
+  engellemeHatasi: string | null;
+  onEngelle: () => void;
+  onEngeliKaldir: () => void;
+  onSikayetEt: () => void;
   onSesliArama: () => void;
 
   onGoruntuluArama: () => void;
@@ -195,6 +203,14 @@ function ConversationPanel({
 
   onStopRecording,
 
+  benEngelledim,
+  beniEngelledi,
+  engellemeYukleniyor,
+  engellemeIslemiYapiliyor,
+  engellemeHatasi,
+  onEngelle,
+  onEngeliKaldir,
+  onSikayetEt,
   onSesliArama,
 
   onGoruntuluArama,
@@ -207,7 +223,36 @@ function ConversationPanel({
 }: ConversationPanelProps) {
   const listeRef = useRef<FlatList<MessageDto>>(null);
 
+  const engellemeButonunaBas = () => {
+    if (engellemeIslemiYapiliyor || engellemeYukleniyor || beniEngelledi) {
+      return;
+    }
+
+    if (benEngelledim) {
+      Alert.alert(
+        "Engeli kaldır",
+        `${selectedUserName} kullanıcısının engelini kaldırmak istiyor musunuz?`,
+        [
+          { text: "Vazgeç", style: "cancel" },
+          { text: "Engeli kaldır", onPress: onEngeliKaldir },
+        ],
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Kullanıcıyı engelle",
+      `${selectedUserName} kullanıcısını engellemek istiyor musunuz? Engelleme sırasında mesajlaşma ve arama kullanılamaz.`,
+      [
+        { text: "Vazgeç", style: "cancel" },
+        { text: "Engelle", style: "destructive", onPress: onEngelle },
+      ],
+    );
+  };
+
   const [videoOynatmaUri, setVideoOynatmaUri] = useState<string | null>(null);
+  const [sesOynatmaUri, setSesOynatmaUri] = useState<string | null>(null);
+  const [islemMenusuAcik, setIslemMenusuAcik] = useState(false);
 
   /*
    * ============================================================
@@ -385,7 +430,8 @@ function ConversationPanel({
       aramaWebRTC.olayDinle("teklif", (mesaj) => {
         console.log("======================================");
         console.log("📲 GELEN ARAMA EVENT");
-        console.log("📲 Mesaj:", mesaj);
+        console.log("📲 Arayan kullanıcı:", mesaj.arayanId);
+        console.log("📞 Arama türü:", mesaj.aramaTuru);
         console.log("======================================");
 
         if (currentUserId === null) {
@@ -393,13 +439,14 @@ function ConversationPanel({
           return;
         }
 
-        // Önceki aramadan kalan UI kilidini yeni arama için sıfırla.
+        // Önceki aramadan kalan sonlandırma kilidini sıfırla.
         aramaSonlandirmaRef.current = false;
 
         console.log("🔓 Yeni gelen arama için sonlandırma kilidi sıfırlandı.");
 
-        // Gelen aramanın WebRTC oturum bilgilerini ayarla.
-        aramaWebRTC.ayarla(currentUserId, mesaj.arayanId, mesaj.aramaTuru);
+        // ÖNEMLİ:
+        // Burada aramaWebRTC.ayarla() çağrılmıyor.
+        // Gelen teklifin oturum kimliği korunmalı.
 
         setAramaTuru(mesaj.aramaTuru);
         setHoparlorAcik(mesaj.aramaTuru === "VIDEO");
@@ -413,7 +460,6 @@ function ConversationPanel({
         console.log("📞 Arama türü:", mesaj.aramaTuru);
       }),
     );
-
     /*
      * ============================================================
      * CEVAP
@@ -705,6 +751,14 @@ function ConversationPanel({
   }, []);
 
   const aramaBaslat = async (tur: AramaTuru) => {
+    if (benEngelledim || beniEngelledi) {
+      Alert.alert(
+        "Arama yapılamadı",
+        "Engelleme nedeniyle arama kullanılamıyor.",
+      );
+      return;
+    }
+
     if (currentUserId === null || selectedUserId === null) {
       Alert.alert("Arama yapılamadı", "Önce bir kullanıcı seçmelisiniz.");
       return;
@@ -751,25 +805,26 @@ function ConversationPanel({
     }
 
     try {
-      // Önceki görüşmeden kalan kilit gelen çağrının kabulünü engellemesin.
+      // Önceki görüşmeden kalan kilidi kaldır.
       aramaSonlandirmaRef.current = false;
-      aramaWebRTC.ayarla(currentUserId, aramaArayanId, aramaTuru);
 
+      // Gelen aramanın oturum kimliğini değiştirme.
       setHoparlorAcik(aramaTuru === "VIDEO");
-      setAramaDurumu("ARAMA_YAPILIYOR");
+      setAramaDurumu("GELEN_ARAMA");
 
       await aramaWebRTC.teklifiKabulEt(gelenTeklif);
 
-      // Aranan tarafın kendi kamera görüntüsünü de garanti et.
       yerelStreamiGoster();
       setGelenTeklif(null);
       aramaAkisiniGuncelle();
     } catch (error) {
       console.error("GELEN ARAMA KABUL HATASI:", error);
+
       Alert.alert(
         "Arama kabul edilemedi",
         error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
       );
+
       await aramaTemizle();
     }
   };
@@ -889,33 +944,24 @@ function ConversationPanel({
           "Oturum gerekli",
           "Medya açmak için tekrar giriş yapmanız gerekiyor.",
         );
-
         return;
       }
 
       const url = getMediaUrl(media.mediaUrl);
+      const mimeType = media.mimeType?.trim().toLowerCase() || "";
 
       console.log("MEDYA AUTHENTICATED OPEN BAŞLADI:", {
         mediaId: media.id,
         fileName: media.fileName,
-        mimeType: media.mimeType,
+        mimeType,
+        type: media.type,
         url,
       });
 
-      /*
-       * Korunan medya URL'si doğrudan
-       * Linking.openURL ile açılırsa Authorization
-       * header gitmez.
-       *
-       * Önce JWT ile indiriyoruz.
-       */
-
       const response = await fetch(url, {
         method: "GET",
-
         headers: {
           Authorization: `Bearer ${token}`,
-
           Accept: "*/*",
         },
       });
@@ -964,9 +1010,7 @@ function ConversationPanel({
 
       if (!blob || blob.size <= 0) {
         console.error("MEDYA BOŞ GELDİ:", media.id);
-
         Alert.alert("Hata", "Medya dosyası boş geldi.");
-
         return;
       }
 
@@ -978,9 +1022,7 @@ function ConversationPanel({
 
           if (typeof result !== "string" || !result.startsWith("data:")) {
             console.error("MEDYA DATA URI OLUŞTURULAMADI:", media.id);
-
             Alert.alert("Hata", "Medya dosyası hazırlanamadı.");
-
             return;
           }
 
@@ -988,56 +1030,41 @@ function ConversationPanel({
 
           if (!base64) {
             console.error("MEDYA BASE64 VERİSİ OLUŞTURULAMADI:", media.id);
-
             Alert.alert("Hata", "Medya verisi hazırlanamadı.");
-
             return;
           }
+
+          const mimeUzantilari: Record<string, string> = {
+            "video/mp4": ".mp4",
+            "video/webm": ".webm",
+            "video/quicktime": ".mov",
+            "video/x-msvideo": ".avi",
+            "audio/mpeg": ".mp3",
+            "audio/mp3": ".mp3",
+            "audio/wav": ".wav",
+            "audio/x-wav": ".wav",
+            "audio/ogg": ".ogg",
+            "audio/webm": ".webm",
+            "audio/mp4": ".m4a",
+            "audio/x-m4a": ".m4a",
+            "audio/aac": ".aac",
+            "audio/flac": ".flac",
+            "image/jpeg": ".jpg",
+            "image/png": ".png",
+            "image/webp": ".webp",
+            "image/gif": ".gif",
+          };
 
           let uzanti = "";
 
           if (media.fileName && media.fileName.includes(".")) {
-            uzanti = media.fileName.substring(media.fileName.lastIndexOf("."));
-          }
-
-          if (!uzanti && media.mimeType) {
-            const mimeUzantilari: Record<string, string> = {
-              "video/mp4": ".mp4",
-
-              "video/webm": ".webm",
-
-              "video/quicktime": ".mov",
-
-              "video/x-msvideo": ".avi",
-
-              "audio/mpeg": ".mp3",
-
-              "audio/mp3": ".mp3",
-
-              "audio/wav": ".wav",
-
-              "audio/ogg": ".ogg",
-
-              "audio/webm": ".webm",
-
-              "audio/mp4": ".m4a",
-
-              "audio/x-m4a": ".m4a",
-
-              "image/jpeg": ".jpg",
-
-              "image/png": ".png",
-
-              "image/webp": ".webp",
-
-              "image/gif": ".gif",
-            };
-
-            uzanti = mimeUzantilari[media.mimeType] || "";
+            uzanti = media.fileName
+              .substring(media.fileName.lastIndexOf("."))
+              .toLowerCase();
           }
 
           if (!uzanti) {
-            uzanti = ".bin";
+            uzanti = mimeUzantilari[mimeType] || ".bin";
           }
 
           const temizDosyaAdi = (media.fileName || `medya_${media.id}${uzanti}`)
@@ -1052,9 +1079,7 @@ function ConversationPanel({
 
           if (!cacheDirectory) {
             console.error("CACHE DIRECTORY BULUNAMADI:", media.id);
-
             Alert.alert("Hata", "Cihazın geçici dosya alanı bulunamadı.");
-
             return;
           }
 
@@ -1068,54 +1093,66 @@ function ConversationPanel({
             fileName: dosyaAdi,
             localUri: dosyaUri,
             size: blob.size,
+            mimeType,
           });
 
           /*
-           * ====================================================
-           * VİDEO
-           * ====================================================
+           * VİDEO: Mevcut MP4 oynatma akışı korunuyor.
            */
+          const videoMu =
+            media.type === "VIDEO" ||
+            mimeType.startsWith("video/") ||
+            /\.(mp4|webm|mov|avi|m4v)$/i.test(dosyaAdi);
 
-          if (media.type === "VIDEO" || media.mimeType?.startsWith("video/")) {
+          if (videoMu) {
             console.log("MEDYA VİDEO UYGULAMA İÇİNDE AÇILIYOR:", {
               mediaId: media.id,
-
               fileName: dosyaAdi,
-
               localUri: dosyaUri,
-
-              mimeType: media.mimeType || "video/mp4",
+              mimeType: mimeType || "video/mp4",
             });
 
             setVideoOynatmaUri(dosyaUri);
-
             return;
           }
 
           /*
-           * ====================================================
-           * DİĞER DOSYALAR
-           * ====================================================
+           * SES: M4A, MP3, WAV, OGG, AAC ve FLAC.
            */
+          const sesMi =
+            media.type === "AUDIO" ||
+            mimeType.startsWith("audio/") ||
+            /\.(m4a|mp3|wav|ogg|aac|flac)$/i.test(dosyaAdi);
 
+          if (sesMi) {
+            console.log("MEDYA SES OYNATMA İÇİN AÇILIYOR:", {
+              mediaId: media.id,
+              fileName: dosyaAdi,
+              localUri: dosyaUri,
+              mimeType,
+            });
+
+            setSesOynatmaUri(dosyaUri);
+            return;
+          }
+
+          /*
+           * DİĞER DOSYALAR
+           */
           console.log("MEDYA LOCAL DOSYA URI HAZIR:", {
             mediaId: media.id,
-
             fileName: dosyaAdi,
-
             localUri: dosyaUri,
-
-            mimeType: media.mimeType || "application/octet-stream",
+            mimeType: mimeType || "application/octet-stream",
           });
 
           Alert.alert(
-            "Dosya hazır",
-            "Bu medya türü için Android dış uygulama açma desteği ayrıca yapılandırılabilir.",
+            "Dosya indirildi",
+            `${dosyaAdi} geçici olarak cihazda hazırlandı. Bu dosya türü için ayrıca dosya açma desteği gerekir.`,
           );
         } catch (error) {
           console.error("MEDYA LOCAL DOSYA HATASI:", {
             mediaId: media.id,
-
             error,
           });
 
@@ -1126,7 +1163,6 @@ function ConversationPanel({
       reader.onerror = (error) => {
         console.error("MEDYA FILEREADER HATASI:", {
           mediaId: media.id,
-
           error,
         });
 
@@ -1137,7 +1173,6 @@ function ConversationPanel({
     } catch (error) {
       console.error("MEDYA AUTHENTICATED OPEN EXCEPTION:", {
         mediaId: media.id,
-
         error,
       });
 
@@ -1474,7 +1509,7 @@ function ConversationPanel({
             <Text style={styles.mediaTitle}>Ses</Text>
 
             <Text style={styles.mediaFileName} numberOfLines={1}>
-              {media.fileName || "Ses dosyasını aç"}
+              Ses kaydını dinlemek için dokunun
             </Text>
           </View>
 
@@ -1560,14 +1595,48 @@ function ConversationPanel({
       currentUserId !== null && Number(item.senderId) === Number(currentUserId);
 
     const medias = messageMedias[item.id] || [];
-
     const gonderenAdi = kendiMesaji ? "Siz" : selectedUserName;
+
+    // Konum bağlantısını bul
+    const konumBaglantisi =
+      item.content?.match(/https?:\/\/[^\s]+/i)?.[0]?.replace(/[),.;]+$/, "") ??
+      null;
+
+    // Google Maps bağlantısı mı?
+    const konumMesaji =
+      !!konumBaglantisi &&
+      /google\.[^/]+\/maps|maps\.app\.goo\.gl|goo\.gl\/maps/i.test(
+        konumBaglantisi,
+      );
+
+    // Konumu aç
+    const konumuAc = async () => {
+      console.log("📍 KONUM KARTINA BASILDI");
+      console.log("📍 MESAJ ID:", item.id);
+      console.log("📍 KONUM URL:", konumBaglantisi);
+
+      if (!konumBaglantisi) {
+        Alert.alert("Konum hatası", "Konum bağlantısı bulunamadı.");
+        return;
+      }
+
+      try {
+        await Linking.openURL(konumBaglantisi);
+        console.log("✅ GOOGLE MAPS AÇILDI");
+      } catch (error) {
+        console.error("❌ KONUM AÇMA HATASI:", error);
+
+        Alert.alert(
+          "Konum açılamadı",
+          "Harita bağlantısı açılırken bir hata oluştu.",
+        );
+      }
+    };
 
     return (
       <View
         style={[
           styles.messageRow,
-
           kendiMesaji ? styles.messageRowMine : styles.messageRowOther,
         ]}
       >
@@ -1575,31 +1644,90 @@ function ConversationPanel({
           <View
             style={[
               styles.messageBubble,
-
               kendiMesaji
                 ? styles.messageBubbleMine
                 : styles.messageBubbleOther,
             ]}
           >
             {item.content ? (
-              <Text
-                style={[
-                  styles.messageContent,
+              konumMesaji ? (
+                <Pressable
+                  style={[
+                    styles.konumKarti,
+                    {
+                      backgroundColor: kendiMesaji
+                        ? "rgba(214,173,88,0.13)"
+                        : "#FFF9EF",
+                    },
+                  ]}
+                  onPress={() => {
+                    void konumuAc();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Paylaşılan konumu haritada aç"
+                  android_ripple={{
+                    color: "rgba(143,35,72,0.15)",
+                  }}
+                >
+                  <View style={styles.konumIkonAlani}>
+                    <Text style={styles.konumIkon}>📍</Text>
+                  </View>
 
-                  kendiMesaji
-                    ? styles.messageContentMine
-                    : styles.messageContentOther,
-                ]}
-              >
-                {item.content}
-              </Text>
+                  <View style={styles.konumBilgiAlani}>
+                    <Text
+                      style={[
+                        styles.konumBaslik,
+                        {
+                          color: kendiMesaji ? "#E5C477" : "#A77A2D",
+                        },
+                      ]}
+                    >
+                      Konum paylaşıldı
+                    </Text>
+
+                    <Text
+                      style={[
+                        styles.konumAltYazi,
+                        {
+                          color: kendiMesaji
+                            ? "rgba(255,255,255,0.80)"
+                            : "#777777",
+                        },
+                      ]}
+                    >
+                      Haritada görüntülemek için dokunun
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={[
+                      styles.konumOk,
+                      {
+                        color: kendiMesaji ? "#E5C477" : "#A77A2D",
+                      },
+                    ]}
+                  >
+                    ↗
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text
+                  style={[
+                    styles.messageContent,
+                    kendiMesaji
+                      ? styles.messageContentMine
+                      : styles.messageContentOther,
+                  ]}
+                >
+                  {item.content}
+                </Text>
+              )
             ) : null}
 
             {medias.length > 0 && (
               <View
                 style={[
                   styles.mediaList,
-
                   item.content ? styles.mediaWithText : styles.mediaWithoutText,
                 ]}
               >
@@ -1611,7 +1739,6 @@ function ConversationPanel({
               <Text
                 style={[
                   styles.messageTime,
-
                   kendiMesaji
                     ? styles.messageTimeMine
                     : styles.messageTimeOther,
@@ -1619,6 +1746,7 @@ function ConversationPanel({
               >
                 {(() => {
                   const tarih = new Date(item.sentAt);
+
                   return Number.isNaN(tarih.getTime())
                     ? formatDate(item.sentAt)
                     : tarih.toLocaleTimeString("tr-TR", {
@@ -1633,7 +1761,6 @@ function ConversationPanel({
                   <Text
                     style={[
                       styles.readStatus,
-
                       item.read
                         ? styles.readStatusRead
                         : styles.readStatusUnread,
@@ -1647,21 +1774,15 @@ function ConversationPanel({
                     onPress={() => {
                       Alert.alert(
                         "Mesajı Sil",
-
                         "Bu mesajı silmek istediğinize emin misiniz?",
-
                         [
                           {
                             text: "Vazgeç",
-
                             style: "cancel",
                           },
-
                           {
                             text: "Sil",
-
                             style: "destructive",
-
                             onPress: () => onDeleteMessage(Number(item.id)),
                           },
                         ],
@@ -1678,7 +1799,6 @@ function ConversationPanel({
       </View>
     );
   };
-
   /*
    * ============================================================
    * KONUŞMA SEÇİLİ DEĞİL
@@ -1764,42 +1884,48 @@ function ConversationPanel({
             <Pressable
               style={styles.ustAramaButonu}
               onPress={() => void aramaBaslat("VIDEO")}
+              accessibilityRole="button"
               accessibilityLabel="Görüntülü ara"
+              hitSlop={6}
             >
-              <VideoIcon size={23} color="#E53935" strokeWidth={2} />
+              <VideoIcon size={20} color="#A77A2D" strokeWidth={2.1} />
             </Pressable>
             <Pressable
               style={styles.ustAramaButonu}
               onPress={() => void aramaBaslat("SES")}
+              accessibilityRole="button"
               accessibilityLabel="Sesli ara"
+              hitSlop={6}
             >
-              <PhoneCall size={23} color="#852B49" strokeWidth={2} />
+              <PhoneCall size={20} color="#A77A2D" strokeWidth={2.1} />
             </Pressable>
             <Pressable
-              style={[
-                styles.aramaIzniButonu,
-                aramaIzniAktif
-                  ? styles.aramaIzniButonuAktif
-                  : styles.aramaIzniButonuPasif,
-                aramaIzniYukleniyor && styles.aramaIzniButonuDevreDisi,
-              ]}
-              onPress={onAramaIzniDegistir}
-              disabled={aramaIzniYukleniyor}
+              style={styles.menuButonu}
+              onPress={() => setIslemMenusuAcik(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Konuşma işlemleri"
+              hitSlop={6}
             >
-              <Text style={styles.aramaIzniButonuIkon}>
-                {aramaIzniAktif ? "📵" : "📞"}
-              </Text>
-
-              <Text style={styles.aramaIzniButonuMetni} numberOfLines={1}>
-                {aramaIzniYukleniyor
-                  ? "Kontrol..."
-                  : aramaIzniAktif
-                    ? "İzni Geri Al"
-                    : "Arama İzni Ver"}
-              </Text>
+              <Text style={styles.menuButonuIkon}>⋮</Text>
             </Pressable>
           </View>
         </View>
+
+        {engellemeHatasi ? (
+          <View style={styles.engellemeHataAlani}>
+            <Text style={styles.engellemeHataMetni}>{engellemeHatasi}</Text>
+          </View>
+        ) : null}
+
+        {benEngelledim || beniEngelledi ? (
+          <View style={styles.engellemeBilgiAlani}>
+            <Text style={styles.engellemeBilgiMetni}>
+              {benEngelledim
+                ? "Bu kullanıcıyı engellediniz. Mesajlaşma ve arama kullanılamaz."
+                : "Bu kullanıcı sizi engelledi. Mesajlaşma ve arama kullanılamaz."}
+            </Text>
+          </View>
+        ) : null}
 
         {/* =====================================================
             MESAJLAR
@@ -1864,23 +1990,119 @@ function ConversationPanel({
           =================================================== */}
 
           <View style={styles.mesajInputAlani}>
-            <MessageInput
-              messageText={messageText}
-              sending={sending}
-              mediaSending={mediaSending}
-              recording={recording}
-              recordingSeconds={recordingSeconds}
-              mediaMenuOpen={mediaMenuOpen}
-              onMessageTextChange={onMessageTextChange}
-              onSendMessage={onSendMessage}
-              onMediaButtonClick={onMediaButtonClick}
-              onOpenMediaPicker={onOpenMediaPicker}
-              onStartRecording={onStartRecording}
-              onStopRecording={onStopRecording}
-            />
+            {benEngelledim || beniEngelledi ? (
+              <View style={styles.engellemeInputKapali}>
+                <Text style={styles.engellemeInputKapaliMetni}>
+                  Engelleme nedeniyle mesaj gönderemezsiniz.
+                </Text>
+              </View>
+            ) : (
+              <MessageInput
+                messageText={messageText}
+                sending={sending}
+                mediaSending={mediaSending}
+                recording={recording}
+                recordingSeconds={recordingSeconds}
+                mediaMenuOpen={mediaMenuOpen}
+                onMessageTextChange={onMessageTextChange}
+                onSendMessage={onSendMessage}
+                onMediaButtonClick={onMediaButtonClick}
+                onOpenMediaPicker={onOpenMediaPicker}
+                onStartRecording={onStartRecording}
+                onStopRecording={onStopRecording}
+              />
+            )}
           </View>
         </View>
       </View>
+
+      <Modal
+        visible={islemMenusuAcik}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setIslemMenusuAcik(false)}
+      >
+        <Pressable
+          style={styles.islemMenusuArkaPlan}
+          onPress={() => setIslemMenusuAcik(false)}
+        >
+          <Pressable style={styles.islemMenusuKart} onPress={() => {}}>
+            <Text style={styles.islemMenusuBaslik}>Konuşma işlemleri</Text>
+
+            {/* ARAMA İZNİ */}
+            <Pressable
+              style={styles.islemMenusuSatir}
+              onPress={() => {
+                setIslemMenusuAcik(false);
+                onAramaIzniDegistir();
+              }}
+              disabled={aramaIzniYukleniyor}
+            >
+              <Text style={styles.islemMenusuIkon}>☎</Text>
+              <Text style={styles.islemMenusuMetin}>
+                {aramaIzniYukleniyor
+                  ? "İzin durumu kontrol ediliyor..."
+                  : aramaIzniAktif
+                    ? "Arama iznini geri al"
+                    : "Arama izni ver"}
+              </Text>
+            </Pressable>
+
+            <View style={styles.islemMenusuAyirici} />
+
+            {/* ŞİKÂYET ET */}
+            <Pressable
+              style={styles.islemMenusuSatir}
+              onPress={() => {
+                setIslemMenusuAcik(false);
+                onSikayetEt();
+              }}
+            >
+              <Text style={styles.islemMenusuIkon}>⚑</Text>
+              <Text
+                style={[styles.islemMenusuMetin, styles.islemMenusuTehlike]}
+              >
+                Şikâyet Et
+              </Text>
+            </Pressable>
+
+            <View style={styles.islemMenusuAyirici} />
+
+            {/* KULLANICIYI ENGELLE / ENGELİ KALDIR */}
+            <Pressable
+              style={styles.islemMenusuSatir}
+              onPress={() => {
+                setIslemMenusuAcik(false);
+                engellemeButonunaBas();
+              }}
+              disabled={
+                engellemeYukleniyor || engellemeIslemiYapiliyor || beniEngelledi
+              }
+            >
+              <Text style={styles.islemMenusuIkon}>⊘</Text>
+
+              <Text
+                style={[
+                  styles.islemMenusuMetin,
+                  styles.islemMenusuTehlike,
+                  (engellemeYukleniyor ||
+                    engellemeIslemiYapiliyor ||
+                    beniEngelledi) &&
+                    styles.islemMenusuDevreDisi,
+                ]}
+              >
+                {engellemeYukleniyor || engellemeIslemiYapiliyor
+                  ? "İşlem yapılıyor..."
+                  : beniEngelledi
+                    ? "Bu kullanıcı sizi engelledi"
+                    : benEngelledim
+                      ? "Engeli kaldır"
+                      : "Kullanıcıyı engelle"}
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* =======================================================
           WEBRTC ARAMA OVERLAY
@@ -1973,7 +2195,7 @@ function ConversationPanel({
                 onPress={() => void gelenAramayiKabulEt()}
               >
                 <Text style={styles.aramaKontrolIkon}>✓</Text>
-                <Text style={styles.aramaKontrolMetni}>Kabul Et2</Text>
+                <Text style={styles.aramaKontrolMetni}>Kabul Et</Text>
               </Pressable>
             </View>
           ) : (
@@ -2039,7 +2261,7 @@ function ConversationPanel({
                 onPress={() => void aramaTemizle()}
               >
                 <Text style={styles.aramaKontrolIkon}>🔴</Text>
-                <Text style={styles.aramaKontrolMetni}>Kapat2</Text>
+                <Text style={styles.aramaKontrolMetni}>Kapat</Text>
               </Pressable>
             </View>
           )}
@@ -2066,6 +2288,51 @@ function ConversationPanel({
         visible={videoOynatmaUri !== null}
         onClose={() => setVideoOynatmaUri(null)}
       />
+
+      <Modal
+        visible={sesOynatmaUri !== null}
+        animationType="fade"
+        onRequestClose={() => setSesOynatmaUri(null)}
+      >
+        <View style={styles.videoModalContainer}>
+          <Pressable
+            style={styles.videoCloseButton}
+            onPress={() => setSesOynatmaUri(null)}
+          >
+            <Text style={styles.videoCloseButtonText}>✕</Text>
+          </Pressable>
+
+          <Text
+            style={{
+              color: "#FFFFFF",
+              fontSize: 20,
+              marginBottom: 20,
+            }}
+          >
+            🎵 Ses kaydı
+          </Text>
+
+          {sesOynatmaUri !== null && (
+            <Video
+              key={sesOynatmaUri}
+              source={{ uri: sesOynatmaUri }}
+              style={{ width: "100%", height: 100 }}
+              controls={true}
+              paused={false}
+              repeat={false}
+              playInBackground={false}
+              playWhenInactive={false}
+              onError={(error) => {
+                console.error("SES OYNATMA HATASI:", error);
+                Alert.alert(
+                  "Ses oynatılamadı",
+                  "Ses dosyasının biçimi veya içeriği desteklenmiyor.",
+                );
+              }}
+            />
+          )}
+        </View>
+      </Modal>
     </>
   );
 }
@@ -2090,7 +2357,7 @@ const styles = StyleSheet.create({
     width: "100%",
     minWidth: 0,
     minHeight: 0,
-    backgroundColor: "#FFF4F7",
+    backgroundColor: "#FFF9EF",
   },
 
   /*
@@ -2102,7 +2369,7 @@ const styles = StyleSheet.create({
   emptyPanel: {
     flex: 1,
     width: "100%",
-    backgroundColor: "#FFF7FA",
+    backgroundColor: "#FFF9EF",
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 28,
@@ -2121,9 +2388,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FCE7EF",
+    backgroundColor: "#F8EEDB",
     borderWidth: 1,
-    borderColor: "#F5B8CE",
+    borderColor: "#D6AD58",
   },
 
   emptyAvatarText: {
@@ -2131,7 +2398,7 @@ const styles = StyleSheet.create({
   },
 
   emptyTitle: {
-    color: "#7D1D43",
+    color: "#4B1836",
     fontSize: 20,
     fontWeight: "800",
     textAlign: "center",
@@ -2160,33 +2427,28 @@ const styles = StyleSheet.create({
     width: "100%",
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    minHeight: 76,
+    backgroundColor: "#FFF9EF",
+    minHeight: 66,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F4DCE5",
-    shadowColor: "#7D1D43",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    paddingVertical: 9,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#D6AD58",
   },
 
   headerAvatar: {
     alignItems: "center",
     justifyContent: "center",
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: "#FCE7EF",
-    borderWidth: 2,
-    borderColor: "#F5B8CE",
-    marginRight: 11,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#F8EEDB",
+    borderWidth: 1,
+    borderColor: "#D6AD58",
+    marginRight: 9,
   },
 
   headerAvatarText: {
-    color: "#92264F",
+    color: "#4B1836",
 
     fontSize: 19,
 
@@ -2205,7 +2467,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-end",
-    marginLeft: 8,
+    marginLeft: 6,
     gap: 5,
   },
 
@@ -2222,15 +2484,15 @@ const styles = StyleSheet.create({
   },
 
   aramaIzniButonuAktif: {
-    backgroundColor: "#FCE8EC",
+    backgroundColor: "#F8EEDB",
 
-    borderColor: "#E9A8BE",
+    borderColor: "#D6AD58",
   },
 
   aramaIzniButonuPasif: {
-    backgroundColor: "#FBE8EF",
+    backgroundColor: "#F8EEDB",
 
-    borderColor: "#E9B8C9",
+    borderColor: "#D6AD58",
   },
 
   aramaIzniButonuDevreDisi: {
@@ -2244,7 +2506,7 @@ const styles = StyleSheet.create({
   },
 
   aramaIzniButonuMetni: {
-    color: "#7D1D43",
+    color: "#4B1836",
 
     fontSize: 9,
 
@@ -2258,28 +2520,23 @@ const styles = StyleSheet.create({
   },
 
   headerName: {
-    color: "#7D1D43",
-    fontSize: 18,
-    lineHeight: 23,
+    color: "#4B1836",
+    fontSize: 15,
+    lineHeight: 19,
     fontWeight: "800",
     letterSpacing: 0.1,
   },
 
   statusContainer: {
     flexDirection: "row",
-
     alignItems: "center",
-
-    marginTop: 3,
+    marginTop: 1,
   },
 
   statusDot: {
-    width: 8,
-
-    height: 8,
-
+    width: 7,
+    height: 7,
     borderRadius: 4,
-
     marginRight: 5,
   },
 
@@ -2292,9 +2549,8 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    fontSize: 11,
-
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 13,
   },
 
   activeText: {
@@ -2306,7 +2562,7 @@ const styles = StyleSheet.create({
   },
 
   typingText: {
-    color: "#C12F65",
+    color: "#B8862D",
 
     fontSize: 10,
 
@@ -2348,7 +2604,7 @@ const styles = StyleSheet.create({
     width: "100%",
     minHeight: 0,
     overflow: "hidden",
-    backgroundColor: "#FFF4F7",
+    backgroundColor: "#FBF7EF",
   },
 
   messageListContent: {
@@ -2356,7 +2612,6 @@ const styles = StyleSheet.create({
     paddingBottom: 18,
     flexGrow: 1,
     paddingHorizontal: 14,
-    paddingVertical: 14,
   },
 
   /*
@@ -2385,7 +2640,7 @@ const styles = StyleSheet.create({
   },
 
   senderName: {
-    color: "#8D4562",
+    color: "#8A6A35",
 
     fontSize: 11,
 
@@ -2411,26 +2666,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     paddingVertical: 11,
     elevation: 1,
-    shadowColor: "#7D1D43",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
+    shadowColor: "#4B1836",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
   },
 
   messageBubbleMine: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderBottomLeftRadius: 20,
-    backgroundColor: "#C12F65",
+    borderTopLeftRadius: 19,
+    borderTopRightRadius: 19,
+    borderBottomLeftRadius: 19,
+    backgroundColor: "#4B1836",
+    borderWidth: 1,
+    borderColor: "#B8862D",
     borderBottomRightRadius: 6,
   },
 
   messageBubbleOther: {
     borderWidth: 1,
-    borderColor: "#F4DCE5",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderBottomRightRadius: 20,
+    borderColor: "#D6AD58",
+    borderTopLeftRadius: 19,
+    borderTopRightRadius: 19,
+    borderBottomRightRadius: 19,
     backgroundColor: "#FFFFFF",
     borderBottomLeftRadius: 6,
   },
@@ -2444,11 +2701,11 @@ const styles = StyleSheet.create({
   messageContentMine: {
     color: "#FFFFFF",
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 23,
   },
 
   messageContentOther: {
-    color: "#292329",
+    color: "#3D2935",
   },
 
   /*
@@ -2509,22 +2766,14 @@ const styles = StyleSheet.create({
 
   mediaCard: {
     width: "100%",
-
-    minHeight: 58,
-
-    marginTop: 5,
-
+    minHeight: 60,
+    marginTop: 7,
     paddingHorizontal: 9,
-
-    paddingVertical: 8,
-
-    borderRadius: 12,
-
+    paddingVertical: 7,
+    borderRadius: 15,
     flexDirection: "row",
-
     alignItems: "center",
-
-    backgroundColor: "rgba(194,47,101,0.09)",
+    backgroundColor: "rgba(143,35,72,0.08)",
   },
 
   mediaIconContainer: {
@@ -2554,7 +2803,7 @@ const styles = StyleSheet.create({
   },
 
   mediaTitle: {
-    color: "#7D1D43",
+    color: "#4B1836",
 
     fontSize: 12,
 
@@ -2570,7 +2819,7 @@ const styles = StyleSheet.create({
   },
 
   mediaOpenIcon: {
-    color: "#92264F",
+    color: "#4B1836",
 
     fontSize: 15,
 
@@ -2618,7 +2867,7 @@ const styles = StyleSheet.create({
   },
 
   readStatusRead: {
-    color: "#72cfff",
+    color: "#E5C477",
   },
 
   readStatusUnread: {
@@ -2650,20 +2899,20 @@ const styles = StyleSheet.create({
   inputContainer: {
     width: "100%",
     flexShrink: 0,
-    minHeight: 76,
+    minHeight: 62,
     zIndex: 20,
-    elevation: 12,
+    elevation: 8,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    borderTopWidth: 1,
-    borderTopColor: "#F4DCE5",
-    shadowColor: "#7D1D43",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
+    backgroundColor: "#FFF9EF",
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#D6AD58",
+    shadowColor: "#4B1836",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 5,
   },
 
   /*
@@ -2695,7 +2944,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#FBE8EF",
+    backgroundColor: "#F8EEDB",
   },
 
   aramaButonuIkon: {
@@ -2717,11 +2966,11 @@ const styles = StyleSheet.create({
 
   aramaOverlay: {
     flex: 1,
-    backgroundColor: "#4B142B",
+    backgroundColor: "#321126",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingTop: 55,
-    paddingBottom: 35,
+    paddingTop: 60,
+    paddingBottom: 38,
   },
 
   aramaHeader: {
@@ -2731,13 +2980,13 @@ const styles = StyleSheet.create({
   },
 
   aramaBaslik: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 15,
     fontWeight: "700",
   },
 
   aramaKullaniciAdi: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 23,
     fontWeight: "800",
     marginTop: 6,
@@ -2756,26 +3005,26 @@ const styles = StyleSheet.create({
     borderRadius: 62,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#92264F",
+    backgroundColor: "#4B1836",
     borderWidth: 4,
-    borderColor: "#F5B8CE",
+    borderColor: "#D6AD58",
     marginBottom: 22,
   },
 
   aramaAvatarText: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 48,
     fontWeight: "800",
   },
 
   sesliAramaIsmi: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 25,
     fontWeight: "800",
   },
 
   aramaDurumMetni: {
-    color: "#F1C8D7",
+    color: "#E8D7B4",
     fontSize: 15,
     marginTop: 9,
   },
@@ -2819,10 +3068,54 @@ const styles = StyleSheet.create({
   },
 
   videoBeklemeMetni: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 15,
   },
+  konumKarti: {
+    width: 230,
+    maxWidth: "100%",
+    minHeight: 76,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+  },
 
+  konumIkonAlani: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(143,35,72,0.12)",
+  },
+
+  konumIkon: {
+    fontSize: 23,
+  },
+
+  konumBilgiAlani: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 10,
+  },
+
+  konumBaslik: {
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  konumAltYazi: {
+    fontSize: 10,
+    marginTop: 4,
+  },
+
+  konumOk: {
+    fontSize: 20,
+    fontWeight: "800",
+    marginLeft: 6,
+  },
   aramaKontrolleri: {
     width: "100%",
     flexDirection: "row",
@@ -2847,17 +3140,17 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#3a3448",
+    backgroundColor: "#654A2B",
     paddingHorizontal: 9,
   },
 
   aramaKontrolIkon: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 22,
   },
 
   aramaKontrolMetni: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 9,
     marginTop: 2,
     fontWeight: "700",
@@ -2876,7 +3169,7 @@ const styles = StyleSheet.create({
   },
 
   aramaKontrolButonuAktif: {
-    backgroundColor: "#92264F",
+    backgroundColor: "#4B1836",
   },
 
   aramaSonuBildirim: {
@@ -2893,7 +3186,7 @@ const styles = StyleSheet.create({
   },
 
   aramaSonuBildirimBaslik: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
     fontSize: 15,
     fontWeight: "800",
     textAlign: "center",
@@ -2953,7 +3246,7 @@ const styles = StyleSheet.create({
   },
 
   videoCloseButtonText: {
-    color: "#FFFCFA",
+    color: "#FFF9EF",
 
     fontSize: 22,
 
@@ -2979,7 +3272,7 @@ const styles = StyleSheet.create({
   },
 
   loadingText: {
-    color: "#8a7ab8",
+    color: "#8A6A35",
 
     fontSize: 14,
 
@@ -3017,7 +3310,7 @@ const styles = StyleSheet.create({
 
     justifyContent: "center",
 
-    backgroundColor: "#FBE8EF",
+    backgroundColor: "#F8EEDB",
   },
 
   noMessageIconText: {
@@ -3025,7 +3318,7 @@ const styles = StyleSheet.create({
   },
 
   noMessageTitle: {
-    color: "#92264F",
+    color: "#4B1836",
 
     fontSize: 17,
 
@@ -3043,14 +3336,139 @@ const styles = StyleSheet.create({
 
     textAlign: "center",
   },
-  ustAramaButonu: {
-    width: 40,
-    height: 42,
-    borderRadius: 21,
+  engellemeButonu: {
+    minHeight: 34,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFF1F5",
-    marginHorizontal: 2,
+    backgroundColor: "#F8EEDB",
+    marginLeft: 4,
   },
-  ustAramaIkonu: { fontSize: 23, color: "#8B2948", fontWeight: "700" },
+  engellemeButonuAktif: {
+    backgroundColor: "#FFF0D6",
+  },
+  engellemeButonuDevreDisi: {
+    opacity: 0.55,
+  },
+  engellemeButonuMetni: {
+    color: "#A77A2D",
+    fontSize: 11,
+    fontWeight: "800",
+  },
+  engellemeBilgiAlani: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: "#FFF0D6",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "#E8C98E",
+  },
+  engellemeBilgiMetni: {
+    color: "#7A4A00",
+    fontSize: 12,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+  engellemeHataAlani: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "#FDECEC",
+  },
+  engellemeHataMetni: {
+    color: "#B42318",
+    fontSize: 12,
+    textAlign: "center",
+  },
+  engellemeInputKapali: {
+    paddingHorizontal: 14,
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF0D6",
+  },
+  engellemeInputKapaliMetni: {
+    color: "#7A4A00",
+    fontSize: 13,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  ustAramaButonu: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8EEDB",
+  },
+  menuButonu: {
+    width: 34,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F5EBD8",
+  },
+  menuButonuIkon: {
+    color: "#4B1836",
+    fontSize: 25,
+    lineHeight: 28,
+    fontWeight: "700",
+  },
+  islemMenusuArkaPlan: {
+    flex: 1,
+    backgroundColor: "rgba(28, 12, 19, 0.22)",
+    alignItems: "flex-end",
+    paddingTop: 70,
+    paddingRight: 12,
+  },
+  islemMenusuKart: {
+    width: 250,
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    backgroundColor: "#FFFFFF",
+    elevation: 12,
+    shadowColor: "#3D1426",
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+  },
+  islemMenusuBaslik: {
+    color: "#A77A2D",
+    fontSize: 12,
+    fontWeight: "800",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  islemMenusuSatir: {
+    minHeight: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    borderRadius: 10,
+  },
+  islemMenusuIkon: {
+    width: 28,
+    color: "#A77A2D",
+    fontSize: 19,
+    fontWeight: "700",
+  },
+  islemMenusuMetin: {
+    flex: 1,
+    color: "#3D2935",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  islemMenusuTehlike: {
+    color: "#A12645",
+  },
+  islemMenusuDevreDisi: {
+    opacity: 0.45,
+  },
+  islemMenusuAyirici: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#E8DCC4",
+    marginHorizontal: 8,
+  },
+  ustAramaIkonu: { fontSize: 23, color: "#A77A2D", fontWeight: "700" },
 });
