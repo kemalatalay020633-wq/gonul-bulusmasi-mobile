@@ -8,7 +8,10 @@ import {
   Video,
   X,
 } from "lucide-react-native";
+
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+
+import { useTranslation } from "react-i18next";
 
 type MediaType = "image" | "video" | "audio" | "file" | "camera" | "location";
 
@@ -27,10 +30,13 @@ function MediaMenu({
   onMediaButtonClick,
   onOpenMediaPicker,
 }: MediaMenuProps) {
+  const { t } = useTranslation("messages");
+
   const disabled = sending || mediaSending;
 
   const medyaSec = (type: MediaType) => {
     if (disabled) return;
+
     onOpenMediaPicker(type);
   };
 
@@ -38,7 +44,7 @@ function MediaMenu({
     <View style={styles.container}>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Medya veya dosya ekle"
+        accessibilityLabel={t("media.attach")}
         style={({ pressed }) => [
           styles.attachButton,
           pressed && styles.attachButtonPressed,
@@ -60,8 +66,8 @@ function MediaMenu({
         <View style={styles.modalRoot}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Menüyü kapat"
-            style={styles.overlay}
+            accessibilityLabel={t("media.closeMenu")}
+            style={[StyleSheet.absoluteFill, styles.overlay]}
             onPress={onMediaButtonClick}
           />
 
@@ -70,15 +76,14 @@ function MediaMenu({
 
             <View style={styles.menuHeader}>
               <View>
-                <Text style={styles.menuTitle}>Paylaş</Text>
-                <Text style={styles.menuSubtitle}>
-                  Sohbete medya, dosya veya konum ekle
-                </Text>
+                <Text style={styles.menuTitle}>{t("media.share")}</Text>
+
+                <Text style={styles.menuSubtitle}>{t("media.subtitle")}</Text>
               </View>
 
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Kapat"
+                accessibilityLabel={t("media.close")}
                 style={({ pressed }) => [
                   styles.closeButton,
                   pressed && styles.closeButtonPressed,
@@ -91,6 +96,8 @@ function MediaMenu({
 
             <View style={styles.options}>
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("media.photo")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("image")}
@@ -98,10 +105,13 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.imageIcon]}>
                   <ImageIcon size={25} color="#852B49" />
                 </View>
-                <Text style={styles.optionTitle}>Fotoğraf</Text>
+
+                <Text style={styles.optionTitle}>{t("media.photo")}</Text>
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("media.video")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("video")}
@@ -109,10 +119,13 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.videoIcon]}>
                   <Video size={25} color="#6241B7" />
                 </View>
-                <Text style={styles.optionTitle}>Video</Text>
+
+                <Text style={styles.optionTitle}>{t("media.video")}</Text>
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("media.audio")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("audio")}
@@ -120,10 +133,13 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.audioIcon]}>
                   <Music size={25} color="#287B55" />
                 </View>
-                <Text style={styles.optionTitle}>Ses</Text>
+
+                <Text style={styles.optionTitle}>{t("media.audio")}</Text>
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("media.document")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("file")}
@@ -131,10 +147,13 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.fileIcon]}>
                   <FileText size={25} color="#9A6718" />
                 </View>
-                <Text style={styles.optionTitle}>Belge</Text>
+
+                <Text style={styles.optionTitle}>{t("media.document")}</Text>
               </Pressable>
 
               <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={t("media.camera")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("camera")}
@@ -142,13 +161,13 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.cameraIcon]}>
                   <Camera size={25} color="#287B55" />
                 </View>
-                <Text style={styles.optionTitle}>Kamera</Text>
+
+                <Text style={styles.optionTitle}>{t("media.camera")}</Text>
               </Pressable>
 
-              {/* KONUM PAYLAŞIMI */}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Konum paylaş"
+                accessibilityLabel={t("media.location")}
                 style={styles.option}
                 disabled={disabled}
                 onPress={() => medyaSec("location")}
@@ -156,14 +175,16 @@ function MediaMenu({
                 <View style={[styles.iconContainer, styles.locationIcon]}>
                   <MapPin size={25} color="#2875B8" />
                 </View>
-                <Text style={styles.optionTitle}>Konum</Text>
+
+                <Text style={styles.optionTitle}>{t("media.location")}</Text>
               </Pressable>
             </View>
 
             {mediaSending && (
               <View style={styles.loadingContainer}>
                 <View style={styles.loadingDot} />
-                <Text style={styles.loadingText}>Medya yükleniyor...</Text>
+
+                <Text style={styles.loadingText}>{t("media.uploading")}</Text>
               </View>
             )}
           </View>
@@ -204,9 +225,9 @@ const styles = StyleSheet.create({
   },
 
   overlay: {
-    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(180, 25, 55, 0.45)",
   },
+
   sheet: {
     width: "100%",
     backgroundColor: "#FFFBFC",

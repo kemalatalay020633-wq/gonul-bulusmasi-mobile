@@ -1,4 +1,6 @@
+import { tokenGetir } from "../services/tokenServisi";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Pressable,
@@ -38,50 +40,20 @@ type PremiumPaketi = "ONE_MONTH" | "THREE_MONTHS" | "SIX_MONTHS" | "ONE_YEAR";
 
 type PremiumPaketBilgisi = {
   kod: PremiumPaketi;
-  baslik: string;
-  sure: string;
   fiyat: number;
-  aciklama: string;
-  rozet?: string;
 };
 
 const API_ADRESI = API_BASE_URL + "/api";
 
 const premiumPaketleri: PremiumPaketBilgisi[] = [
-  {
-    kod: "ONE_MONTH",
-    baslik: "1 Aylık",
-    sure: "1 Ay",
-    fiyat: 100,
-    aciklama: "1 aylık Premium üyelik",
-  },
-  {
-    kod: "THREE_MONTHS",
-    baslik: "3 Aylık",
-    sure: "3 Ay",
-    fiyat: 240,
-    aciklama: "3 aylık Premium üyelik",
-    rozet: "AVANTAJLI",
-  },
-  {
-    kod: "SIX_MONTHS",
-    baslik: "6 Aylık",
-    sure: "6 Ay",
-    fiyat: 400,
-    aciklama: "6 aylık Premium üyelik",
-    rozet: "ÇOK AVANTAJLI",
-  },
-  {
-    kod: "ONE_YEAR",
-    baslik: "1 Yıllık",
-    sure: "12 Ay",
-    fiyat: 600,
-    aciklama: "12 aylık Premium üyelik",
-    rozet: "EN AVANTAJLI",
-  },
+  { kod: "ONE_MONTH", fiyat: 100 },
+  { kod: "THREE_MONTHS", fiyat: 240 },
+  { kod: "SIX_MONTHS", fiyat: 400 },
+  { kod: "ONE_YEAR", fiyat: 600 },
 ];
 
 export default function Premium() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const [odeme, setOdeme] = useState<Odeme | null>(null);
   const [yukleniyor, setYukleniyor] = useState(false);
@@ -100,18 +72,29 @@ export default function Premium() {
     (paket) => paket.kod === secilenPaket,
   );
 
+  const paketAdiGetir = (kod: PremiumPaketi) =>
+    t(`premium.packages.${kod}.title`);
+  const odemeYontemiGetir = (yontem: string | null) => {
+    if (yontem === "CARD") return t("premium.paymentMethods.card");
+    if (yontem === "MOBILE_OPERATOR") return t("premium.paymentMethods.mobile");
+    if (yontem === "BANK_TRANSFER") return t("premium.paymentMethods.bank");
+    return yontem || "-";
+  };
+  const durumGetir = (durum: string) =>
+    t(`premium.status.${durum}`, { defaultValue: durum });
+
   const odemeBaslat = async (paymentMethod: OdemeYontemi) => {
     setHata("");
 
     if (!secilenPaket) {
-      setHata("Lütfen bir Premium paketi seçin.");
+      setHata(t("premium.selectPackage"));
       return;
     }
 
     setYukleniyor(true);
 
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const kayitliKullaniciId = await AsyncStorage.getItem("userId");
       const kullaniciId = Number(kayitliKullaniciId);
 
@@ -121,7 +104,7 @@ export default function Premium() {
         !Number.isFinite(kullaniciId) ||
         kullaniciId <= 0
       ) {
-        setHata("Oturum bilgileriniz bulunamadı. Lütfen tekrar giriş yapın.");
+        setHata(t("premium.errors.sessionMissing"));
         return;
       }
 
@@ -141,10 +124,10 @@ export default function Premium() {
       if (!cevap.ok) {
         throw new Error(
           cevap.status === 401 || cevap.status === 403
-            ? "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın."
+            ? t("premium.errors.sessionInvalid")
             : cevap.status === 429
-              ? "Çok fazla ödeme denemesi yapıldı. Lütfen bekleyin."
-              : "Ödeme işlemi başlatılamadı. Lütfen tekrar deneyin.",
+              ? t("premium.errors.tooManyAttempts")
+              : t("premium.errors.startFailed"),
         );
       }
 
@@ -157,12 +140,15 @@ export default function Premium() {
       setMobilOdemeEkrani(false);
       setHavaleOdemeEkrani(false);
 
-      Alert.alert("Başarılı", "Ödeme kaydınız oluşturuldu.");
+      Alert.alert(
+        t("premium.alerts.successTitle"),
+        t("premium.alerts.paymentCreated"),
+      );
     } catch (hata) {
       console.error("PREMIUM ÖDEME HATASI:", hata);
 
       setHata(
-        hata instanceof Error ? hata.message : "Ödeme işlemi başlatılamadı.",
+        hata instanceof Error ? hata.message : t("premium.errors.startFailed"),
       );
     } finally {
       setYukleniyor(false);
@@ -185,14 +171,14 @@ export default function Premium() {
 
   const mobilOdemeBaslat = async (telefon: string, operator: string) => {
     if (!operator) {
-      setHata("Lütfen operatörünüzü seçin.");
+      setHata(t("premium.errors.operatorRequired"));
       return;
     }
 
     const temizTelefon = telefon.replace(/\s/g, "");
 
     if (temizTelefon.length !== 10) {
-      setHata("Telefon numarası 10 haneli olmalıdır.");
+      setHata(t("premium.errors.phoneLength"));
       return;
     }
 
@@ -213,7 +199,7 @@ export default function Premium() {
   if (kartOdemeEkrani && secilenPaketBilgisi) {
     return (
       <KartOdeme
-        paketAdi={secilenPaketBilgisi.baslik}
+        paketAdi={paketAdiGetir(secilenPaketBilgisi.kod)}
         tutar={secilenPaketBilgisi.fiyat}
         yukleniyor={yukleniyor}
         onGeri={() => setKartOdemeEkrani(false)}
@@ -225,7 +211,7 @@ export default function Premium() {
   if (mobilOdemeEkrani && secilenPaketBilgisi) {
     return (
       <MobilOdeme
-        paketAdi={secilenPaketBilgisi.baslik}
+        paketAdi={paketAdiGetir(secilenPaketBilgisi.kod)}
         tutar={secilenPaketBilgisi.fiyat}
         yukleniyor={yukleniyor}
         onGeri={() => setMobilOdemeEkrani(false)}
@@ -237,7 +223,7 @@ export default function Premium() {
   if (havaleOdemeEkrani && secilenPaketBilgisi) {
     return (
       <HavaleOdeme
-        paketAdi={secilenPaketBilgisi.baslik}
+        paketAdi={paketAdiGetir(secilenPaketBilgisi.kod)}
         tutar={secilenPaketBilgisi.fiyat}
         yukleniyor={yukleniyor}
         onGeri={() => setHavaleOdemeEkrani(false)}
@@ -250,12 +236,12 @@ export default function Premium() {
     setHata("");
 
     if (!secilenPaket) {
-      setHata("Lütfen bir Premium paketi seçin.");
+      setHata(t("premium.selectPackage"));
       return;
     }
 
     if (!odemeYontemi) {
-      setHata("Lütfen bir ödeme yöntemi seçin.");
+      setHata(t("premium.selectPaymentMethod"));
       return;
     }
 
@@ -280,11 +266,9 @@ export default function Premium() {
         <View style={styles.hero}>
           <Text style={styles.heroIcon}>👑</Text>
 
-          <Text style={styles.heroTitle}>Premium Üyelik</Text>
+          <Text style={styles.heroTitle}>{t("premium.title")}</Text>
 
-          <Text style={styles.heroDescription}>
-            Gönül Buluşması Premium ile mesajlaşmaya başlayın.
-          </Text>
+          <Text style={styles.heroDescription}>{t("premium.subtitle")}</Text>
         </View>
 
         {hata ? (
@@ -296,47 +280,53 @@ export default function Premium() {
         {odemeOlusturuldu && odeme ? (
           <View style={styles.successBox}>
             <Text style={styles.successTitle}>
-              ✅ Ödeme işleminiz oluşturuldu
+              ✅ {t("premium.paymentCreatedTitle")}
             </Text>
 
             <Text style={styles.successText}>
-              Paket: {odeme.membershipPackage}
+              {t("premium.order.package")}:{" "}
+              {paketAdiGetir(odeme.membershipPackage as PremiumPaketi)}
             </Text>
 
             <Text style={styles.successText}>
-              Sipariş No: {odeme.merchantOid}
+              {t("premium.order.orderNumber")}: {odeme.merchantOid}
             </Text>
 
             <Text style={styles.successText}>
-              Ödeme Yöntemi: {odeme.paymentMethod}
+              {t("premium.order.paymentMethod")}:{" "}
+              {odemeYontemiGetir(odeme.paymentMethod)}
             </Text>
 
             <Text style={styles.successText}>
-              Tutar: {odeme.amount} {odeme.currency}
+              {t("premium.order.amount")}: {odeme.amount} {odeme.currency}
             </Text>
 
-            <Text style={styles.successText}>Durum: {odeme.status}</Text>
+            <Text style={styles.successText}>
+              {t("premium.order.status")}: {durumGetir(odeme.status)}
+            </Text>
           </View>
         ) : null}
 
-        <Text style={styles.sectionHeading}>
-          Premium ile neler yapabilirsiniz?
-        </Text>
+        <Text style={styles.sectionHeading}>{t("premium.featuresTitle")}</Text>
 
-        {[
-          "Mesaj gönderebilirsiniz",
-          "Gelen mesajları okuyabilirsiniz",
-          "Sınırsız mesajlaşabilirsiniz",
-          "Premium üyelik avantajlarından yararlanabilirsiniz",
-        ].map((ozellik) => (
+        {(
+          [
+            "sendMessages",
+            "readMessages",
+            "unlimitedMessaging",
+            "premiumBenefits",
+          ] as const
+        ).map((ozellik) => (
           <View key={ozellik} style={styles.featureCard}>
             <Text style={styles.check}>✓</Text>
 
-            <Text style={styles.featureText}>{ozellik}</Text>
+            <Text style={styles.featureText}>
+              {t(`premium.features.${ozellik}`)}
+            </Text>
           </View>
         ))}
 
-        <Text style={styles.sectionHeading}>Premium Paketini Seç</Text>
+        <Text style={styles.sectionHeading}>{t("premium.choosePackage")}</Text>
 
         {premiumPaketleri.map((paket) => {
           const secili = secilenPaket === paket.kod;
@@ -351,21 +341,29 @@ export default function Premium() {
                 setOdemeOlusturuldu(false);
               }}
             >
-              {paket.rozet ? (
+              {t(`premium.packages.${paket.kod}.badge`, {
+                defaultValue: "",
+              }) ? (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{paket.rozet}</Text>
+                  <Text style={styles.badgeText}>
+                    {t(`premium.packages.${paket.kod}.badge`)}
+                  </Text>
                 </View>
               ) : null}
 
               <Text style={styles.packageIcon}>👑</Text>
 
-              <Text style={styles.packageTitle}>{paket.baslik}</Text>
+              <Text style={styles.packageTitle}>
+                {paketAdiGetir(paket.kod)}
+              </Text>
 
               <Text style={styles.packagePrice}>
                 {paket.fiyat.toFixed(2).replace(".", ",")} TL
               </Text>
 
-              <Text style={styles.packageDescription}>{paket.aciklama}</Text>
+              <Text style={styles.packageDescription}>
+                {t(`premium.packages.${paket.kod}.description`)}
+              </Text>
 
               <View
                 style={[
@@ -379,7 +377,9 @@ export default function Premium() {
                     secili && styles.selectButtonTextSelected,
                   ]}
                 >
-                  {secili ? "SEÇİLDİ" : "BU PAKETİ SEÇ"}
+                  {secili
+                    ? t("premium.selected")
+                    : t("premium.selectThisPackage")}
                 </Text>
               </View>
             </Pressable>
@@ -388,17 +388,21 @@ export default function Premium() {
 
         {secilenPaketBilgisi ? (
           <View style={styles.selectedPackage}>
-            <Text style={styles.selectedPackageLabel}>Seçilen Paket</Text>
+            <Text style={styles.selectedPackageLabel}>
+              {t("premium.selectedPackage")}
+            </Text>
 
             <Text style={styles.selectedPackageText}>
-              {secilenPaketBilgisi.baslik}
+              {paketAdiGetir(secilenPaketBilgisi.kod)}
               {" - "}
               {secilenPaketBilgisi.fiyat.toFixed(2).replace(".", ",")} TL
             </Text>
           </View>
         ) : null}
 
-        <Text style={styles.sectionHeading}>Ödeme Yöntemini Seç</Text>
+        <Text style={styles.sectionHeading}>
+          {t("premium.choosePaymentMethod")}
+        </Text>
 
         <View style={styles.paymentMethods}>
           <Pressable
@@ -419,7 +423,7 @@ export default function Premium() {
                 odemeYontemi === "CARD" && styles.paymentTextSelected,
               ]}
             >
-              Kredi / Banka Kartı
+              {t("premium.paymentMethods.card")}
             </Text>
           </Pressable>
 
@@ -443,7 +447,7 @@ export default function Premium() {
                   styles.paymentTextSelected,
               ]}
             >
-              Mobil Ödeme
+              {t("premium.paymentMethods.mobile")}
             </Text>
           </Pressable>
 
@@ -465,7 +469,7 @@ export default function Premium() {
                 odemeYontemi === "BANK_TRANSFER" && styles.paymentTextSelected,
               ]}
             >
-              Havale / EFT
+              {t("premium.paymentMethods.bank")}
             </Text>
           </Pressable>
         </View>
@@ -473,10 +477,12 @@ export default function Premium() {
         {odemeYontemi ? (
           <View style={styles.selectedPayment}>
             <Text style={styles.selectedPaymentText}>
-              Seçilen ödeme yöntemi:{" "}
-              {odemeYontemi === "CARD" && "Kredi / Banka Kartı"}
-              {odemeYontemi === "MOBILE_OPERATOR" && "Mobil Ödeme"}
-              {odemeYontemi === "BANK_TRANSFER" && "Havale / EFT"}
+              {t("premium.selectedPaymentMethod")}:{" "}
+              {odemeYontemi === "CARD" && t("premium.paymentMethods.card")}
+              {odemeYontemi === "MOBILE_OPERATOR" &&
+                t("premium.paymentMethods.mobile")}
+              {odemeYontemi === "BANK_TRANSFER" &&
+                t("premium.paymentMethods.bank")}
             </Text>
           </View>
         ) : null}
@@ -491,10 +497,10 @@ export default function Premium() {
         >
           <Text style={styles.continueButtonText}>
             {secilenPaketBilgisi
-              ? `DEVAM ET → ${secilenPaketBilgisi.fiyat
-                  .toFixed(2)
-                  .replace(".", ",")} TL`
-              : "PREMIUM PAKETİ SEÇ"}
+              ? t("premium.continueWithPrice", {
+                  price: secilenPaketBilgisi.fiyat.toFixed(2),
+                })
+              : t("premium.selectPackageButton")}
           </Text>
         </Pressable>
 
@@ -502,7 +508,7 @@ export default function Premium() {
           style={styles.homeButton}
           onPress={() => navigation.replace("home")}
         >
-          <Text style={styles.homeButtonText}>← Ana Sayfa</Text>
+          <Text style={styles.homeButtonText}>{t("premium.home")}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

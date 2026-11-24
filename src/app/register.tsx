@@ -11,13 +11,17 @@ import {
   TextInput,
   View,
 } from "react-native";
-// src/app/home.tsx
+
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import { API_BASE_URL } from "../config/api";
+
 const API_ADRESI = API_BASE_URL + "/api";
 
 export default function Register() {
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
+
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -29,76 +33,63 @@ export default function Register() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  /*
-   * =========================================================
-   * KAYIT
-   * =========================================================
-   */
-
+  // KAYIT
   const handleRegister = async () => {
     setError("");
 
     if (!username.trim()) {
-      setError("Lütfen kullanıcı adınızı giriniz.");
+      setError(t("register.usernameRequired"));
       return;
     }
 
     if (username.trim().length < 3) {
-      setError("Kullanıcı adi en az 3 karakter olmalıdır.");
+      setError(t("register.usernameMin"));
       return;
     }
 
     if (!email.trim()) {
-      setError("Lütfen e-posta adresinizi giriniz.");
+      setError(t("register.emailRequired"));
       return;
     }
 
     if (!password) {
-      setError("Lütfen şifrenizi giriniz.");
+      setError(t("register.passwordRequired"));
       return;
     }
 
     if (password.length < 8) {
-      setError("Şifre en az 8 karakter olmalıdır.");
+      setError(t("register.passwordMin"));
       return;
     }
 
     if (!firstName.trim()) {
-      setError("Lütfen adınızı giriniz.");
+      setError(t("register.firstNameRequired"));
       return;
     }
 
     if (!lastName.trim()) {
-      setError("Lütfen soyadınızı giriniz.");
+      setError(t("register.lastNameRequired"));
       return;
     }
 
     if (!birthDate.trim()) {
-      setError("Lütfen doğum tarihinizi giriniz.");
+      setError(t("register.birthDateRequired"));
       return;
     }
 
     if (!gender) {
-      setError("Lütfen cinsiyet seçiniz.");
+      setError(t("register.genderRequired"));
       return;
     }
 
-    /*
-     * =========================================================
-     * DOGUM TARİHİ
-     *
-     * Kullanıcı:
-     * GG/AA/YYYY
-     *
-     * Backend:
-     * YYYY-MM-DD
-     * =========================================================
-     */
+    // DOĞUM TARİHİ KONTROLÜ
+    // Kullanıcı: GG/AA/YYYY
+    // Backend: YYYY-MM-DD
 
     const parcalar = birthDate.split("/");
 
     if (parcalar.length !== 3) {
-      setError("Doğum tarihini GG/AA/YYYY şeklinde giriniz.");
+      setError(t("register.birthDateFormat"));
       return;
     }
 
@@ -107,7 +98,7 @@ export default function Register() {
     const yil = parcalar[2];
 
     if (gun.length !== 2 || ay.length !== 2 || yil.length !== 4) {
-      setError("Doğum tarihini GG/AA/YYYY şeklinde giriniz.");
+      setError(t("register.birthDateFormat"));
       return;
     }
 
@@ -120,29 +111,21 @@ export default function Register() {
       !Number.isInteger(aySayisi) ||
       !Number.isInteger(yilSayisi)
     ) {
-      setError("Doğum tarihi geçersiz.");
+      setError(t("register.birthDateInvalid"));
       return;
     }
 
     if (aySayisi < 1 || aySayisi > 12) {
-      setError("Doğum tarihi geçersiz. Ay 01-12 arasında olmalıdır.");
+      setError(t("register.birthMonthInvalid"));
       return;
     }
 
     if (gunSayisi < 1 || gunSayisi > 31) {
-      setError("Doğum tarihi geçersiz. Gün 01-31 arasında olmalıdır.");
+      setError(t("register.birthDayInvalid"));
       return;
     }
 
-    /*
-     * =========================================================
-     * GERÇEK TAKVİM TARİHİ KONTROLÜ
-     *
-     * Örneğin:
-     * 31/02/1990 -> geçersiz
-     * =========================================================
-     */
-
+    // GERÇEK TAKVİM TARİHİ KONTROLÜ
     const kontrolTarihi = new Date(yilSayisi, aySayisi - 1, gunSayisi);
 
     if (
@@ -150,41 +133,23 @@ export default function Register() {
       kontrolTarihi.getMonth() !== aySayisi - 1 ||
       kontrolTarihi.getDate() !== gunSayisi
     ) {
-      setError("Geçerli bir doğum tarihi giriniz.");
+      setError(t("register.birthDateInvalidCalendar"));
       return;
     }
 
-    /*
-     * =========================================================
-     * GELECEK TARİH KONTROLÜ
-     * =========================================================
-     */
-
+    // GELECEK TARİH KONTROLÜ
     const bugun = new Date();
 
     if (kontrolTarihi >= bugun) {
-      setError("Doğum tarihi gelecekte olamaz.");
+      setError(t("register.birthDateFuture"));
       return;
     }
 
-    /*
-     * =========================================================
-     * BACKEND TARIH FORMATI
-     *
-     * 19/05/1990
-     *
-     * ->
-     *
-     * 1990-05-19
-     * =========================================================
-     */
-
+    // BACKEND TARİH FORMATI
     const birthDateBackend = `${yil}-${ay}-${gun}`;
 
     console.log("DOGUM TARİHİ MOBIL:", birthDate);
-
     console.log("DOGUM TARİHİ BACKEND:", birthDateBackend);
-
     console.log("CİNSİYET:", gender);
 
     setLoading(true);
@@ -194,12 +159,7 @@ export default function Register() {
 
       console.log("KAYIT URL:", registerUrl);
 
-      /*
-       * =====================================================
-       * BACKEND'E KAYIT ISTEGI
-       * =====================================================
-       */
-
+      // BACKEND'E KAYIT İSTEĞİ
       const requestBody = {
         username: username.trim(),
         email: email.trim(),
@@ -221,12 +181,10 @@ export default function Register() {
 
       const response = await fetch(registerUrl, {
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
           Accept: "application/json",
         },
-
         body: JSON.stringify(requestBody),
       });
 
@@ -248,35 +206,22 @@ export default function Register() {
         }
       }
 
-      /*
-       * =====================================================
-       * HATA
-       *
-       * Backend Türkçe olarak "mesaj" döndürüyor.
-       * Bu yüzden hem mesaj hem message kontrol ediyoruz.
-       * =====================================================
-       */
-
+      // BACKEND HATALARI
       if (!response.ok) {
         const durum = response.status;
 
         throw new Error(
           durum === 409
-            ? "Bu kullanıcı adı veya e-posta adresi zaten kullanılıyor."
+            ? t("register.userAlreadyExists")
             : durum === 400
-              ? "Kayıt bilgilerinizi kontrol edip tekrar deneyin."
+              ? t("register.invalidRegistration")
               : durum === 429
-                ? "Çok fazla kayıt denemesi yapıldı. Lütfen biraz bekleyin."
-                : "Kayıt işlemi tamamlanamadı. Lütfen tekrar deneyin.",
+                ? t("register.tooManyAttempts")
+                : t("register.registrationFailed"),
         );
       }
 
-      /*
-       * =====================================================
-       * BASARILI
-       * =====================================================
-       */
-
+      // KAYIT BAŞARILI
       console.log("KAYIT BAŞARILI:", data);
 
       navigation.replace("emailDogrulama", {
@@ -288,33 +233,19 @@ export default function Register() {
       if (hata instanceof Error) {
         setError(hata.message);
       } else {
-        setError("Kayıt sırasında bir hata oluştu.");
+        setError(t("register.generalError"));
       }
     } finally {
       setLoading(false);
     }
   };
 
-  /*
-   * =========================================================
-   * CİNSİYET SEÇİMİ
-   *
-   * Backend enum:
-   * KADIN
-   * ERKEK
-   * =========================================================
-   */
-
+  // CİNSİYET SEÇİMİ
+  // Backend enum değerleri değiştirilmemelidir.
   const cinsiyetSec = (deger: string) => {
     setGender(deger);
     setError("");
   };
-
-  /*
-   * =========================================================
-   * EKRAN
-   * =========================================================
-   */
 
   return (
     <KeyboardAvoidingView
@@ -327,15 +258,8 @@ export default function Register() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.container}>
-          {/* =================================================
-              ÜST ALAN
-          ================================================= */}
-
+          {/* ÜST ALAN */}
           <View style={styles.header}>
-            {/* =================================================
-                GERÇEK GÖNÜL BULUŞMASI LOGOSU
-            ================================================= */}
-
             <View style={styles.logoAlan}>
               <Image
                 source={require("./logo/logo-gonul-bulusmasi.png")}
@@ -346,38 +270,25 @@ export default function Register() {
 
             <Text style={styles.appTitle}>Gönül Buluşması</Text>
 
-            <Text style={styles.subtitle}>
-              Yeni bir başlangıç için ilk adım
-            </Text>
+            <Text style={styles.subtitle}>{t("register.subtitle")}</Text>
           </View>
 
-          {/* =================================================
-              KART
-          ================================================= */}
-
+          {/* KAYIT KARTI */}
           <View style={styles.card}>
-            <Text style={styles.title}>Hesabını oluştur</Text>
+            <Text style={styles.title}>{t("register.title")}</Text>
 
-            <Text style={styles.description}>
-              Ücretsiz olarak kaydol ve Gönül Buluşması'na katıl.
-            </Text>
+            <Text style={styles.description}>{t("register.description")}</Text>
 
-            {/* =================================================
-                HATA
-            ================================================= */}
-
+            {/* HATA */}
             {error ? (
               <View style={styles.errorBox}>
                 <Text style={styles.errorText}>{error}</Text>
               </View>
             ) : null}
 
-            {/* =================================================
-                KULLANICI ADI
-            ================================================= */}
-
+            {/* KULLANICI ADI */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Kullanıcı Adi</Text>
+              <Text style={styles.label}>{t("register.username")}</Text>
 
               <TextInput
                 value={username}
@@ -385,7 +296,7 @@ export default function Register() {
                   setUsername(text);
                   setError("");
                 }}
-                placeholder="Kullanıcı adin"
+                placeholder={t("register.usernamePlaceholder")}
                 placeholderTextColor="#A88F95"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -394,12 +305,9 @@ export default function Register() {
               />
             </View>
 
-            {/* =================================================
-                E-POSTA
-            ================================================= */}
-
+            {/* E-POSTA */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>E-posta</Text>
+              <Text style={styles.label}>{t("register.email")}</Text>
 
               <TextInput
                 value={email}
@@ -407,7 +315,7 @@ export default function Register() {
                   setEmail(text);
                   setError("");
                 }}
-                placeholder="E-posta adresin"
+                placeholder={t("register.emailPlaceholder")}
                 placeholderTextColor="#A88F95"
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -416,12 +324,9 @@ export default function Register() {
               />
             </View>
 
-            {/* =================================================
-                SIFRE
-            ================================================= */}
-
+            {/* ŞİFRE */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Şifre</Text>
+              <Text style={styles.label}>{t("register.password")}</Text>
 
               <TextInput
                 value={password}
@@ -429,7 +334,7 @@ export default function Register() {
                   setPassword(text);
                   setError("");
                 }}
-                placeholder="Şifren"
+                placeholder={t("register.passwordPlaceholder")}
                 placeholderTextColor="#A88F95"
                 secureTextEntry
                 autoCapitalize="none"
@@ -439,16 +344,13 @@ export default function Register() {
               />
 
               <Text style={styles.helperText}>
-                Şifren en az 8 karakter olmalıdır.
+                {t("register.passwordHint")}
               </Text>
             </View>
 
-            {/* =================================================
-                AD
-            ================================================= */}
-
+            {/* AD */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Ad</Text>
+              <Text style={styles.label}>{t("register.firstName")}</Text>
 
               <TextInput
                 value={firstName}
@@ -456,19 +358,16 @@ export default function Register() {
                   setFirstName(text);
                   setError("");
                 }}
-                placeholder="Adin"
+                placeholder={t("register.firstNamePlaceholder")}
                 placeholderTextColor="#A88F95"
                 autoCapitalize="words"
                 style={styles.input}
               />
             </View>
 
-            {/* =================================================
-                SOYAD
-            ================================================= */}
-
+            {/* SOYAD */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Soyad</Text>
+              <Text style={styles.label}>{t("register.lastName")}</Text>
 
               <TextInput
                 value={lastName}
@@ -476,42 +375,27 @@ export default function Register() {
                   setLastName(text);
                   setError("");
                 }}
-                placeholder="Soyadın"
+                placeholder={t("register.lastNamePlaceholder")}
                 placeholderTextColor="#A88F95"
                 autoCapitalize="words"
                 style={styles.input}
               />
             </View>
 
-            {/* =================================================
-                DOGUM TARİHİ
-            ================================================= */}
-
+            {/* DOĞUM TARİHİ */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Doğum Tarihi</Text>
+              <Text style={styles.label}>{t("register.birthDate")}</Text>
 
               <TextInput
                 value={birthDate}
                 onChangeText={(text) => {
-                  /*
-                   * Sadece rakamlari al
-                   */
-
                   const temiz = text.replace(/[^0-9]/g, "");
 
                   let formatli = temiz;
 
-                  /*
-                   * GG/...
-                   */
-
                   if (temiz.length > 2) {
                     formatli = temiz.slice(0, 2) + "/" + temiz.slice(2);
                   }
-
-                  /*
-                   * GG/AA/...
-                   */
 
                   if (temiz.length > 4) {
                     formatli =
@@ -523,7 +407,6 @@ export default function Register() {
                   }
 
                   setBirthDate(formatli);
-
                   setError("");
                 }}
                 placeholder="GG/AA/YYYY"
@@ -533,19 +416,16 @@ export default function Register() {
                 style={styles.input}
               />
 
-              <Text style={styles.helperText}>Örnek: 15/05/1990</Text>
+              <Text style={styles.helperText}>
+                {t("register.birthDateExample")}
+              </Text>
             </View>
 
-            {/* =================================================
-                CİNSİYET
-            ================================================= */}
-
+            {/* CİNSİYET */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Cinsiyet</Text>
+              <Text style={styles.label}>{t("register.gender")}</Text>
 
               <View style={styles.genderRow}>
-                {/* KADIN */}
-
                 <Pressable
                   style={[
                     styles.genderButton,
@@ -559,11 +439,9 @@ export default function Register() {
                       gender === "KADIN" && styles.genderTextSelected,
                     ]}
                   >
-                    ♀ Kadın
+                    ♀ {t("register.female")}
                   </Text>
                 </Pressable>
-
-                {/* ERKEK */}
 
                 <Pressable
                   style={[
@@ -578,16 +456,13 @@ export default function Register() {
                       gender === "ERKEK" && styles.genderTextSelected,
                     ]}
                   >
-                    ♂ Erkek
+                    ♂ {t("register.male")}
                   </Text>
                 </Pressable>
               </View>
             </View>
 
-            {/* =================================================
-                KAYIT BUTONU
-            ================================================= */}
-
+            {/* KAYIT BUTONU */}
             <Pressable
               style={[
                 styles.registerButton,
@@ -603,69 +478,50 @@ export default function Register() {
                   <Text style={styles.buttonIcon}>✦</Text>
 
                   <Text style={styles.registerButtonText}>
-                    Ücretsiz Kayıt Ol
+                    {t("register.submit")}
                   </Text>
                 </>
               )}
             </Pressable>
 
-            {/* =================================================
-                GÜVENLİK
-            ================================================= */}
-
+            {/* GÜVENLİK */}
             <View style={styles.securityBox}>
               <Text style={styles.securityIcon}>🔒</Text>
 
               <Text style={styles.securityText}>
-                Kişisel bilgilerini korumaya önem veriyoruz. Hesabını istediğin
-                zaman silebilirsin.
+                {t("register.securityText")}
               </Text>
             </View>
 
-            {/* =================================================
-                GIRIS
-            ================================================= */}
-
+            {/* GİRİŞ */}
             <View style={styles.loginContainer}>
-              <Text style={styles.loginText}>Zaten hesabın var mı?</Text>
+              <Text style={styles.loginText}>{t("register.haveAccount")}</Text>
 
               <Pressable onPress={() => navigation.replace("index")}>
-                <Text style={styles.loginButton}>Giriş Yap</Text>
+                <Text style={styles.loginButton}>{t("register.login")}</Text>
               </Pressable>
             </View>
 
-            {/* =================================================
-                ALT BILGI
-            ================================================= */}
-
-            <Text style={styles.footerText}>
-              Kayıt olarak Gönül Buluşması topluluk kurallarına uymayı kabul
-              etmiş olursun.
-            </Text>
+            {/* ALT BİLGİ */}
+            <Text style={styles.footerText}>{t("register.footer")}</Text>
           </View>
 
-          {/* =================================================
-              ÖZELLİKLER
-          ================================================= */}
-
+          {/* ÖZELLİKLER */}
           <View style={styles.features}>
-            <View style={styles.logoAlan}>
-              <Image
-                source={require("./logo/logo-gonul-bulusmasi.png")}
-                style={styles.logo}
-                resizeMode="contain"
-              />
-            </View>
             <View style={styles.feature}>
               <Text style={styles.featureIcon}>♡</Text>
 
-              <Text style={styles.featureText}>Profilini kendin oluştur</Text>
+              <Text style={styles.featureText}>
+                {t("register.featureProfile")}
+              </Text>
             </View>
 
             <View style={styles.feature}>
               <Text style={styles.featureIcon}>🔒</Text>
 
-              <Text style={styles.featureText}>Güvenli kullanım</Text>
+              <Text style={styles.featureText}>
+                {t("register.featureSecurity")}
+              </Text>
             </View>
           </View>
         </View>
@@ -674,12 +530,7 @@ export default function Register() {
   );
 }
 
-/*
- * =========================================================
- * STYLES
- * =========================================================
- */
-
+// STYLES
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -698,22 +549,10 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  /*
-   * =========================================================
-   * HEADER
-   * =========================================================
-   */
-
   header: {
     alignItems: "center",
     marginBottom: 22,
   },
-
-  /*
-   * =========================================================
-   * GERÇEK LOGO
-   * =========================================================
-   */
 
   logoAlan: {
     width: "100%",
@@ -741,27 +580,17 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /*
-   * =========================================================
-   * KART
-   * =========================================================
-   */
-
   card: {
     backgroundColor: "#FFFCFA",
     borderRadius: 22,
     padding: 22,
-
     shadowColor: "#7A263C",
-
     shadowOffset: {
       width: 0,
       height: 10,
     },
-
     shadowOpacity: 0.12,
     shadowRadius: 25,
-
     elevation: 6,
   },
 
@@ -778,12 +607,6 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginBottom: 22,
   },
-
-  /*
-   * =========================================================
-   * HATA
-   * =========================================================
-   */
 
   errorBox: {
     backgroundColor: "#FCE8EC",
@@ -802,12 +625,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
-  /*
-   * =========================================================
-   * INPUT
-   * =========================================================
-   */
-
   inputGroup: {
     marginBottom: 16,
   },
@@ -822,16 +639,11 @@ const styles = StyleSheet.create({
   input: {
     width: "100%",
     minHeight: 52,
-
     borderWidth: 1,
     borderColor: "#E8C5CF",
-
     borderRadius: 12,
-
     backgroundColor: "#FFF9F6",
-
     paddingHorizontal: 15,
-
     fontSize: 15,
     color: "#48252F",
   },
@@ -842,12 +654,6 @@ const styles = StyleSheet.create({
     color: "#80666D",
   },
 
-  /*
-   * =========================================================
-   * CİNSİYET
-   * =========================================================
-   */
-
   genderRow: {
     flexDirection: "row",
     gap: 10,
@@ -856,15 +662,11 @@ const styles = StyleSheet.create({
   genderButton: {
     flex: 1,
     minHeight: 52,
-
     borderWidth: 1,
     borderColor: "#E8C5CF",
-
     borderRadius: 12,
-
     alignItems: "center",
     justifyContent: "center",
-
     backgroundColor: "#FFF9F6",
   },
 
@@ -885,36 +687,21 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  /*
-   * =========================================================
-   * KAYIT BUTONU
-   * =========================================================
-   */
-
   registerButton: {
     minHeight: 55,
-
     marginTop: 5,
-
     borderRadius: 13,
-
     backgroundColor: "#8F2942",
-
     alignItems: "center",
     justifyContent: "center",
-
     flexDirection: "row",
-
     shadowColor: "#8F2942",
-
     shadowOffset: {
       width: 0,
       height: 8,
     },
-
     shadowOpacity: 0.25,
     shadowRadius: 12,
-
     elevation: 5,
   },
 
@@ -933,24 +720,13 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  /*
-   * =========================================================
-   * GÜVENLİK
-   * =========================================================
-   */
-
   securityBox: {
     marginTop: 16,
-
     padding: 13,
-
     borderRadius: 12,
-
     backgroundColor: "#faf5ff",
-
     borderWidth: 1,
     borderColor: "#F5DCE3",
-
     flexDirection: "row",
     alignItems: "center",
   },
@@ -962,29 +738,17 @@ const styles = StyleSheet.create({
 
   securityText: {
     flex: 1,
-
     color: "#7A263C",
-
     fontSize: 11,
     lineHeight: 17,
-
     fontWeight: "600",
   },
 
-  /*
-   * =========================================================
-   * GIRIS
-   * =========================================================
-   */
-
   loginContainer: {
     marginTop: 22,
-
     paddingTop: 20,
-
     borderTopWidth: 1,
     borderTopColor: "#F5DCE3",
-
     alignItems: "center",
   },
 
@@ -1000,48 +764,26 @@ const styles = StyleSheet.create({
     fontWeight: "800",
   },
 
-  /*
-   * =========================================================
-   * ALT BILGI
-   * =========================================================
-   */
-
   footerText: {
     marginTop: 18,
-
     color: "#a1a1aa",
-
     fontSize: 10,
     lineHeight: 15,
-
     textAlign: "center",
   },
 
-  /*
-   * =========================================================
-   * ÖZELLİKLER
-   * =========================================================
-   */
-
   features: {
     marginTop: 20,
-
     flexDirection: "row",
-
     justifyContent: "space-between",
-
     gap: 8,
   },
 
   feature: {
     flex: 1,
-
     alignItems: "center",
-
     backgroundColor: "rgba(255,255,255,0.75)",
-
     borderRadius: 12,
-
     paddingVertical: 11,
     paddingHorizontal: 5,
   },
@@ -1053,11 +795,8 @@ const styles = StyleSheet.create({
 
   featureText: {
     color: "#80666D",
-
     fontSize: 10,
-
     fontWeight: "700",
-
     textAlign: "center",
   },
 });

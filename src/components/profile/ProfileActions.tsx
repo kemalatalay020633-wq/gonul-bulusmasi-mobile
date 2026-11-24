@@ -1,14 +1,16 @@
-import React from "react";
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { tokenSil } from "../../services/tokenServisi";
 type ProfileActionsProps = {
   onLogout?: () => void;
 };
 
 export default function ProfileActions({ onLogout }: ProfileActionsProps) {
   const navigation = useNavigation<any>();
+  const { t } = useTranslation("myProfile");
+
   const anaSayfayaGit = () => {
     navigation.navigate("home");
   };
@@ -18,23 +20,19 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
   };
 
   const cikisYap = () => {
-    Alert.alert(
-      "Çıkış Yap",
-      "Oturumunuzu kapatmak istediğinize emin misiniz?",
-      [
-        {
-          text: "Vazgeç",
-          style: "cancel",
-        },
-        {
-          text: "Çıkış Yap",
-          style: "destructive",
-          onPress: async () => {
-            await AsyncStorage.multiRemove([
-              "token",
-              "userId",
-              "username",
-              "role",
+    Alert.alert(t("actions.logoutTitle"), t("actions.logoutConfirm"), [
+      {
+        text: t("actions.cancel"),
+        style: "cancel",
+      },
+      {
+        text: t("actions.logout"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await Promise.all([
+              tokenSil(),
+              AsyncStorage.multiRemove(["userId", "username", "role"]),
             ]);
 
             if (onLogout) {
@@ -42,10 +40,17 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
             } else {
               navigation.replace("index");
             }
-          },
+          } catch (hata) {
+            console.error("PROFİL ÇIKIŞ HATASI:", hata);
+
+            Alert.alert(
+              t("actions.logoutTitle"),
+              "Oturum kapatılırken bir hata oluştu.",
+            );
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   return (
@@ -55,7 +60,7 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
         onPress={anaSayfayaGit}
         activeOpacity={0.8}
       >
-        <Text style={styles.buttonText}>🏠 Ana Sayfa</Text>
+        <Text style={styles.buttonText}>🏠 {t("actions.home")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -63,7 +68,7 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
         onPress={profiliDuzenle}
         activeOpacity={0.8}
       >
-        <Text style={styles.buttonText}>✏️ Profili Düzenle</Text>
+        <Text style={styles.buttonText}>✏️ {t("actions.editProfile")}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -71,7 +76,7 @@ export default function ProfileActions({ onLogout }: ProfileActionsProps) {
         onPress={cikisYap}
         activeOpacity={0.8}
       >
-        <Text style={styles.logoutText}>🚪 Çıkış Yap</Text>
+        <Text style={styles.logoutText}>🚪 {t("actions.logout")}</Text>
       </TouchableOpacity>
     </View>
   );

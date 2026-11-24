@@ -1,6 +1,8 @@
+import { tokenGetir } from "../../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -16,6 +18,10 @@ import {
 // src/app/user/[id].tsx
 import KimlikDogrulamaliAvatar from "../../components/common/KimlikDogrulamaliAvatar";
 import { API_BASE_URL } from "../../config/api";
+import {
+  meslegiCevir,
+  profilSorusunuCevir,
+} from "../../utils/profilSoruCevirisi";
 
 const API_ADRESI = API_BASE_URL + "/api";
 type Kullanıcı = {
@@ -60,7 +66,13 @@ type Favori = {
   favoriteUserId?: number;
 };
 
+type EnumSecenegi = {
+  kod: string | number;
+  aciklama: string;
+};
+
 export default function KullanıcıProfil() {
+  const { t, i18n } = useTranslation("userProfile");
   const navigation = useNavigation<any>();
 
   const route = useRoute<any>();
@@ -70,6 +82,9 @@ export default function KullanıcıProfil() {
 
   const [kullanici, setKullanıcı] = useState<Kullanıcı | null>(null);
   const [profil, setProfil] = useState<Profil | null>(null);
+  const [medeniDurumlari, setMedeniDurumlari] = useState<EnumSecenegi[]>([]);
+  const [mezhepler, setMezhepler] = useState<EnumSecenegi[]>([]);
+  const [ilgiAlanlari, setIlgiAlanlari] = useState<EnumSecenegi[]>([]);
 
   const [yukleniyor, setYukleniyor] = useState(true);
   const [hata, setHata] = useState("");
@@ -91,31 +106,31 @@ export default function KullanıcıProfil() {
   const sikayetNedenleri = [
     {
       kod: "MEDENI_DURUMUNU_GIZLEME",
-      metin: "Medeni durumunu gizleme",
+      metin: t("userProfile:reportReasonMarital"),
     },
     {
       kod: "SAHTE_PROFIL",
-      metin: "Sahte profil veya başkasının fotoğrafı",
+      metin: t("userProfile:reportReasonFake"),
     },
     {
       kod: "TACIZ_VE_ISRARLI_MESAJ",
-      metin: "Taciz ve ısrarlı mesajlar",
+      metin: t("userProfile:reportReasonHarassment"),
     },
     {
       kod: "HAKARET_VE_TEHDIT",
-      metin: "Hakaret ve tehdit",
+      metin: t("userProfile:reportReasonInsult"),
     },
     {
       kod: "UYGUNSUZ_CINSEL_ICERIK",
-      metin: "Uygunsuz cinsel içerik",
+      metin: t("userProfile:reportReasonSexual"),
     },
     {
       kod: "DOLANDIRICILIK_VE_PARA_ISTEME",
-      metin: "Dolandırıcılık ve para isteme",
+      metin: t("userProfile:reportReasonScam"),
     },
     {
       kod: "DIGER",
-      metin: "Diğer",
+      metin: t("userProfile:reportReasonOther"),
     },
   ];
   useEffect(() => {
@@ -127,7 +142,7 @@ export default function KullanıcıProfil() {
       setYukleniyor(true);
       setHata("");
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
         navigation.replace("index");
@@ -135,7 +150,7 @@ export default function KullanıcıProfil() {
       }
 
       if (!id) {
-        setHata("Kullanıcı bulunamadi.");
+        setHata(t("userProfile:notFound"));
         return;
       }
 
@@ -149,9 +164,7 @@ export default function KullanıcıProfil() {
       });
 
       if (!kullaniciResponse.ok) {
-        throw new Error(
-          "Kullanıcı profili şu anda yüklenemiyor. Lütfen tekrar dene.",
-        );
+        throw new Error(t("userProfile:userLoadFailed"));
       }
 
       const kullaniciVerisi = (await kullaniciResponse.json()) as Kullanıcı;
@@ -172,13 +185,13 @@ export default function KullanıcıProfil() {
         );
 
         if (!goruntulemeResponse.ok) {
-          console.warn("Profil görüntüleme bildirimi oluşturulamadı.");
+          console.warn(t("userProfile:viewNoticeCreateFailed"));
         } else {
           // Yanıt içeriği kullanılmıyor.
           await goruntulemeResponse.text();
         }
       } catch {
-        console.warn("Profil görüntüleme bildirimi gönderilemedi.");
+        console.warn(t("userProfile:viewNoticeSendFailed"));
       }
 
       // Profil listesini getir.
@@ -191,9 +204,7 @@ export default function KullanıcıProfil() {
       });
 
       if (!profilResponse.ok) {
-        throw new Error(
-          "Profil bilgileri şu anda yüklenemiyor. Lütfen tekrar dene.",
-        );
+        throw new Error(t("userProfile:profileLoadFailed"));
       }
 
       const profilVerisi = await profilResponse.json();
@@ -210,6 +221,43 @@ export default function KullanıcıProfil() {
         (item) => Number(item.userId) === Number(id),
       );
 
+      // Sayısal enum kodlarını açıklamalarıyla eşleştirmek için seçenekleri getir.
+      // API değerleri değiştirilmez; yalnızca ekranda çevrilir.
+      const [medeniDurumYaniti, mezhepYaniti, ilgiAlaniYaniti] =
+        await Promise.all([
+          fetch(`${API_ADRESI}/enums/medeni-durumlar`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }).catch(() => null),
+          fetch(`${API_ADRESI}/enums/mezhepler`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }).catch(() => null),
+          fetch(`${API_ADRESI}/enums/ilgi-alanlari`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          }).catch(() => null),
+        ]);
+
+      const [medeniDurumVerisi, mezhepVerisi, ilgiAlaniVerisi] =
+        await Promise.all([
+          medeniDurumYaniti?.ok ? medeniDurumYaniti.json() : [],
+          mezhepYaniti?.ok ? mezhepYaniti.json() : [],
+          ilgiAlaniYaniti?.ok ? ilgiAlaniYaniti.json() : [],
+        ]);
+
+      setMedeniDurumlari(
+        Array.isArray(medeniDurumVerisi) ? medeniDurumVerisi : [],
+      );
+      setMezhepler(Array.isArray(mezhepVerisi) ? mezhepVerisi : []);
+      setIlgiAlanlari(Array.isArray(ilgiAlaniVerisi) ? ilgiAlaniVerisi : []);
+
       // Profil bilgilerini ekrana aktar.
       setKullanıcı(kullaniciVerisi);
       setProfil(bulunanProfil || null);
@@ -219,7 +267,7 @@ export default function KullanıcıProfil() {
     } catch (error) {
       console.error("Kullanıcı profili yüklenemedi.");
 
-      setHata("Profil yüklenirken bir hata oluştu. Lütfen tekrar dene.");
+      setHata(t("userProfile:loadError"));
     } finally {
       setYukleniyor(false);
     }
@@ -278,23 +326,26 @@ export default function KullanıcıProfil() {
         setFavoride(mevcutFavori);
       }
     } catch (error) {
-      console.error("Beğeni/favori durumu alınamadı.");
+      console.error(t("userProfile:likeStateFailed"));
     }
   };
 
   const begen = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
 
       if (!token || !mevcutKullanıcıId || !kullanici) {
-        Alert.alert("Hata", "Oturum veya kullanici bilgisi bulunamadi.");
+        Alert.alert(
+          t("userProfile:operationFailed"),
+          t("userProfile:sessionMissing"),
+        );
         return;
       }
 
       if (mevcutKullanıcıId === kullanici.id) {
-        Alert.alert("Uyarı", "Kendinizi beğenemezsiniz.");
+        Alert.alert(t("userProfile:warning"), t("userProfile:selfLike"));
         return;
       }
 
@@ -321,18 +372,18 @@ export default function KullanıcıProfil() {
 
       // Sunucunun yanıt gövdesini konsola yazdırma.
       if (!response.ok) {
-        throw new Error("Beğeni gönderilemedi. Lütfen tekrar dene.");
+        throw new Error(t("userProfile:likeFailed"));
       }
 
       setBegendi(true);
 
-      Alert.alert("Başarılı", "?? Beğeni gönderildi.");
+      Alert.alert(t("userProfile:success"), t("userProfile:likeSent"));
     } catch (error) {
-      console.error("Beğeni işlemi başarısız oldu.");
+      console.error(t("userProfile:likeOperationFailed"));
 
       Alert.alert(
-        "İşlem başarısız",
-        "Beğeni gönderilemedi. Lütfen tekrar dene.",
+        t("userProfile:operationFailed"),
+        t("userProfile:likeFailed"),
       );
     } finally {
       setBegeniYukleniyor(false);
@@ -341,17 +392,20 @@ export default function KullanıcıProfil() {
 
   const favoriyeEkle = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       const mevcutKullanıcıId = Number(await AsyncStorage.getItem("userId"));
 
       if (!token || !mevcutKullanıcıId || !kullanici) {
-        Alert.alert("Hata", "Oturum veya kullanici bilgisi bulunamadi.");
+        Alert.alert(
+          t("userProfile:operationFailed"),
+          t("userProfile:sessionMissing"),
+        );
         return;
       }
 
       if (mevcutKullanıcıId === kullanici.id) {
-        Alert.alert("Uyarı", "Kendinizi favorilere ekleyemezsiniz.");
+        Alert.alert(t("userProfile:warning"), t("userProfile:selfFavorite"));
         return;
       }
 
@@ -378,18 +432,18 @@ export default function KullanıcıProfil() {
 
       // Sunucunun yanıt gövdesini konsola yazdırma.
       if (!response.ok) {
-        throw new Error("Favorilere eklenemedi. Lütfen tekrar dene.");
+        throw new Error(t("userProfile:favoriteFailed"));
       }
 
       setFavoride(true);
 
-      Alert.alert("Başarılı", "? Favorilere eklendi.");
+      Alert.alert(t("userProfile:success"), t("userProfile:favoriteAdded"));
     } catch (error) {
-      console.error("Favorilere ekleme işlemi başarısız oldu.");
+      console.error(t("userProfile:favoriteOperationFailed"));
 
       Alert.alert(
-        "İşlem başarısız",
-        "Favorilere eklenemedi. Lütfen tekrar dene.",
+        t("userProfile:operationFailed"),
+        t("userProfile:favoriteFailed"),
       );
     } finally {
       setFavoriYukleniyor(false);
@@ -398,7 +452,7 @@ export default function KullanıcıProfil() {
 
   const mesajGonder = async () => {
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token || !kullanici) {
         Alert.alert("Hata", "Oturum veya kullanici bulunamadi.");
@@ -408,7 +462,7 @@ export default function KullanıcıProfil() {
       const temizMesaj = mesaj.trim();
 
       if (!temizMesaj) {
-        Alert.alert("Uyarı", "Mesaj boş olamaz.");
+        Alert.alert(t("userProfile:warning"), t("userProfile:messageEmpty"));
         return;
       }
 
@@ -439,21 +493,22 @@ export default function KullanıcıProfil() {
 
           if (veri?.kod === "PREMIUM_GEREKLI") {
             premiumGerekli = true;
-            hataMesaji =
-              "Mesaj gönderebilmek için aktif PREMIUM üyeliğiniz bulunmalıdır.";
+            hataMesaji = t("userProfile:premiumMessageRequired");
           }
         } catch {
           // Ham sunucu yanıtı kullanıcıya gösterilmez.
         }
 
         if (premiumGerekli) {
-          Alert.alert("Premium Üyelik Gerekli", hataMesaji, [
+          Alert.alert(t("userProfile:premiumRequired"), hataMesaji, [
             {
-              text: "Vazgeç",
+              text: t("userProfile:cancel"),
               style: "cancel",
             },
             {
-              text: "⭐ Premium Ol",
+              text: t("userProfile:becomePremium", {
+                defaultValue: "⭐ Premium Ol",
+              }),
               onPress: () => navigation.navigate("premium"),
             },
           ]);
@@ -466,13 +521,13 @@ export default function KullanıcıProfil() {
 
       setMesaj("");
 
-      Alert.alert("Başarılı", "Mesaj başarıyla gönderildi.");
+      Alert.alert(t("userProfile:success"), t("userProfile:messageSent"));
     } catch (error) {
-      console.error("Mesaj gönderme işlemi başarısız oldu.");
+      console.error(t("userProfile:messageOperationFailed"));
 
       Alert.alert(
-        "İşlem başarısız",
-        "Mesaj gönderilemedi. Lütfen tekrar dene.",
+        t("userProfile:operationFailed"),
+        t("userProfile:messageSendFailed"),
       );
     } finally {
       setMesajYukleniyor(false);
@@ -484,28 +539,31 @@ export default function KullanıcıProfil() {
     }
 
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
 
       if (!token || !mevcutKullaniciId || !kullanici) {
-        Alert.alert("Hata", "Oturum veya kullanıcı bilgisi bulunamadı.");
+        Alert.alert("Hata", t("userProfile:sessionMissing"));
         return;
       }
 
       if (mevcutKullaniciId === kullanici.id) {
-        Alert.alert("Uyarı", "Kendi profilinizi şikâyet edemezsiniz.");
+        Alert.alert(t("userProfile:warning"), t("userProfile:selfReport"));
         return;
       }
 
       if (!sikayetNedeni) {
-        Alert.alert("Uyarı", "Lütfen bir şikâyet nedeni seçin.");
+        Alert.alert(t("userProfile:warning"), t("userProfile:reasonRequired"));
         return;
       }
 
       const aciklama = sikayetAciklamasi.trim();
 
       if (aciklama.length > 2000) {
-        Alert.alert("Uyarı", "Açıklama en fazla 2000 karakter olabilir.");
+        Alert.alert(
+          t("userProfile:warning"),
+          t("userProfile:descriptionTooLong"),
+        );
         return;
       }
 
@@ -533,7 +591,7 @@ export default function KullanıcıProfil() {
       const yanitMetni = await response.text();
 
       if (!response.ok) {
-        let hataMesaji = "Şikâyet gönderilemedi. Lütfen tekrar deneyin.";
+        let hataMesaji = t("userProfile:reportFailed");
 
         try {
           const veri = JSON.parse(yanitMetni);
@@ -547,7 +605,7 @@ export default function KullanıcıProfil() {
           // Sunucunun ham yanıtını kullanıcıya göstermiyoruz.
         }
 
-        Alert.alert("İşlem başarısız", hataMesaji);
+        Alert.alert(t("userProfile:operationFailed"), hataMesaji);
         return;
       }
 
@@ -555,11 +613,11 @@ export default function KullanıcıProfil() {
       setSikayetNedeni("");
       setSikayetAciklamasi("");
 
-      Alert.alert("Şikâyet Alındı", "Bildiriminiz başarıyla gönderildi.");
+      Alert.alert(t("userProfile:reportReceived"), t("userProfile:reportSent"));
     } catch {
       Alert.alert(
-        "Bağlantı Hatası",
-        "Şikâyet gönderilemedi. Bağlantınızı kontrol edin.",
+        t("userProfile:connectionError"),
+        t("userProfile:reportConnectionFailed"),
       );
     } finally {
       setSikayetGonderiliyor(false);
@@ -589,13 +647,70 @@ export default function KullanıcıProfil() {
     return yas;
   };
 
+  // Sunucudan gelen enum ve seçenek değerlerini, kayıtlı dile göre gösterir.
+  // API'ye gönderilen değerler değiştirilmez; yalnızca ekranda çevrilir.
   const enumGoster = (deger?: string | number) => {
     if (deger === undefined || deger === null || String(deger).trim() === "") {
-      return "Belirtilmemiş";
+      return t("userProfile:unspecified");
     }
 
-    return String(deger);
+    const hamDeger = String(deger).trim();
+    return profilSorusunuCevir(
+      hamDeger,
+      i18n.resolvedLanguage || i18n.language,
+    );
   };
+
+  // API'den gelen sayısal enum kodunu önce açıklamayla eşleştirir,
+  // ardından mevcut beş dilli çeviri sözlüğünden ekrana uygun metni alır.
+  const enumSecenegiGoster = (
+    liste: EnumSecenegi[],
+    deger?: string | number,
+  ): string => {
+    if (deger === undefined || deger === null || String(deger).trim() === "") {
+      return t("userProfile:unspecified");
+    }
+
+    const hamDeger = String(deger).trim();
+    const bulunan = liste.find((item) => String(item.kod).trim() === hamDeger);
+
+    if (bulunan?.aciklama) {
+      return profilSorusunuCevir(
+        bulunan.aciklama,
+        i18n.resolvedLanguage || i18n.language,
+      );
+    }
+
+    // Sayısal kodun açıklaması bulunamadıysa kodu kullanıcıya göstermeyiz.
+    if (/^\\d+$/.test(hamDeger)) {
+      return t("userProfile:unspecified");
+    }
+
+    return profilSorusunuCevir(
+      hamDeger,
+      i18n.resolvedLanguage || i18n.language,
+    );
+  };
+
+  const cinsiyetiGoster = (deger?: string) => {
+    if (!deger?.trim()) return t("userProfile:unspecified");
+
+    const anahtar = deger.trim().toLocaleUpperCase("tr-TR");
+    const cinsiyetCevirileri: Record<string, string> = {
+      ERKEK: t("userProfile:genderMale", { defaultValue: "Erkek" }),
+      KADIN: t("userProfile:genderFemale", { defaultValue: "Kadın" }),
+      MALE: t("userProfile:genderMale", { defaultValue: "Erkek" }),
+      FEMALE: t("userProfile:genderFemale", { defaultValue: "Kadın" }),
+    };
+
+    return cinsiyetCevirileri[anahtar] || enumGoster(deger);
+  };
+
+  const ilgiAlanlariniGoster = (deger: string | number) =>
+    String(deger)
+      .split(/[,|]/)
+      .map((ilgi) => enumSecenegiGoster(ilgiAlanlari, ilgi.trim()))
+      .filter((ilgi) => ilgi && ilgi !== t("userProfile:unspecified"));
 
   if (yukleniyor) {
     return (
@@ -603,9 +718,7 @@ export default function KullanıcıProfil() {
         <View style={styles.center}>
           <ActivityIndicator size="large" />
 
-          <Text style={styles.loadingText}>
-            Kullanıcı profili yükleniyor...
-          </Text>
+          <Text style={styles.loadingText}>{t("userProfile:loading")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -615,7 +728,7 @@ export default function KullanıcıProfil() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.hataBaslik}>Profil Yüklenemedi</Text>
+          <Text style={styles.hataBaslik}>{t("userProfile:loadTitle")}</Text>
 
           <Text style={styles.hataText}>{hata}</Text>
 
@@ -623,14 +736,18 @@ export default function KullanıcıProfil() {
             style={styles.primaryButton}
             onPress={kullaniciProfiliniGetir}
           >
-            <Text style={styles.primaryButtonText}>Tekrar Dene</Text>
+            <Text style={styles.primaryButtonText}>
+              {t("userProfile:retry")}
+            </Text>
           </Pressable>
 
           <Pressable
             style={styles.secondaryButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.secondaryButtonText}>Geri Dön</Text>
+            <Text style={styles.secondaryButtonText}>
+              {t("userProfile:back")}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -641,13 +758,15 @@ export default function KullanıcıProfil() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.hataBaslik}>Kullanıcı bulunamadi.</Text>
+          <Text style={styles.hataBaslik}>{t("userProfile:notFound")}</Text>
 
           <Pressable
             style={styles.primaryButton}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.primaryButtonText}>Geri Dön</Text>
+            <Text style={styles.primaryButtonText}>
+              {t("userProfile:back")}
+            </Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -676,10 +795,12 @@ export default function KullanıcıProfil() {
             style={styles.backButton}
           >
             <Text style={styles.backIcon}>←</Text>
-            <Text style={styles.backText}>Geri</Text>
+            <Text style={styles.backText}>
+              {t("userProfile:back", { defaultValue: "Geri" })}
+            </Text>
           </Pressable>
 
-          <Text style={styles.topTitle}>Profil</Text>
+          <Text style={styles.topTitle}>{t("userProfile:profile")}</Text>
 
           <Pressable
             style={styles.sikayetTopButton}
@@ -689,7 +810,9 @@ export default function KullanıcıProfil() {
               });
             }}
           >
-            <Text style={styles.sikayetTopButtonText}>⚑ Şikâyet Et</Text>
+            <Text style={styles.sikayetTopButtonText}>
+              {t("userProfile:report")}
+            </Text>
           </Pressable>
         </View>
 
@@ -717,13 +840,17 @@ export default function KullanıcıProfil() {
                   ]}
                 />
                 <Text style={styles.statusText}>
-                  {kullanici.online ? "Çevrimiçi" : "Şu an çevrimdışı"}
+                  {kullanici.online
+                    ? t("userProfile:online")
+                    : t("userProfile:offline")}
                 </Text>
               </View>
               {profil?.profileVerified && (
                 <View style={styles.verifiedBadge}>
                   <Text style={styles.verifiedBadgeText}>
-                    ✓ Doğrulanmış profil
+                    {t("userProfile:verified", {
+                      defaultValue: "✓ Doğrulanmış profil",
+                    })}
                   </Text>
                 </View>
               )}
@@ -733,7 +860,9 @@ export default function KullanıcıProfil() {
           <View style={styles.tagRow}>
             {yas !== null && (
               <View style={styles.tag}>
-                <Text style={styles.tagText}>{yas} yaş</Text>
+                <Text style={styles.tagText}>
+                  {yas} {t("userProfile:yearsOld", { defaultValue: "yaş" })}
+                </Text>
               </View>
             )}
             {kullanici.city && (
@@ -743,13 +872,15 @@ export default function KullanıcıProfil() {
             )}
             {kullanici.gender && (
               <View style={styles.tag}>
-                <Text style={styles.tagText}>{kullanici.gender}</Text>
+                <Text style={styles.tagText}>
+                  {cinsiyetiGoster(kullanici.gender)}
+                </Text>
               </View>
             )}
             {profil?.maritalStatus !== undefined && (
               <View style={styles.tag}>
                 <Text style={styles.tagText}>
-                  {enumGoster(profil.maritalStatus)}
+                  {enumSecenegiGoster(medeniDurumlari, profil.maritalStatus)}
                 </Text>
               </View>
             )}
@@ -766,10 +897,10 @@ export default function KullanıcıProfil() {
           >
             <Text style={styles.likeButtonText}>
               {begeniYukleniyor
-                ? "Gönderiliyor..."
+                ? t("userProfile:sending")
                 : begendi
-                  ? "♥ Beğenildi"
-                  : "♥ Beğen"}
+                  ? t("userProfile:liked")
+                  : t("userProfile:like")}
             </Text>
           </Pressable>
 
@@ -780,10 +911,14 @@ export default function KullanıcıProfil() {
           >
             <Text style={styles.favoriteButtonText}>
               {favoriYukleniyor
-                ? "Ekleniyor..."
+                ? t("userProfile:addingFavorite", {
+                    defaultValue: "Ekleniyor...",
+                  })
                 : favoride
-                  ? "? Favorilerde"
-                  : "☆ Favorilere Ekle"}
+                  ? t("userProfile:inFavorites", {
+                      defaultValue: "★ Favorilerde",
+                    })
+                  : t("userProfile:addFavorite")}
             </Text>
           </Pressable>
         </View>
@@ -796,14 +931,19 @@ export default function KullanıcıProfil() {
             onPress={() => setMesajAcik(!mesajAcik)}
           >
             <Text style={styles.messageButtonText}>
-              {mesajAcik ? "Mesaj Alanını Kapat" : "📍 Mesaj Gönder"}
+              {mesajAcik
+                ? t("userProfile:closeMessage")
+                : t("userProfile:sendMessage")}
             </Text>
           </Pressable>
 
           {mesajAcik && (
             <View style={styles.messageBox}>
               <Text style={styles.messageTitle}>
-                {adSoyad || kullanici.username} kişisine mesaj gönder
+                {t("userProfile:messageToUser", {
+                  name: adSoyad || kullanici.username,
+                  defaultValue: `${adSoyad || kullanici.username} kişisine mesaj gönder`,
+                })}
               </Text>
 
               <TextInput
@@ -812,7 +952,7 @@ export default function KullanıcıProfil() {
                 multiline
                 maxLength={2000}
                 numberOfLines={5}
-                placeholder="Mesajinizi yazin..."
+                placeholder={t("userProfile:messagePlaceholder")}
                 placeholderTextColor="#999999"
                 style={styles.messageInput}
                 textAlignVertical="top"
@@ -827,7 +967,9 @@ export default function KullanıcıProfil() {
                   disabled={mesajYukleniyor || !mesaj.trim()}
                 >
                   <Text style={styles.sendButtonText}>
-                    {mesajYukleniyor ? "Gönderiliyor..." : "Gönder"}
+                    {mesajYukleniyor
+                      ? t("userProfile:sending")
+                      : t("userProfile:send")}
                   </Text>
                 </Pressable>
               </View>
@@ -837,81 +979,96 @@ export default function KullanıcıProfil() {
 
         {/* HAKKINDA */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hakkında</Text>
+          <Text style={styles.sectionTitle}>{t("userProfile:about")}</Text>
           <View style={styles.aboutBox}>
             <Text style={styles.aboutText}>
-              {profil?.about || "Bu kullanıcı hakkında henüz bilgi eklenmemiş."}
+              {profil?.about || t("userProfile:noAbout")}
             </Text>
           </View>
         </View>
 
         {/* KİŞİSEL BİLGİLER: İKİLİ GRID */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Kişisel Bilgiler</Text>
+          <Text style={styles.sectionTitle}>
+            {t("userProfile:personalInfo")}
+          </Text>
+
           <View style={styles.infoGrid}>
             <BilgiKarti
-              baslik="Şehir"
-              deger={kullanici.city || "Belirtilmemiş"}
+              baslik={t("userProfile:city")}
+              deger={kullanici.city || t("userProfile:unspecified")}
               ikon="⌖"
             />
+
             <BilgiKarti
-              baslik="Yaş"
-              deger={yas !== null ? `${yas} yaş` : "Belirtilmemiş"}
+              baslik={t("userProfile:age")}
+              deger={
+                yas !== null
+                  ? `${yas} ${t("userProfile:yearsOld", { defaultValue: "yaş" })}`
+                  : t("userProfile:unspecified")
+              }
               ikon="◷"
             />
+
             <BilgiKarti
-              baslik="Meslek"
-              deger={enumGoster(profil?.profession)}
+              baslik={t("userProfile:profession")}
+              deger={meslegiCevir(
+                profil?.profession,
+                i18n.resolvedLanguage || i18n.language,
+              )}
               ikon="▣"
             />
+
             <BilgiKarti
-              baslik="Eğitim"
-              deger={enumGoster(profil?.education)}
-              ikon="◇"
-            />
-            <BilgiKarti
-              baslik="Boy"
-              deger={profil?.height ? `${profil.height} cm` : "Belirtilmemiş"}
+              baslik={t("userProfile:height")}
+              deger={
+                profil?.height
+                  ? `${profil.height} cm`
+                  : t("userProfile:unspecified")
+              }
               ikon="↕"
             />
+
             <BilgiKarti
-              baslik="Kilo"
-              deger={profil?.weight ? `${profil.weight} kg` : "Belirtilmemiş"}
+              baslik={t("userProfile:weight")}
+              deger={
+                profil?.weight
+                  ? `${profil.weight} kg`
+                  : t("userProfile:unspecified")
+              }
               ikon="⚖"
             />
+
             <BilgiKarti
-              baslik="Medeni Durum"
-              deger={enumGoster(profil?.maritalStatus)}
+              baslik={t("userProfile:maritalStatus")}
+              deger={enumSecenegiGoster(medeniDurumlari, profil?.maritalStatus)}
               ikon="♡"
             />
+
             <BilgiKarti
-              baslik="Din"
-              deger={enumGoster(profil?.religion)}
+              baslik={t("userProfile:religion")}
+              deger={enumSecenegiGoster(mezhepler, profil?.religion)}
               ikon="✧"
             />
           </View>
         </View>
-
         {/* ILGI ALANLARI */}
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ilgi Alanlari</Text>
+          <Text style={styles.sectionTitle}>{t("userProfile:interests")}</Text>
 
           {profil?.interests ? (
             <View style={styles.interestsBox}>
-              {String(profil.interests)
-                .split(",")
-                .map((interest, index) => (
-                  <View
-                    key={`${interest}-${index}`}
-                    style={styles.interestChip}
-                  >
-                    <Text style={styles.interestText}>{interest.trim()}</Text>
-                  </View>
-                ))}
+              {ilgiAlanlariniGoster(profil.interests).map((interest, index) => (
+                <View key={`${interest}-${index}`} style={styles.interestChip}>
+                  <Text style={styles.interestText}>{interest}</Text>
+                </View>
+              ))}
             </View>
           ) : (
-            <Text style={styles.emptyText}>İlgi alanı belirtilmemiş.</Text>
+            <Text style={styles.emptyText}>
+              {t("userProfile:interestsUnspecified")}
+            </Text>
           )}
         </View>
 
@@ -926,7 +1083,9 @@ export default function KullanıcıProfil() {
               })
             }
           >
-            <Text style={styles.detailButtonText}>Profil Detaylarını Gör</Text>
+            <Text style={styles.detailButtonText}>
+              {t("userProfile:viewDetails")}
+            </Text>
           </Pressable>
         </View>
 
@@ -937,14 +1096,18 @@ export default function KullanıcıProfil() {
             style={styles.bottomBackButton}
             onPress={() => navigation.replace("home")}
           >
-            <Text style={styles.bottomBackText}>← Kullanıcılara Dön</Text>
+            <Text style={styles.bottomBackText}>
+              {t("userProfile:backUsers")}
+            </Text>
           </Pressable>
 
           <Pressable
             style={styles.bottomMessageButton}
             onPress={() => navigation.navigate("messages")}
           >
-            <Text style={styles.bottomMessageText}>📍 Tüm Mesajlar</Text>
+            <Text style={styles.bottomMessageText}>
+              {t("userProfile:allMessages")}
+            </Text>
           </Pressable>
         </View>
       </ScrollView>

@@ -1,4 +1,6 @@
-import React, { useMemo } from "react";
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+
 import {
   ActivityIndicator,
   StyleSheet,
@@ -6,6 +8,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { profilSorusunuCevir } from "../../utils/profilSoruCevirisi";
 import QuestionItem from "./QuestionItem";
 
 type Question = {
@@ -37,28 +41,56 @@ export default function ProfileQuestions({
   onCheckboxChange,
   onSave,
 }: ProfileQuestionsProps) {
+  const { t, i18n } = useTranslation("editProfile");
+
+  const dil = i18n.resolvedLanguage || i18n.language || "tr";
+
+  /**
+   * Kategori adını yalnızca ekranda gösterirken çevirir.
+   * Backend'den gelen kategori değerini değiştirmez.
+   */
+  const kategoriCevir = (kategori: string | null): string => {
+    const kategoriMetni =
+      kategori?.trim() || t("profileQuestions.generalCategory");
+
+    return profilSorusunuCevir(kategoriMetni, dil);
+  };
+
+  /**
+   * Kategorileri orijinal değerleri üzerinden gruplandırır.
+   * Böylece farklı kategoriler çeviri sonucunda aynı metne
+   * dönüşse bile yanlışlıkla birleştirilmez.
+   */
   const categories = useMemo(() => {
     return Array.from(
-      new Set(questions.map((question) => question.category || "GENEL")),
+      new Set(questions.map((question) => question.category?.trim() || "")),
     );
   }, [questions]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Profil Soruları</Text>
+      {/* Başlık */}
+      <Text style={styles.title}>{t("profileQuestions.title")}</Text>
 
+      {/* Açıklama */}
       <Text style={styles.description}>
-        Size uygun seçenekleri işaretleyerek profilinizi tamamlayın.
+        {t("profileQuestions.description")}
       </Text>
 
+      {/* Kategori ve sorular */}
       {categories.map((category) => {
         const categoryQuestions = questions.filter(
-          (question) => (question.category || "GENEL") === category,
+          (question) => (question.category?.trim() || "") === category,
         );
 
         return (
-          <View key={category} style={styles.categoryContainer}>
-            <Text style={styles.categoryTitle}>{category}</Text>
+          <View
+            key={category || "general-category"}
+            style={styles.categoryContainer}
+          >
+            <Text style={styles.categoryTitle}>
+              {kategoriCevir(category || null)}
+            </Text>
 
             {categoryQuestions.map((question) => (
               <QuestionItem
@@ -73,18 +105,21 @@ export default function ProfileQuestions({
         );
       })}
 
+      {/* Soru bulunamadığında */}
       {questions.length === 0 && (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Aktif profil sorusu bulunmuyor.</Text>
+          <Text style={styles.emptyText}>{t("profileQuestions.empty")}</Text>
         </View>
       )}
 
+      {/* Hata mesajı */}
       {error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
       ) : null}
 
+      {/* Kaydet butonu */}
       <TouchableOpacity
         style={[styles.saveButton, saving && styles.saveButtonDisabled]}
         disabled={saving}
@@ -95,10 +130,14 @@ export default function ProfileQuestions({
           <>
             <ActivityIndicator size="small" color="#FFFCFA" />
 
-            <Text style={styles.saveButtonText}>Kaydediliyor...</Text>
+            <Text style={styles.saveButtonText}>
+              {t("profileQuestions.saving")}
+            </Text>
           </>
         ) : (
-          <Text style={styles.saveButtonText}>Profil Cevaplarını Kaydet</Text>
+          <Text style={styles.saveButtonText}>
+            {t("profileQuestions.save")}
+          </Text>
         )}
       </TouchableOpacity>
     </View>

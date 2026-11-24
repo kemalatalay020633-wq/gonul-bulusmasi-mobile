@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   ScrollView,
@@ -32,6 +33,7 @@ function KartOdeme({
   onOdemeBaslat,
   yukleniyor,
 }: KartOdemeProps) {
+  const { t } = useTranslation();
   /*
    * =========================================================
    * KART BİLGİLERİ
@@ -92,7 +94,7 @@ function KartOdeme({
      */
 
     if (kartSahibi.trim().length < 3) {
-      setHata("Lütfen kart üzerindeki adı girin.");
+      setHata(t("premium.card.errName"));
       return;
     }
 
@@ -103,7 +105,7 @@ function KartOdeme({
     const temizKartNumarasi = kartNumarasi.replace(/\s/g, "");
 
     if (temizKartNumarasi.length !== 16) {
-      setHata("Kart numarası 16 haneli olmalıdır.");
+      setHata(t("premium.card.errNumber"));
       return;
     }
 
@@ -112,7 +114,7 @@ function KartOdeme({
      */
 
     if (sonKullanma.length !== 5) {
-      setHata("Son kullanma tarihini AA/YY şeklinde girin.");
+      setHata(t("premium.card.errExpiry"));
       return;
     }
 
@@ -121,7 +123,7 @@ function KartOdeme({
      */
 
     if (cvv.length !== 3) {
-      setHata("CVV 3 haneli olmalıdır.");
+      setHata(t("premium.card.errCvv"));
       return;
     }
 
@@ -154,7 +156,7 @@ function KartOdeme({
         <View style={styles.header}>
           <Text style={styles.headerIcon}>💳</Text>
 
-          <Text style={styles.title}>Kart ile Ödeme</Text>
+          <Text style={styles.title}>{t("premium.card.title")}</Text>
 
           <Text style={styles.subtitle}>{paketAdi}</Text>
 
@@ -170,19 +172,19 @@ function KartOdeme({
         ) : null}
 
         <View style={styles.formCard}>
-          <Text style={styles.label}>Kart Üzerindeki Ad</Text>
+          <Text style={styles.label}>{t("premium.card.cardholder")}</Text>
 
           <TextInput
             value={kartSahibi}
             onChangeText={setKartSahibi}
-            placeholder="Ad Soyad"
+            placeholder={t("premium.card.cardholderPlaceholder")}
             placeholderTextColor="#999"
             autoCapitalize="words"
             style={styles.input}
             editable={!yukleniyor}
           />
 
-          <Text style={styles.label}>Kart Numarası</Text>
+          <Text style={styles.label}>{t("premium.card.number")}</Text>
 
           <TextInput
             value={kartNumarasi}
@@ -199,14 +201,14 @@ function KartOdeme({
 
           <View style={styles.row}>
             <View style={styles.half}>
-              <Text style={styles.label}>Son Kullanma</Text>
+              <Text style={styles.label}>{t("premium.card.expiry")}</Text>
 
               <TextInput
                 value={sonKullanma}
                 onChangeText={(deger) => {
                   setSonKullanma(sonKullanmaTarihiniFormatla(deger));
                 }}
-                placeholder="AA/YY"
+                placeholder={t("premium.card.expiryPlaceholder")}
                 placeholderTextColor="#999"
                 keyboardType="number-pad"
                 maxLength={5}
@@ -216,7 +218,7 @@ function KartOdeme({
             </View>
 
             <View style={styles.half}>
-              <Text style={styles.label}>CVV</Text>
+              <Text style={styles.label}>{t("premium.card.cvv")}</Text>
 
               <TextInput
                 value={cvv}
@@ -234,7 +236,7 @@ function KartOdeme({
             </View>
           </View>
 
-          <Text style={styles.label}>Taksit</Text>
+          <Text style={styles.label}>{t("premium.card.installments")}</Text>
 
           <View style={styles.taksitContainer}>
             {["1", "2", "3", "6", "9", "12"].map((secenek) => {
@@ -260,7 +262,7 @@ function KartOdeme({
                       secili && styles.taksitTextSelected,
                     ]}
                   >
-                    {secenek} Taksit
+                    {t("premium.card.installment", { count: secenek })}
                   </Text>
                 </TouchableOpacity>
               );
@@ -268,11 +270,9 @@ function KartOdeme({
           </View>
 
           <View style={styles.infoBox}>
-            <Text style={styles.infoTitle}>🔒 Güvenli Ödeme</Text>
+            <Text style={styles.infoTitle}>{t("premium.card.secure")}</Text>
 
-            <Text style={styles.infoText}>
-              Kart bilgileriniz bu uygulama tarafından kayıt altına alınmaz.
-            </Text>
+            <Text style={styles.infoText}>{t("premium.card.secureText")}</Text>
           </View>
 
           <TouchableOpacity
@@ -282,8 +282,10 @@ function KartOdeme({
           >
             <Text style={styles.payButtonText}>
               {yukleniyor
-                ? "İŞLEM YAPILIYOR..."
-                : `ÖDEME YAP • ${tutar.toFixed(2).replace(".", ",")} TL`}
+                ? t("premium.card.processing")
+                : t("premium.card.pay", {
+                    price: tutar.toFixed(2).replace(".", ","),
+                  })}
             </Text>
           </TouchableOpacity>
 
@@ -292,7 +294,7 @@ function KartOdeme({
             onPress={onGeri}
             disabled={yukleniyor}
           >
-            <Text style={styles.backButtonText}>← Geri</Text>
+            <Text style={styles.backButtonText}>{t("premium.card.back")}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

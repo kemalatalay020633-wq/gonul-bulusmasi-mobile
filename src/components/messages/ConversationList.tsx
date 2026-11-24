@@ -1,5 +1,7 @@
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { useTranslation } from "react-i18next";
+
 import KimlikDogrulamaliAvatar from "../../components/common/KimlikDogrulamaliAvatar";
 import type { MessageDto } from "../../types/message";
 
@@ -17,6 +19,14 @@ type ConversationListProps = {
   userInfoLoading?: boolean;
 };
 
+const tarihYerelleri: Record<string, string> = {
+  tr: "tr-TR",
+  en: "en-US",
+  de: "de-DE",
+  ar: "ar",
+  ru: "ru-RU",
+};
+
 function ConversationList({
   users,
   selectedUserId,
@@ -25,6 +35,15 @@ function ConversationList({
   getUserActive,
   userInfoLoading = false,
 }: ConversationListProps) {
+  const { t, i18n } = useTranslation("messages");
+
+  const aktifDil = (i18n.resolvedLanguage || i18n.language || "tr")
+    .split("-")[0]
+    .split("_")[0]
+    .toLowerCase();
+
+  const tarihDili = tarihYerelleri[aktifDil] || "tr-TR";
+
   const tarihFormatla = (tarih?: string) => {
     if (!tarih) return "";
 
@@ -42,13 +61,13 @@ function ConversationList({
       tarihNesnesi.getFullYear() === simdi.getFullYear();
 
     if (ayniGun) {
-      return tarihNesnesi.toLocaleTimeString("tr-TR", {
+      return tarihNesnesi.toLocaleTimeString(tarihDili, {
         hour: "2-digit",
         minute: "2-digit",
       });
     }
 
-    return tarihNesnesi.toLocaleDateString("tr-TR", {
+    return tarihNesnesi.toLocaleDateString(tarihDili, {
       day: "2-digit",
       month: "short",
     });
@@ -59,15 +78,19 @@ function ConversationList({
     const secili = selectedUserId === item.userId;
     const kullaniciAdi = getUserDisplayName(item.userId);
 
-    const sonMesaj = item.lastMessage?.content?.trim() || "📎 Medya mesajı";
+    const sonMesaj =
+      item.lastMessage?.content?.trim() || t("conversation.mediaMessage");
 
     const avatarHarf =
       kullaniciAdi && kullaniciAdi.length > 0
-        ? kullaniciAdi.charAt(0).toLocaleUpperCase("tr-TR")
+        ? kullaniciAdi.charAt(0).toLocaleUpperCase(tarihDili)
         : "?";
 
     return (
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={kullaniciAdi}
+        accessibilityState={{ selected: secili }}
         style={[
           styles.conversationItem,
           secili && styles.conversationItemSelected,
@@ -98,7 +121,7 @@ function ConversationList({
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {userInfoLoading ? "Yükleniyor..." : kullaniciAdi}
+              {userInfoLoading ? t("conversation.loading") : kullaniciAdi}
             </Text>
 
             <Text
@@ -127,7 +150,9 @@ function ConversationList({
                     ]}
                     numberOfLines={1}
                   >
-                    {aktif ? "Çevrimiçi" : "Çevrimdışı"}
+                    {aktif
+                      ? t("conversation.online")
+                      : t("conversation.offline")}
                   </Text>
                 </View>
               ) : null}
@@ -161,11 +186,10 @@ function ConversationList({
             <Text style={styles.emptyIcon}>♡</Text>
           </View>
 
-          <Text style={styles.emptyTitle}>Henüz mesajınız yok</Text>
+          <Text style={styles.emptyTitle}>{t("conversation.emptyTitle")}</Text>
 
           <Text style={styles.emptyText}>
-            Bir kullanıcıyla mesajlaşmaya başladığınızda konuşmalarınız burada
-            görünecek.
+            {t("conversation.emptyDescription")}
           </Text>
         </View>
       ) : (

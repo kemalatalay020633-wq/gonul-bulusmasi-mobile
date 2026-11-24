@@ -1,6 +1,8 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -123,48 +125,49 @@ const yasHesapla = (dogumTarihi: string | null | undefined): number | null => {
 
 const medeniDurumGetir = (
   medeniDurum: string | number | null | undefined,
+  t: (key: string) => string,
 ): string => {
-  if (medeniDurum === null || medeniDurum === undefined) {
-    return "";
-  }
+  if (medeniDurum === null || medeniDurum === undefined) return "";
 
   const deger = String(medeniDurum).trim();
+  if (!deger) return "";
 
-  if (!deger) {
-    return "";
-  }
-
-  const sayisalDegerler: Record<string, string> = {
-    "0": "Bekar",
-    "1": "Evli",
-    "2": "Boşanmış",
-    "3": "Dul",
+  const normalize = deger
+    .toLocaleUpperCase("tr-TR")
+    .replace(/İ/g, "I")
+    .replace(/Ş/g, "S")
+    .replace(/Ğ/g, "G")
+    .replace(/Ü/g, "U")
+    .replace(/Ö/g, "O")
+    .replace(/Ç/g, "C");
+  const durumAnahtarlari: Record<string, string> = {
+    "0": "single",
+    "1": "married",
+    "2": "divorced",
+    "3": "widowed",
+    BEKAR: "single",
+    EVLI: "married",
+    BOSANMIS: "divorced",
+    DUL: "widowed",
   };
 
-  if (sayisalDegerler[deger]) {
-    return sayisalDegerler[deger];
-  }
-
-  const metinselDegerler: Record<string, string> = {
-    BEKAR: "Bekar",
-    EVLI: "Evli",
-    BOSANMIS: "Boşanmış",
-    DUL: "Dul",
-    Bekar: "Bekar",
-    Evli: "Evli",
-    Boşanmış: "Boşanmış",
-    Dul: "Dul",
-  };
-
-  if (metinselDegerler[deger]) {
-    return metinselDegerler[deger];
-  }
-
-  if (!Number.isNaN(Number(deger))) {
-    return "";
-  }
-
+  const anahtar = durumAnahtarlari[deger] || durumAnahtarlari[normalize];
+  if (anahtar) return t(`profileViewers.maritalStatus.${anahtar}`);
+  if (!Number.isNaN(Number(deger))) return "";
   return deger;
+};
+
+const cinsiyetGetir = (
+  cinsiyet: string | undefined,
+  t: (key: string) => string,
+): string => {
+  if (!cinsiyet) return "";
+  const deger = cinsiyet.toLocaleUpperCase("tr-TR");
+  if (["ERKEK", "MALE", "MAN"].includes(deger))
+    return t("profileViewers.gender.male");
+  if (["KADIN", "FEMALE", "WOMAN"].includes(deger))
+    return t("profileViewers.gender.female");
+  return cinsiyet;
 };
 
 /*
@@ -174,6 +177,7 @@ const medeniDurumGetir = (
  */
 
 export default function ProfilimeBakanlar() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
 
   const [kullanicilar, setKullanicilar] = useState<BakanKullanici[]>([]);
@@ -332,10 +336,10 @@ export default function ProfilimeBakanlar() {
        * TOKEN
        */
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
-        setHata("Oturum bilgisi bulunamadi.");
+        setHata(t("profileViewers.errors.sessionMissing"));
         return;
       }
 
@@ -348,7 +352,7 @@ export default function ProfilimeBakanlar() {
       const kullaniciId = Number(userId);
 
       if (!userId || !Number.isFinite(kullaniciId) || kullaniciId <= 0) {
-        setHata("Kullanici bilgisi bulunamadi.");
+        setHata(t("profileViewers.errors.userMissing"));
         return;
       }
 
@@ -421,11 +425,8 @@ export default function ProfilimeBakanlar() {
     } catch (error) {
       console.error("PROFILIME BAKANLAR HATASI:", error);
 
-      setHata(
-        error instanceof Error
-          ? error.message
-          : "Profilinize bakan kullanıcılar yüklenemedi.",
-      );
+      console.error("PROFILIME BAKANLAR YUKLEME DETAYI:", error);
+      setHata(t("profileViewers.errors.loadFailed"));
     } finally {
       setYukleniyor(false);
     }
@@ -474,7 +475,7 @@ export default function ProfilimeBakanlar() {
           <ActivityIndicator size="large" color="#8F2942" />
 
           <Text style={styles.yukleniyorText}>
-            Profilinize bakanlar yükleniyor...
+            {t("profileViewers.loading")}
           </Text>
         </View>
       </SafeAreaView>
@@ -504,10 +505,8 @@ export default function ProfilimeBakanlar() {
 
           <View style={styles.baslikAlani}>
             <Text style={styles.baslikIcon}>👀</Text>
-            <Text style={styles.baslik}>Profilime Bakanlar</Text>
-            <Text style={styles.altBaslik}>
-              Profilini görüntüleyen kullanıcılar
-            </Text>
+            <Text style={styles.baslik}>{t("profileViewers.title")}</Text>
+            <Text style={styles.altBaslik}>{t("profileViewers.subtitle")}</Text>
           </View>
 
           <View style={styles.ustBosluk} />
@@ -515,9 +514,13 @@ export default function ProfilimeBakanlar() {
 
         <View style={styles.ozetKart}>
           <Text style={styles.ozetIkon}>👁</Text>
-          <Text style={styles.ozetMetin}>Toplam</Text>
+          <Text style={styles.ozetMetin}>
+            {t("profileViewers.summaryPrefix")}
+          </Text>
           <Text style={styles.ozetSayi}>{kullanicilar.length}</Text>
-          <Text style={styles.ozetMetin}>kişi profilini görüntüledi</Text>
+          <Text style={styles.ozetMetin}>
+            {t("profileViewers.summarySuffix")}
+          </Text>
         </View>
 
         {/*
@@ -526,12 +529,16 @@ export default function ProfilimeBakanlar() {
 
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
+            <Text style={styles.hataBaslik}>
+              {t("profileViewers.errorTitle")}
+            </Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
             <Pressable style={styles.tekrarButonu} onPress={yukle}>
-              <Text style={styles.tekrarButonuText}>Tekrar Dene</Text>
+              <Text style={styles.tekrarButonuText}>
+                {t("profileViewers.retry")}
+              </Text>
             </Pressable>
           </View>
         ) : null}
@@ -544,10 +551,12 @@ export default function ProfilimeBakanlar() {
           <View style={styles.bosKart}>
             <Text style={styles.bosIcon}>👀</Text>
 
-            <Text style={styles.bosBaslik}>Henüz profilinize bakan yok</Text>
+            <Text style={styles.bosBaslik}>
+              {t("profileViewers.emptyTitle")}
+            </Text>
 
             <Text style={styles.bosText}>
-              Profilinizi görüntüleyen kullanıcılar burada görünecek.
+              {t("profileViewers.emptyDescription")}
             </Text>
           </View>
         ) : null}
@@ -576,7 +585,7 @@ export default function ProfilimeBakanlar() {
              * MEDENI DURUM
              */
 
-            const medeniDurum = medeniDurumGetir(profil?.maritalStatus);
+            const medeniDurum = medeniDurumGetir(profil?.maritalStatus, t);
 
             return (
               <View key={kullanici.id} style={styles.kullaniciKart}>
@@ -612,7 +621,9 @@ export default function ProfilimeBakanlar() {
 
                   <View style={styles.bilgiler}>
                     <Text style={styles.adSoyad} numberOfLines={1}>
-                      {adSoyad || kullanici.username || "Kullanici"}
+                      {adSoyad ||
+                        kullanici.username ||
+                        t("profileViewers.userFallback")}
                     </Text>
 
                     {kullanici.username ? (
@@ -623,7 +634,9 @@ export default function ProfilimeBakanlar() {
 
                     {yas !== null || kullanici.city ? (
                       <Text style={styles.detay} numberOfLines={1}>
-                        {yas !== null ? `${yas} yaş` : ""}
+                        {yas !== null
+                          ? t("profileViewers.age", { age: yas })
+                          : ""}
                         {yas !== null && kullanici.city ? " · " : ""}
                         {kullanici.city || ""}
                       </Text>
@@ -631,16 +644,20 @@ export default function ProfilimeBakanlar() {
 
                     {medeniDurum ? (
                       <Text style={styles.detay}>
-                        Medeni durum: {medeniDurum}
+                        {t("profileViewers.maritalStatusLabel", {
+                          status: medeniDurum,
+                        })}
                       </Text>
                     ) : null}
 
                     {kullanici.gender ? (
-                      <Text style={styles.detay}>{kullanici.gender}</Text>
+                      <Text style={styles.detay}>
+                        {cinsiyetGetir(kullanici.gender, t)}
+                      </Text>
                     ) : null}
 
                     <Text style={styles.bakanBilgisi}>
-                      Profilinizi görüntüledi
+                      {t("profileViewers.viewedProfile")}
                     </Text>
                   </View>
                 </View>
@@ -653,7 +670,9 @@ export default function ProfilimeBakanlar() {
                   style={styles.profilButonu}
                   onPress={() => profileGit(kullanici.id)}
                 >
-                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
+                  <Text style={styles.profilButonuText}>
+                    👤 {t("profileViewers.viewProfile")}
+                  </Text>
                 </Pressable>
               </View>
             );

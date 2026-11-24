@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
 import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
+import type { RTCRtpEncodingParameters } from "react-native-webrtc";
 
 import InCallManager from "react-native-incall-manager";
 import { createSound } from "react-native-nitro-sound";
@@ -13,6 +13,7 @@ import {
 } from "react-native-webrtc";
 import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
 
+import { AramaE2EEHandshake } from "./AramaE2EEHandshake";
 import { Hoparlor } from "./Hoparlor";
 
 type RTCSessionDescriptionInit = {
@@ -105,6 +106,13 @@ type AramaOlaylari = {
     },
   ) => void;
 
+  e2ee: (
+    gonderenKullaniciId: number,
+    aramaOturumId: string,
+    e2eeVerisi: string,
+  ) => void;
+
+  webSocketBaglandi: () => void;
   baglandi: () => void;
 
   uzakStream: (stream: MediaStream) => void;
@@ -130,12 +138,26 @@ type BackendAramaSinyali = {
   sdpMLineIndex?: number | null;
 
   aramaOturumId?: string | null;
+
+  e2eeVerisi?: string | null;
 };
 
 type AramaOlayCallback = (...args: any[]) => void;
 
 class AramaWebRTC {
   private peerConnection: RTCPeerConnection | null = null;
+
+  private e2eeHandshake: AramaE2EEHandshake | null = null;
+  private e2eeBekleyenSinyaller: Array<{
+    senderUserId: number;
+    sessionId: string;
+    payload: string;
+  }> = [];
+  private e2eeBekleyenGondericiler: Array<{
+    sender: any;
+    track: any;
+    detached: boolean;
+  }> = [];
 
   private yerelStream: MediaStream | null = null;
 
@@ -194,11 +216,25 @@ class AramaWebRTC {
 
   private bekleyenIceAdaylari: RTCIceCandidateInit[] = [];
 
+  // Giden ICE, backend CALL_OFFER_ACK gelene kadar ayrı kuyrukta tutulur.
+  private offerAckBekleniyor = false;
+  private gidenIceAktarimiSuruyor = false;
+  private gidenIceAktarimPromise: {
+    nesil: number;
+    promise: Promise<void>;
+  } | null = null;
+  private gidenIceTekrarDenemeIstendi = false;
+  private bekleyenGidenIceAdaylari: RTCIceCandidateInit[] = [];
+
   private remoteDescriptionHazir = false;
 
   private aramaSonlandiriliyor = false;
+  private aramaNesli = 0;
 
-  private webRtcBaglandiBildirildi = false; // Aynı anda iki createOffer çalışmasını engeller.
+  private webRtcBaglandiBildirildi = false;
+  private statsTimer: ReturnType<typeof setInterval> | null = null;
+  private statsOkumaSuruyor = false;
+  // Aynı anda iki createOffer çalışmasını engeller.
   // Özellikle medya alma ile arama başlatmanın yarışması halinde
   // SDP m-line sırasının bozulmasını önler.
 
@@ -241,8 +277,16 @@ class AramaWebRTC {
   private ringtoneBaslatiliyor = false;
 
   private sonGelenOfferSdp: string | null = null;
+  private bekleyenGelenTeklif: Extract<
+    AramaMesaji,
+    { tip: "CALL_OFFER" }
+  > | null = null;
 
   private cevapIsleniyor = false;
+
+  // Aynı gelen aramanın iki farklı UI dinleyicisinden
+  // eş zamanlı kabul edilmesini engeller.
+  private gelenAramaKabulPromise: Promise<RTCSessionDescriptionInit> | null = null;
 
   private ringbackHoparlorOnceAcik = false;
 
@@ -600,41 +644,169 @@ class AramaWebRTC {
     return `${parca()}${parca()}-${parca()}-4${parca().slice(1)}-${(8 + Math.floor(Math.random() * 4)).toString(16)}${parca().slice(1)}-${parca()}${parca()}${parca()}`;
   }
 
+  /**
+   * Oturum açmış kullanıcının kimliğini WebRTC/E2EE katmanına tanıtır.
+   * Arama ayarından önce çağrılabilir; ayarla() ve gelenAramayiAyarla()
+   * çağrıları bu değeri kendi oturum bilgileriyle günceller.
+   */
+  public kullaniciKimliginiAyarla(kullaniciId: number): void {
+    if (!Number.isSafeInteger(kullaniciId) || kullaniciId <= 0) {
+      throw new Error("Geçersiz kullanıcı ID.");
+    }
+
+    this.mevcutKullaniciId = kullaniciId;
+  }
+
   ayarla(
     mevcutKullaniciId: number,
-
     arananKullaniciId: number,
-
     aramaTuru: AramaTuru,
   ) {
-    this.mevcutKullaniciId = mevcutKullaniciId;
+    // Devam eden bir arama oturumu varsa üzerine yazma.
+    if (this.aramaOturumId && !this.aramaSonlandiriliyor) {
+      console.warn(
+        "AKTİF ARAMA OTURUMU KORUNDU. Yeni oturum oluşturulmadı.",
+        this.aramaOturumId,
+      );
+      return;
+    }
 
+    this.aramaNesli++;
+    this.mevcutKullaniciId = mevcutKullaniciId;
     this.arananKullaniciId = arananKullaniciId;
 
-    // UUID yalnızca oturum tanımlayıcısıdır; yetki denetimi sunucudadır.
     this.aramaOturumId = this.yeniAramaOturumId();
 
     this.aramaTuru = aramaTuru;
 
     this.aramaSonlandiriliyor = false;
-
     this.webRtcBaglandiBildirildi = false;
 
     this.bekleyenIceAdaylari = [];
-
+    this.offerAckBekleniyor = false;
+    this.gidenIceAktarimiSuruyor = false;
+    this.gidenIceTekrarDenemeIstendi = false;
+    this.bekleyenGidenIceAdaylari = [];
+    this.e2eeBekleyenSinyaller = [];
+    this.e2eeBekleyenGondericiler = [];
     this.remoteDescriptionHazir = false;
+    this.cevapIsleniyor = false;
 
     console.log("======================================");
-
-    console.log(" WEBRTC ARAMA AYARLANDI");
-
-    console.log(" Mevcut kullanıcı:", mevcutKullaniciId);
-
-    console.log(" Aranan kullanıcı:", arananKullaniciId);
-
-    console.log(" Arama türü:", aramaTuru);
-
+    console.log("WEBRTC ARAMA AYARLANDI");
+    console.log("Mevcut kullanıcı:", mevcutKullaniciId);
+    console.log("Aranan kullanıcı:", arananKullaniciId);
+    console.log("Arama türü:", aramaTuru);
     console.log("======================================");
+  }
+  gelenAramayiAyarla(
+    mevcutKullaniciId: number,
+    arayanKullaniciId: number,
+    aramaTuru: AramaTuru,
+    aramaOturumId: string,
+  ) {
+    if (
+      !Number.isFinite(mevcutKullaniciId) ||
+      !Number.isFinite(arayanKullaniciId) ||
+      mevcutKullaniciId <= 0 ||
+      arayanKullaniciId <= 0
+    ) {
+      throw new Error("Gelen arama kullanıcı bilgileri geçersiz.");
+    }
+
+    if (!aramaOturumId?.trim()) {
+      throw new Error("Gelen arama oturum kimliği bulunamadı.");
+    }
+
+    const aktifPeerConnection =
+      this.peerConnection &&
+      this.peerConnection.signalingState !== "closed";
+
+    if (
+      this.aramaSonlandiriliyor ||
+      this.aramaOturumId !== null ||
+      aktifPeerConnection
+    ) {
+      throw new Error(
+        "Başka bir arama oturumu hâlâ aktif veya temizleniyor. Yeni gelen arama yüklenmedi."
+      );
+    }
+
+    this.aramaNesli++;
+    this.bekleyenGelenTeklif = null;
+    this.mevcutKullaniciId = mevcutKullaniciId;
+    this.arananKullaniciId = arayanKullaniciId;
+
+    // Sunucunun oluşturduğu gerçek oturum kimliği korunur.
+    // yeniAramaOturumId() burada kesinlikle çağrılmaz.
+    this.aramaOturumId = aramaOturumId;
+    this.sonGelenOfferSdp = null;
+
+    this.aramaTuru = aramaTuru;
+
+    this.aramaSonlandiriliyor = false;
+    this.webRtcBaglandiBildirildi = false;
+    this.bekleyenIceAdaylari = [];
+    this.offerAckBekleniyor = false;
+    this.gidenIceAktarimiSuruyor = false;
+    this.gidenIceTekrarDenemeIstendi = false;
+    this.bekleyenGidenIceAdaylari = [];
+    this.e2eeBekleyenSinyaller = [];
+    this.e2eeBekleyenGondericiler = [];
+    this.remoteDescriptionHazir = false;
+    this.cevapIsleniyor = false;
+
+    console.log("GELEN ARAMA WEBRTC OTURUMU HAZIRLANDI");
+    console.log("Arayan kullanıcı:", arayanKullaniciId);
+    console.log("Aranan kullanıcı:", mevcutKullaniciId);
+    console.log("Arama türü:", aramaTuru);
+    console.log("Oturum kimliği:", aramaOturumId);
+  }
+  async fcmIleGelenAramayiYukle(
+    mevcutKullaniciId: number,
+    arayanKullaniciId: number,
+    aramaTuru: AramaTuru,
+    aramaOturumId: string,
+    teklifSdp: string,
+  ): Promise<void> {
+    if (!teklifSdp?.trim()) {
+      throw new Error("Gelen aramanın SDP bilgisi boş.");
+    }
+
+    if (
+      this.aramaOturumId === aramaOturumId &&
+      this.sonGelenOfferSdp === teklifSdp &&
+      !this.aramaSonlandiriliyor
+    ) {
+      console.warn("Aynı FCM arama teklifi daha önce işlendi.");
+      return;
+    }
+
+    this.gelenAramayiAyarla(
+      mevcutKullaniciId,
+      arayanKullaniciId,
+      aramaTuru,
+      aramaOturumId,
+    );
+
+    this.sonGelenOfferSdp = teklifSdp;
+
+    const mesaj: AramaMesaji = {
+      tip: "CALL_OFFER",
+      arayanId: arayanKullaniciId,
+      arananId: mevcutKullaniciId,
+      aramaTuru,
+      teklif: {
+        type: "offer",
+        sdp: teklifSdp,
+      },
+    };
+
+    await this.gelenAramaSesiniBaslat();
+
+    this.olayCalistir("teklif", mesaj);
+
+    console.log("FCM ÜZERİNDEN GELEN ARAMA WEBRTC'YE AKTARILDI");
   }
 
   /*\*
@@ -672,6 +844,23 @@ class AramaWebRTC {
 
     dinleyiciler.push(dinleyici);
 
+    if (olay === "teklif" && this.bekleyenGelenTeklif) {
+      const bekleyen = this.bekleyenGelenTeklif;
+      this.bekleyenGelenTeklif = null;
+
+      try {
+        (
+          dinleyici as (
+            mesaj: Extract<AramaMesaji, { tip: "CALL_OFFER" }>,
+          ) => void
+        )(bekleyen);
+
+        console.log("BEKLEYEN GELEN ARAMA TEKLİFİ TESLİM EDİLDİ");
+      } catch (hata) {
+        console.error("BEKLEYEN TEKLİF İŞLENEMEDİ:", hata);
+      }
+    }
+
     return () => {
       const mevcutDinleyiciler = this.olaylar.get(olay);
 
@@ -699,6 +888,10 @@ class AramaWebRTC {
     const dinleyiciler = this.olaylar.get(olay);
 
     if (!dinleyiciler || dinleyiciler.length === 0) {
+      if (olay === "teklif" && args[0]?.tip === "CALL_OFFER") {
+        this.bekleyenGelenTeklif = args[0];
+        console.warn("GELEN ARAMA TEKLİFİ DİNLEYİCİ BEKLEMEK ÜZERE SAKLANDI");
+      }
       return;
     }
 
@@ -769,6 +962,49 @@ class AramaWebRTC {
     gonderici: ((sinyal: BackendAramaSinyali) => void | Promise<void>) | null,
   ): void {
     this.hariciSinyalGonderici = gonderici;
+  }
+
+  /**
+   * STOMP yeniden bağlandığında bekleyen ICE adaylarını aktarır.
+   * CALL_OFFER mesajını tekrar göndermez.
+   */
+  stompBaglantisiYenidenKuruldu(): void {
+    const nesil = this.aramaNesli;
+
+    // Aktarım sürüyorsa reconnect olayını kaybetme.
+    // Mevcut aktarım bitince kuyruk yeniden kontrol edilecek.
+    if (this.gidenIceAktarimPromise?.nesil === nesil) {
+      this.gidenIceTekrarDenemeIstendi = true;
+      console.log(
+        "⏳ ICE AKTARIMI SÜRÜYOR; STOMP RECONNECT YENİDEN DENEMEYE KAYDEDİLDİ.",
+      );
+      return;
+    }
+
+    if (
+      this.aramaSonlandiriliyor ||
+      !this.aramaOturumId ||
+      this.offerAckBekleniyor ||
+      this.bekleyenGidenIceAdaylari.length === 0
+    ) {
+      return;
+    }
+
+    console.log(
+      "🔄 STOMP YENİDEN BAĞLANDI: BEKLEYEN ICE KUYRUĞU KONTROL EDİLİYOR.",
+      this.bekleyenGidenIceAdaylari.length,
+    );
+
+    void this.bekleyenGidenIceAdaylariniGonder().catch((hata) => {
+      if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+        return;
+      }
+
+      console.error(
+        "❌ STOMP YENİDEN BAĞLANTI SONRASI ICE AKTARIMI BAŞARISIZ:",
+        hata,
+      );
+    });
   } /*\*
 
 
@@ -1042,7 +1278,7 @@ class AramaWebRTC {
 
               basari();
 
-              this.olayCalistir("baglandi");
+              this.olayCalistir("webSocketBaglandi");
             } catch (connectHatasi) {
               const error =
                 connectHatasi instanceof Error
@@ -1299,6 +1535,16 @@ class AramaWebRTC {
 
       const gonderenKullaniciId = sinyal.hedefKullaniciId;
 
+      console.log("========== ARAMA SİNYALİ KİMLİK KONTROLÜ ==========", {
+        tip: sinyal.tip,
+        gelenOturumId: sinyal.aramaOturumId,
+        aktifOturumId: this.aramaOturumId,
+        gelenGonderenId: gonderenKullaniciId,
+        beklenenKarsiKullaniciId: this.arananKullaniciId,
+        mevcutKullaniciId: this.mevcutKullaniciId,
+        aramaNesli: this.aramaNesli,
+        sonlandiriliyor: this.aramaSonlandiriliyor,
+      });
       if (!gonderenKullaniciId) {
         console.warn("  Gelen arama sinyalinde gönderen kullanıcı ID yok.");
 
@@ -1447,7 +1693,14 @@ class AramaWebRTC {
 
           this.olayCalistir("ice", mesaj);
 
-          void this.iceAdayiEkle(aday);
+          void this.iceAdayiEkle(aday).catch((hata) => {
+            if (this.aramaSonlandiriliyor || !this.aramaOturumId) {
+              console.warn("Eski aramanın ICE işlemi yok sayıldı:", hata);
+              return;
+            }
+
+            console.error("ICE işlemi beklenmeyen şekilde başarısız:", hata);
+          });
 
           break;
         }
@@ -1492,6 +1745,50 @@ class AramaWebRTC {
           break;
         }
 
+        case "E2EE_KEY_EXCHANGE": {
+          const sessionId = sinyal.aramaOturumId;
+          const payload = sinyal.e2eeVerisi;
+          if (
+            !sessionId ||
+            sessionId !== this.aramaOturumId ||
+            typeof payload !== "string" ||
+            payload.length === 0 ||
+            payload.length > 2048
+          ) {
+            console.warn("E2EE sinyali geçersiz veya başka oturuma ait.");
+            return;
+          }
+          const pending = {
+            senderUserId: gonderenKullaniciId,
+            sessionId,
+            payload,
+          };
+          const handshake = this.e2eeHandshake;
+          if (!handshake || !this.peerConnection) {
+            if (this.e2eeBekleyenSinyaller.length >= 32) {
+              console.warn("E2EE bekleyen sinyal sınırına ulaşıldı.");
+              return;
+            }
+            this.e2eeBekleyenSinyaller.push(pending);
+          } else {
+            void handshake
+              .handleSignal(
+                pending.senderUserId,
+                pending.sessionId,
+                pending.payload,
+              )
+              .catch((hata) => {
+                if (
+                  this.e2eeHandshake === handshake &&
+                  this.aramaOturumId === sessionId
+                )
+                  this.e2eeHatasi(hata);
+              });
+          }
+          this.olayCalistir("e2ee", gonderenKullaniciId, sessionId, payload);
+          break;
+        }
+
         default:
           console.warn("  Bilinmeyen arama sinyal tipi:", sinyal.tip);
       }
@@ -1521,127 +1818,418 @@ class AramaWebRTC {
 
    */
 
-  private aramaSinyaliGonder(
-    tip: string,
-
-    bilgiler: {
-      sdp?: string;
-
-      aday?: RTCIceCandidateInit;
-    } = {},
-  ) {
-    if (!this.arananKullaniciId) {
-      console.warn("  Arama sinyali gönderilemedi. Hedef kullanıcı yok.");
-
-      return;
-    }
-
-    if (!this.aramaOturumId) {
-      console.warn("Arama sinyali gönderilemedi. Oturum kimliği yok.");
-      this.olayCalistir("hata", new Error("Arama oturum kimliği bulunamadı."));
-      return;
-    }
-
-    if (this.hariciSinyalGonderici) {
-      const sinyal: BackendAramaSinyali = {
-        hedefKullaniciId: this.arananKullaniciId,
-
-        tur: this.aramaTuru,
-
-        tip,
-
-        sdp: bilgiler.sdp ?? null,
-
-        aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
-
-        sdpMid: bilgiler.aday?.sdpMid ?? null,
-
-        sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
-
-        aramaOturumId: this.aramaOturumId,
-      };
-
-      void Promise.resolve(this.hariciSinyalGonderici(sinyal)).catch((hata) => {
-        const error =
-          hata instanceof Error
-            ? hata
-            : new Error("Arama sinyali gönderilemedi.");
-
-        console.error(" Harici STOMP arama sinyali hatası:", error);
-
-        this.olayCalistir("hata", error);
-      });
-
-      return;
-    }
+  private async e2eeSinyaliGonder(
+    payload: string,
+    baglam: {
+      nesil: number;
+      sessionId: string;
+      peerUserId: number;
+      aramaTuru: AramaTuru;
+    },
+  ): Promise<void> {
+    if (!payload || payload.length > 2048)
+      throw new Error("E2EE sinyali geçersiz.");
 
     if (
-      !this.stompClient ||
-      !this.stompClient.connected ||
-      !this.webSocketBagli
+      baglam.nesil !== this.aramaNesli ||
+      baglam.sessionId !== this.aramaOturumId ||
+      baglam.peerUserId !== this.arananKullaniciId ||
+      this.aramaSonlandiriliyor
     ) {
-      console.warn("  Arama sinyali gönderilemedi. STOMP bağlı değil.");
-
-      return;
-    }
-
-    if (!this.arananKullaniciId) {
-      console.warn("  Arama sinyali gönderilemedi. Hedef kullanıcı yok.");
-
-      return;
+      throw new Error("E2EE: Eski arama nesline ait sinyal engellendi.");
     }
 
     const sinyal: BackendAramaSinyali = {
-      hedefKullaniciId: this.arananKullaniciId,
-
-      tur: this.aramaTuru,
-
-      tip,
-
-      sdp: bilgiler.sdp ?? null,
-
-      aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
-
-      sdpMid: bilgiler.aday?.sdpMid ?? null,
-
-      sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
-
-      aramaOturumId: this.aramaOturumId,
+      hedefKullaniciId: baglam.peerUserId,
+      tur: baglam.aramaTuru,
+      tip: "E2EE_KEY_EXCHANGE",
+      sdp: null,
+      aday: null,
+      sdpMid: null,
+      sdpMLineIndex: null,
+      aramaOturumId: baglam.sessionId,
+      e2eeVerisi: payload,
     };
 
-    console.log("======================================");
+    const hariciGonderici = this.hariciSinyalGonderici;
+    if (hariciGonderici) {
+      await hariciGonderici(sinyal);
+      return;
+    }
 
-    console.log(" ARAMA SİNYALİ GÖNDERİLİYOR");
+    const client = this.stompClient;
+    if (!client || !client.connected || !this.webSocketBagli)
+      throw new Error("E2EE sinyali gönderilemedi: STOMP bağlı değil.");
 
-    console.log(" Tip:", tip);
+    client.publish({
+      destination: "/app/arama/sinyal",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(sinyal),
+    });
+  }
+  private async e2eeHandshakeOlustur(baslatanTaraf: boolean): Promise<void> {
+    const pc = this.peerConnection;
+    const sessionId = this.aramaOturumId;
+    const localUserId = this.mevcutKullaniciId;
+    const peerUserId = this.arananKullaniciId;
 
-    console.log(" Hedef:", this.arananKullaniciId);
+    if (!pc || !sessionId || localUserId === null || peerUserId === null) {
+      throw new Error("E2EE: PeerConnection veya arama kimlikleri eksik.");
+    }
 
-    console.log(" Tür:", this.aramaTuru);
+    if (this.e2eeHandshake) {
+      return;
+    }
 
-    console.log("======================================");
+    const nesil = this.aramaNesli;
+    const aramaTuru = this.aramaTuru;
+
+    const handshake = new AramaE2EEHandshake({
+      peerConnection: pc,
+      sessionId,
+      localUserId,
+      peerUserId,
+      sendSignal: (payload) =>
+        this.e2eeSinyaliGonder(payload, {
+          nesil,
+          sessionId,
+          peerUserId,
+          aramaTuru,
+        }),
+    });
+
+    this.e2eeHandshake = handshake;
 
     try {
-      this.stompClient.publish({
-        destination: "/app/arama/sinyal",
+      if (baslatanTaraf) {
+        await handshake.startInitiator();
+      } else {
+        const pendingSignals = this.e2eeBekleyenSinyaller.filter(
+          (item) => item.sessionId === sessionId,
+        );
 
-        headers: {
-          "content-type": "application/json",
-        },
+        this.e2eeBekleyenSinyaller = this.e2eeBekleyenSinyaller.filter(
+          (item) => item.sessionId !== sessionId,
+        );
 
-        body: JSON.stringify(sinyal),
-      });
-
-      console.log(" ARAMA SİNYALİ BACKEND'E GÖNDERİLDİ");
+        await handshake.startResponder(pendingSignals);
+      }
     } catch (hata) {
-      console.error(" Arama sinyali gönderilemedi:", hata);
+      // Eski handshake'in hatası yeni aramayı sonlandırmamalı.
+      const ayniAramaHalaAktif =
+        this.aramaNesli === nesil &&
+        this.e2eeHandshake === handshake &&
+        this.aramaOturumId === sessionId &&
+        this.peerConnection === pc &&
+        !this.aramaSonlandiriliyor;
 
-      const error =
-        hata instanceof Error
-          ? hata
-          : new Error("Arama sinyali gönderilemedi.");
+      if (ayniAramaHalaAktif) {
+        this.e2eeHatasi(hata);
+      } else {
+        console.warn("Eski E2EE handshake hatası yok sayıldı:", hata);
+      }
 
-      this.olayCalistir("hata", error);
+      throw hata;
+    }
+  }
+
+  private async e2eeGondericileriEtkinlestir(
+    trackleriEtkinlestir: boolean = true,
+  ): Promise<void> {
+    const nesil = this.aramaNesli;
+    const peerConnection = this.peerConnection;
+    const bekleyenler = this.e2eeBekleyenGondericiler;
+
+    if (!peerConnection || this.aramaSonlandiriliyor) {
+      throw new Error("E2EE: Aktif PeerConnection bulunamadı.");
+    }
+
+    const aramaHalaAyni = (): boolean =>
+      this.aramaNesli === nesil &&
+      this.peerConnection === peerConnection &&
+      this.e2eeBekleyenGondericiler === bekleyenler &&
+      !this.aramaSonlandiriliyor;
+
+    for (const item of bekleyenler) {
+      if (!aramaHalaAyni()) {
+        console.warn("Eski arama E2EE gönderici işlemi durduruldu.");
+        return;
+      }
+
+      const mevcutTrack = item.sender.track;
+
+      if (mevcutTrack === item.track) {
+        console.log(
+          "E2EE: Sender zaten doğru track'e bağlı:",
+          item.track.kind,
+          item.track.id,
+        );
+      } else if (mevcutTrack == null) {
+        await item.sender.replaceTrack(item.track);
+        console.log(
+          "E2EE: Sender track bağlandı:",
+          item.track.kind,
+          item.track.id,
+        );
+      } else {
+        throw new Error(
+          `E2EE: Beklenmeyen sender track'i. Tür: ${item.track.kind}`,
+        );
+      }
+
+      if (!aramaHalaAyni()) {
+        console.warn("Eski arama replaceTrack sonucu yok sayıldı.");
+        return;
+      }
+
+      // Yalnızca video göndericisine maksimum 30 FPS uygula.
+      if (item.track.kind === "video") {
+        try {
+          const parameters = item.sender.getParameters();
+
+          if (!parameters.encodings?.length) {
+            console.warn(
+              "VIDEO FPS: RTP encoding bulunamadı, varsayılan ayarlar korunuyor.",
+            );
+          } else {
+            for (const encoding of parameters.encodings) {
+              encoding.maxFramerate = 60;
+            }
+
+            await item.sender.setParameters(parameters);
+
+            if (!aramaHalaAyni()) {
+              console.warn("Eski arama FPS sonucu yok sayıldı.");
+              return;
+            }
+
+            const applied = item.sender
+              .getParameters()
+              .encodings.map(
+                (encoding: RTCRtpEncodingParameters) => encoding.maxFramerate,
+              );
+
+            console.log("VIDEO FPS SINIRI UYGULANDI:", applied);
+          }
+        } catch (fpsError) {
+          if (!aramaHalaAyni()) {
+            console.warn("Eski aramanın FPS işlemi durduruldu.");
+            return;
+          }
+
+          // FPS ayarı başarısız olsa bile E2EE güvenliği korunur.
+          console.warn("VIDEO FPS AYARI UYGULANAMADI:", fpsError);
+        }
+      }
+
+      if (!aramaHalaAyni()) {
+        console.warn("Eski arama medya izi etkinleştirilmedi.");
+        return;
+      }
+
+      if (trackleriEtkinlestir) {
+        item.track.enabled = true;
+      }
+    }
+
+    // Yalnızca hâlâ aynı aramaya ait listeyi temizle.
+    if (trackleriEtkinlestir && aramaHalaAyni()) {
+      this.e2eeBekleyenGondericiler = [];
+    }
+  }
+
+  private e2eeHatasi(hata: unknown): void {
+    const error =
+      hata instanceof Error ? hata : new Error("E2EE handshake başarısız.");
+    console.error("E2EE güvenli oturum kurulamadı:", error);
+    this.olayCalistir("hata", error);
+    void this.aramayiBitir().catch((cleanupHatasi) =>
+      console.error(
+        "E2EE hata sonrası arama temizliği başarısız:",
+        cleanupHatasi,
+      ),
+    );
+  }
+
+  private async aramaSinyaliGonder(
+    tip: string,
+    bilgiler: {
+      sdp?: string;
+      aday?: RTCIceCandidateInit;
+      e2eeVerisi?: string;
+    } = {},
+  ): Promise<void> {
+    const hedefKullaniciId = this.arananKullaniciId;
+    const aramaOturumId = this.aramaOturumId;
+
+    if (!hedefKullaniciId) {
+      throw new Error("Arama sinyali gönderilemedi: hedef kullanıcı yok.");
+    }
+    if (!aramaOturumId) {
+      throw new Error("Arama sinyali gönderilemedi: oturum kimliği yok.");
+    }
+    if (this.aramaSonlandiriliyor && tip !== "CALL_END") {
+      throw new Error("Arama sonlandırıldığı için sinyal gönderilemedi.");
+    }
+
+    const sinyal: BackendAramaSinyali = {
+      hedefKullaniciId,
+      tur: this.aramaTuru,
+      tip,
+      sdp: bilgiler.sdp ?? null,
+      aday: bilgiler.aday ? JSON.stringify(bilgiler.aday) : null,
+      sdpMid: bilgiler.aday?.sdpMid ?? null,
+      sdpMLineIndex: bilgiler.aday?.sdpMLineIndex ?? null,
+      aramaOturumId,
+      e2eeVerisi: bilgiler.e2eeVerisi ?? null,
+    };
+
+    console.log(
+      "📤 ARAMA SİNYALİ GÖNDERİLİYOR:",
+      tip,
+      "Hedef:",
+      hedefKullaniciId,
+    );
+
+    // CALL_OFFER ACK korelasyonu useMessages taşıyıcısında kurulur.
+    // Native fallback yalnızca publish yapabildiğinden ACK garantisi veremez.
+    if (tip === "CALL_OFFER" && !this.hariciSinyalGonderici) {
+      throw new Error(
+        "CALL_OFFER_ACK için harici STOMP sinyal taşıyıcısı gerekli.",
+      );
+    }
+
+    if (this.hariciSinyalGonderici) {
+      await this.hariciSinyalGonderici(sinyal);
+      console.log("🟢 ARAMA SİNYALİ HARİCİ TAŞIYICIYLA TAMAMLANDI:", tip);
+      return;
+    }
+
+    const client = this.stompClient;
+    if (!client || !client.connected || !this.webSocketBagli) {
+      throw new Error("Arama sinyali gönderilemedi: STOMP bağlı değil.");
+    }
+
+    client.publish({
+      destination: "/app/arama/sinyal",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(sinyal),
+    });
+    console.log("🟢 ARAMA SİNYALİ STOMP ÜZERİNDEN YAYINLANDI:", tip);
+  }
+
+  private bekleyenGidenIceAdaylariniGonder(): Promise<void> {
+    const nesil = this.aramaNesli;
+
+    if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+      return Promise.reject(
+        new Error(
+          "Arama sonlandırıldı; bekleyen ICE adayları gönderilmeyecek.",
+        ),
+      );
+    }
+
+    const mevcut = this.gidenIceAktarimPromise;
+
+    if (mevcut?.nesil === nesil) {
+      return mevcut.promise;
+    }
+
+    const promise = this.bekleyenGidenIceAdaylariniGonderInternal(nesil);
+    const kayit = { nesil, promise };
+
+    this.gidenIceAktarimPromise = kayit;
+
+    void promise
+      .finally(() => {
+        if (this.gidenIceAktarimPromise !== kayit) {
+          return;
+        }
+
+        this.gidenIceAktarimPromise = null;
+
+        const tekrarDenemeIstendi = this.gidenIceTekrarDenemeIstendi;
+        this.gidenIceTekrarDenemeIstendi = false;
+
+        if (
+          tekrarDenemeIstendi &&
+          nesil === this.aramaNesli &&
+          !this.aramaSonlandiriliyor &&
+          !!this.aramaOturumId &&
+          !this.offerAckBekleniyor &&
+          this.bekleyenGidenIceAdaylari.length > 0
+        ) {
+          console.log(
+            "🔄 STOMP RECONNECT SONRASI KALAN ICE ADAYLARI TEKRAR GÖNDERİLİYOR.",
+          );
+          void this.bekleyenGidenIceAdaylariniGonder().catch((hata) => {
+            if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+              return;
+            }
+            console.error(
+              "❌ STOMP RECONNECT SONRASI ICE TEKRAR DENEMESİ BAŞARISIZ:",
+              hata,
+            );
+          });
+        }
+      })
+      .catch(() => undefined);
+
+    return promise;
+  }
+
+  private async bekleyenGidenIceAdaylariniGonderInternal(
+    nesil: number,
+  ): Promise<void> {
+    if (
+      nesil !== this.aramaNesli ||
+      this.aramaSonlandiriliyor ||
+      !this.aramaOturumId
+    ) {
+      throw new Error("Arama oturumu değişti; bekleyen ICE gönderilemedi.");
+    }
+
+    this.gidenIceAktarimiSuruyor = true;
+
+    try {
+      while (this.bekleyenGidenIceAdaylari.length > 0) {
+        if (
+          nesil !== this.aramaNesli ||
+          this.aramaSonlandiriliyor ||
+          !this.aramaOturumId
+        ) {
+          throw new Error("Arama oturumu değişti; bekleyen ICE gönderilemedi.");
+        }
+
+        const aday = this.bekleyenGidenIceAdaylari[0];
+
+        if (!aday) {
+          this.bekleyenGidenIceAdaylari.shift();
+          continue;
+        }
+
+        await this.aramaSinyaliGonder("CALL_ICE", { aday });
+
+        if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+          throw new Error("ICE gönderimi sırasında arama oturumu değişti.");
+        }
+
+        // Aday yalnızca gönderim başarılı olduktan sonra kuyruktan çıkarılır.
+        if (this.bekleyenGidenIceAdaylari[0] === aday) {
+          this.bekleyenGidenIceAdaylari.shift();
+        }
+      }
+
+      console.log("BEKLEYEN GİDEN ICE ADAYLARI SIRAYLA GÖNDERİLDİ.");
+    } catch (hata) {
+      // Gönderilemeyen adayları silme. Aynı oturumda kuyrukta koru.
+      throw hata;
+    } finally {
+      // Eski aramanın finally bloğu yeni aramanın bayraklarını değiştiremez.
+      if (nesil === this.aramaNesli) {
+        this.gidenIceAktarimiSuruyor = false;
+        this.offerAckBekleniyor = false;
+      }
     }
   }
 
@@ -1664,6 +2252,8 @@ class AramaWebRTC {
    */
 
   async medyaAkisiniAl(): Promise<MediaStream> {
+    const nesil = this.aramaNesli;
+    this.aramaNesliniDogrula(nesil);
     try {
       console.log(" Mikrofon/kamera erişimi isteniyor...");
 
@@ -1683,10 +2273,18 @@ class AramaWebRTC {
                 facingMode: "user",
                 width: 640,
                 height: 480,
-                frameRate: 30,
+                frameRate: 60,
               }
             : false,
       });
+
+      // Medya izni beklenirken arama değişmiş olabilir.
+      if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+        stream.getTracks().forEach((track) => track.stop());
+        throw new Error(
+          "Medya akışı eski arama nesline ait; kullanıma alınmadı.",
+        );
+      }
 
       this.yerelStream = stream;
 
@@ -1705,7 +2303,9 @@ class AramaWebRTC {
           ? hata
           : new Error("Mikrofon veya kamera erişilemedi.");
 
-      this.olayCalistir("hata", error);
+      if (nesil === this.aramaNesli && !this.aramaSonlandiriliyor) {
+        this.olayCalistir("hata", error);
+      }
 
       throw error;
     }
@@ -1728,11 +2328,16 @@ class AramaWebRTC {
    */
 
   async baglantiOlustur(): Promise<RTCPeerConnection> {
+    const nesil = this.aramaNesli;
+    this.aramaNesliniDogrula(nesil);
+
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
       throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
 
     if (this.peerConnection) {
+      const mevcutPeerConnection = this.peerConnection;
+
       console.log(" Mevcut RTCPeerConnection kullanılıyor."); // ÖNEMLİ:
       // PeerConnection daha önce oluşturulmuş olabilir ancak yerel medya
       // henüz hazır olmayabilir. Bu durumda doğrudan return etmek,
@@ -1742,29 +2347,136 @@ class AramaWebRTC {
 
       if (!this.yerelStream) {
         await this.medyaAkisiniAl();
+
+        this.aramaNesliniDogrula(nesil);
+
+        if (this.peerConnection !== mevcutPeerConnection) {
+          throw new Error("Medya hazırlanırken PeerConnection değişti.");
+        }
       }
 
       if (this.yerelStream) {
-        const mevcutGondericiler = this.peerConnection.getSenders();
-
+        const transceivers = mevcutPeerConnection.getTransceivers();
         this.yerelStream.getTracks().forEach((track) => {
-          const zatenEklendi = mevcutGondericiler.some(
-            (sender) => sender.track?.id === track.id,
+          if (
+            this.e2eeBekleyenGondericiler.some(
+              (item) => item.track.id === track.id,
+            )
+          )
+            return;
+
+          console.log("========== TRANSCEIVER KARŞILAŞTIRMA ==========");
+
+          transceivers.forEach((item: any, index: number) => {
+            console.log("TRANSCEIVER:", {
+              index,
+              mid: item.mid,
+              kind: item.receiver?.track?.kind,
+              receiverTrackId: item.receiver?.track?.id,
+              senderTrackId: item.sender?.track?.id,
+              direction: item.direction,
+              currentDirection: item.currentDirection,
+              stopped: item.stopped,
+            });
+          });
+
+          console.log(
+            "YEREL TRACKLER:",
+            this.yerelStream?.getTracks().map((track) => ({
+              id: track.id,
+              kind: track.kind,
+              enabled: track.enabled,
+              readyState: track.readyState,
+            })),
           );
+          // Remote SDP içindeki ilgili medya bölümünün MID değerini bul.
+          const remoteSdp = mevcutPeerConnection.remoteDescription?.sdp ?? "";
+          const remoteMediaSection = remoteSdp
+            .split(/(?=m=)/)
+            .find((section) => section.startsWith(`m=${track.kind} `));
 
-          if (zatenEklendi) {
-            console.log(" Track zaten PeerConnection'da:", track.kind);
+          const remoteMid = remoteMediaSection
+            ?.match(/(?:^|\r?\n)a=mid:([^\r\n]+)/)?.[1]
+            ?.trim();
 
+          // Öncelik, uzak SDP'deki MID ile eşleşen transceiver'dadır.
+          let transceiver: any = remoteMid
+            ? transceivers.find(
+                (item: any) =>
+                  item.mid === remoteMid &&
+                  item.receiver?.track?.kind === track.kind &&
+                  !item.stopped,
+              )
+            : undefined;
+
+          // Remote MID henüz yoksa kullanılmamış sender'ı seç.
+          if (!transceiver) {
+            const adaylar = transceivers.filter(
+              (item: any) =>
+                item.receiver?.track?.kind === track.kind &&
+                !item.stopped &&
+                !item.sender?.track &&
+                !this.e2eeBekleyenGondericiler.some(
+                  (pending) => pending.sender === item.sender,
+                ),
+            );
+
+            // Remote SDP mevcutsa MID atanmış transceiver önceliklidir.
+            transceiver =
+              (remoteSdp
+                ? adaylar.find((item: any) => item.mid !== null)
+                : undefined) ?? adaylar[0];
+          }
+
+          if (!transceiver?.sender) {
+            throw new Error(
+              `E2EE: ${track.kind} için doğru ve kullanılabilir transceiver sender bulunamadı. MID: ${remoteMid ?? "yok"}`,
+            );
+          }
+
+          // Yerel medya gönderebilmek için transceiver yönünü düzenle.
+          // Uzak SDP'nin izin vermediği yön yine WebRTC tarafından kısıtlanır.
+          if (
+            transceiver.direction === "recvonly" ||
+            transceiver.direction === "inactive"
+          ) {
+            transceiver.direction = "sendrecv";
+          }
+
+          // Aynı sender'a ikinci bir track kuyruğu ekleme.
+          if (
+            this.e2eeBekleyenGondericiler.some(
+              (pending) => pending.sender === transceiver.sender,
+            )
+          ) {
             return;
           }
 
-          console.log(" Mevcut PeerConnection'a Track ekleniyor:", track.kind);
+          console.log("YEREL TRACK TRANSCEIVER EŞLEŞMESİ:", {
+            trackKind: track.kind,
+            trackId: track.id,
+            remoteMid,
+            selectedMid: transceiver.mid,
+            direction: transceiver.direction,
+            senderTrackId: transceiver.sender.track?.id ?? null,
+          });
 
-          this.peerConnection!.addTrack(track, this.yerelStream!);
+          track.enabled = false;
+          this.e2eeBekleyenGondericiler.push({
+            sender: transceiver.sender,
+            track,
+            detached: transceiver.sender.track == null,
+          });
         });
       }
 
-      return this.peerConnection;
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.peerConnection !== mevcutPeerConnection) {
+        throw new Error("Mevcut PeerConnection artık aktif değil.");
+      }
+
+      return mevcutPeerConnection;
     }
 
     console.log(" RTCPeerConnection oluşturuluyor...");
@@ -1778,56 +2490,117 @@ class AramaWebRTC {
     this.remoteDescriptionHazir = false;
 
     this.webRtcBaglandiBildirildi = false;
+    this.e2eeBekleyenGondericiler = [];
+    const audioTransceiver = peerConnection.addTransceiver("audio", {
+      direction: "sendrecv",
+    });
+    const videoTransceiver =
+      this.aramaTuru === "VIDEO"
+        ? peerConnection.addTransceiver("video", { direction: "sendrecv" })
+        : null;
 
     if (!this.yerelStream) {
       await this.medyaAkisiniAl();
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.peerConnection !== peerConnection) {
+        throw new Error("Medya hazırlanırken yeni PeerConnection değişti.");
+      }
+    }
+
+    this.aramaNesliniDogrula(nesil);
+
+    if (this.peerConnection !== peerConnection) {
+      throw new Error("PeerConnection artık bu arama nesline ait değil.");
     }
 
     if (this.yerelStream) {
-      const mevcutGondericiler = peerConnection.getSenders();
-
       this.yerelStream.getTracks().forEach((track) => {
-        const zatenEklendi = mevcutGondericiler.some(
-          (sender) => sender.track?.id === track.id,
-        );
-
-        if (zatenEklendi) {
-          console.log(" Track zaten PeerConnection'da:", track.kind);
-
-          return;
-        }
-
-        console.log(" Track PeerConnection'a ekleniyor:", track.kind);
-
-        peerConnection.addTrack(track, this.yerelStream!);
+        const sender =
+          track.kind === "audio"
+            ? audioTransceiver.sender
+            : track.kind === "video"
+              ? videoTransceiver?.sender
+              : undefined;
+        if (!sender)
+          throw new Error(
+            `E2EE: ${track.kind} için transceiver sender bulunamadı.`,
+          );
+        track.enabled = false;
+        this.e2eeBekleyenGondericiler.push({
+          sender,
+          track,
+          detached: sender.track == null,
+        });
       });
     }
-
     peerConnection.ontrack = (event: any) => {
-      console.log(" Uzak medya akışı geldi.");
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
+      console.log("========== UZAK TRACK KONTROLÜ ==========");
+
+      console.log("Uzak medya akışı geldi.");
+
+      console.log("Track türü:", event.track?.kind);
+      console.log("Track ID:", event.track?.id);
+      console.log("Track enabled:", event.track?.enabled);
+      console.log("Track muted:", event.track?.muted);
+      console.log("Track readyState:", event.track?.readyState);
+
+      console.log("Stream sayısı:", event.streams?.length ?? 0);
+
+      if (event.streams?.[0]) {
+        console.log(
+          "Uzak ses track sayısı:",
+          event.streams[0].getAudioTracks().length,
+        );
+
+        console.log(
+          "Uzak görüntü track sayısı:",
+          event.streams[0].getVideoTracks().length,
+        );
+      }
+
+      console.log("==========================================");
 
       if (event.track) {
         console.log(
-          " Uzak track:",
-
+          "Uzak track:",
           event.track.kind,
-
           "id:",
-
           event.track.id,
-
           "enabled:",
-
           event.track.enabled,
+          "muted:",
+          event.track.muted,
+          "readyState:",
+          event.track.readyState,
         );
 
         if (event.track.kind === "audio") {
-          console.log(" UZAK SES TRACK'İ ALINDI");
+          console.log("UZAK SES TRACK'İ ALINDI");
 
           try {
             event.track.enabled = true;
           } catch (hata) {
-            console.warn("  Uzak audio track aktif edilemedi:", hata);
+            console.warn("Uzak audio track aktif edilemedi:", hata);
+          }
+        }
+
+        if (event.track.kind === "video") {
+          console.log("UZAK GÖRÜNTÜ TRACK'İ ALINDI");
+
+          try {
+            event.track.enabled = true;
+          } catch (hata) {
+            console.warn("Uzak video track aktif edilemedi:", hata);
           }
         }
       }
@@ -1845,26 +2618,46 @@ class AramaWebRTC {
 
         if (event.track) {
           try {
-            uzakStream.addTrack(event.track);
+            const mevcutTrack = uzakStream
+              .getTracks()
+              .some((track) => track.id === event.track.id);
+
+            if (!mevcutTrack) {
+              uzakStream.addTrack(event.track);
+            }
           } catch (hata) {
-            console.warn("  Uzak track stream'e eklenemedi:", hata);
+            console.warn("Uzak track stream'e eklenemedi:", hata);
           }
         }
       }
 
       if (!uzakStream) {
-        console.warn("  Uzak medya stream'i oluşturulamadı.");
+        console.warn("Uzak medya stream'i oluşturulamadı.");
 
         return;
       }
 
       this.uzakStream = uzakStream;
 
-      console.log(" Uzak stream:", uzakStream.id);
+      console.log("========== UZAK STREAM SON DURUM ==========");
 
-      console.log(" Uzak audio track:", uzakStream.getAudioTracks().length);
+      console.log("Uzak stream ID:", uzakStream.id);
 
-      console.log(" Uzak video track:", uzakStream.getVideoTracks().length);
+      console.log("Uzak audio track:", uzakStream.getAudioTracks().length);
+
+      console.log("Uzak video track:", uzakStream.getVideoTracks().length);
+
+      uzakStream.getTracks().forEach((track) => {
+        console.log("Stream track:", {
+          kind: track.kind,
+          id: track.id,
+          enabled: track.enabled,
+          muted: track.muted,
+          readyState: track.readyState,
+        });
+      });
+
+      console.log("===========================================");
 
       this.olayCalistir("uzakStream", uzakStream);
     };
@@ -1872,6 +2665,7 @@ class AramaWebRTC {
     peerConnection.onicecandidate = (event: any) => {
       // Eski veya kapatılmış aramanın ICE sinyalini gönderme.
       if (
+        nesil !== this.aramaNesli ||
         this.aramaSonlandiriliyor ||
         this.peerConnection !== peerConnection ||
         !this.aramaOturumId
@@ -1895,11 +2689,21 @@ class AramaWebRTC {
     };
 
     peerConnection.onconnectionstatechange = () => {
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
       const durum = peerConnection.connectionState;
 
       console.log(" WebRTC bağlantı durumu:", durum);
 
       if (durum === "connected") {
+        this.statsOlcumunuBaslat(peerConnection, nesil);
+
         console.log(" WEBRTC BAĞLANTISI KURULDU!");
 
         if (!this.webRtcBaglandiBildirildi) {
@@ -1933,6 +2737,14 @@ class AramaWebRTC {
     };
 
     peerConnection.oniceconnectionstatechange = () => {
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
       const durum = peerConnection.iceConnectionState;
 
       console.log("📡 ICE DURUMU:", durum);
@@ -1963,6 +2775,14 @@ class AramaWebRTC {
     };
 
     peerConnection.onicecandidateerror = (event: any) => {
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
       console.error("❌ ICE CANDIDATE ERROR:", {
         errorCode: event?.errorCode,
         errorText: event?.errorText,
@@ -1971,10 +2791,26 @@ class AramaWebRTC {
     };
 
     peerConnection.onicegatheringstatechange = () => {
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
       console.log(" ICE gathering durumu:", peerConnection.iceGatheringState);
     };
 
     peerConnection.onsignalingstatechange = () => {
+      if (
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor
+      ) {
+        return;
+      }
+
       console.log(" Signaling durumu:", peerConnection.signalingState);
     };
 
@@ -2019,15 +2855,33 @@ class AramaWebRTC {
       return this.aramaBaslatPromise;
     }
 
+    const baslatmaNesli = this.aramaNesli;
     const baslatmaPromise = this.aramaBaslatInternal();
 
     this.aramaBaslatPromise = baslatmaPromise;
 
     try {
       return await baslatmaPromise;
+    } catch (hata) {
+      // Yalnızca hatanın ait olduğu arama hâlâ aktifse temizlik yap.
+      if (this.aramaNesli === baslatmaNesli && !this.aramaSonlandiriliyor) {
+        try {
+          await this.aramayiBitir();
+        } catch (cleanupHatasi) {
+          console.error(
+            "CALL_OFFER başarısızlığı sonrası temizlik hatası:",
+            cleanupHatasi,
+          );
+        }
+      } else {
+        console.warn(
+          "Eski arama başlatma işlemi hata verdi. Yeni aramaya dokunulmadı.",
+        );
+      }
+
+      throw hata;
     } finally {
       // Sadece halen aynı Promise tutuluyorsa temizle.
-
       if (this.aramaBaslatPromise === baslatmaPromise) {
         this.aramaBaslatPromise = null;
       }
@@ -2050,10 +2904,19 @@ class AramaWebRTC {
 
    */
 
+  private aramaNesliniDogrula(nesil: number): void {
+    if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+      throw new Error("Arama oturumu değişti veya sonlandırıldı.");
+    }
+  }
+
   private async aramaBaslatInternal(): Promise<RTCSessionDescriptionInit> {
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
       throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
+
+    const nesil = this.aramaNesli;
+    this.aramaNesliniDogrula(nesil);
 
     console.log("======================================");
 
@@ -2067,6 +2930,7 @@ class AramaWebRTC {
       console.log("======================================");
 
       await this.webSocketBaglantisiAc();
+      this.aramaNesliniDogrula(nesil);
 
       if (!this.webSocketBagliMi()) {
         throw new Error("Arama WebSocket bağlantısı hazır değil.");
@@ -2077,18 +2941,19 @@ class AramaWebRTC {
       console.log(" Arama topic:", `/topic/arama/${this.mevcutKullaniciId}`);
     }
 
-    this.aramaSonlandiriliyor = false; // Yeni bir arama başlatılıyorsa eski offer kilidi temiz olmalı.
-    // Ancak burada yeni bir createOffer başlatmıyoruz. Sadece durum
-    // tutarlılığını sağlıyoruz.
-
     this.offerOlusturuluyor = false; // Giden arama başlarken Android call-audio oturumunu aç.
     // SES: ahize, VIDEO: hoparlör.
 
     this.aramaAudioOturumunuBaslat(); // Karşı taraf cevap verene kadar giden arama için ringback sesi çal.
 
     await this.aramaSesiniBaslat();
+    this.aramaNesliniDogrula(nesil);
 
-    const peerConnection = await this.baglantiOlustur(); // PeerConnection cleanup sırasında kapandıysa yeni offer üretmeye
+    const peerConnection = await this.baglantiOlustur();
+    this.aramaNesliniDogrula(nesil);
+    if (this.peerConnection !== peerConnection) {
+      throw new Error("Arama PeerConnection nesli değişti.");
+    } // PeerConnection cleanup sırasında kapandıysa yeni offer üretmeye
     // çalışmayalım. Bu kontrol "closed" hatasını daha anlaşılır hale getirir.
 
     if ((peerConnection.signalingState as string) === "closed") {
@@ -2129,9 +2994,23 @@ class AramaWebRTC {
           sdp: mevcutOffer.sdp,
         };
 
-        this.aramaSinyaliGonder("CALL_OFFER", {
+        this.offerAckBekleniyor = true;
+
+        this.aramaNesliniDogrula(nesil);
+
+        await this.aramaSinyaliGonder("CALL_OFFER", {
           sdp: mevcutOffer.sdp,
         });
+
+        this.aramaNesliniDogrula(nesil);
+
+        await this.bekleyenGidenIceAdaylariniGonder();
+
+        this.aramaNesliniDogrula(nesil);
+
+        await this.e2eeHandshakeOlustur(true);
+
+        this.aramaNesliniDogrula(nesil);
 
         return mevcutTeklif;
       }
@@ -2156,7 +3035,9 @@ class AramaWebRTC {
         offerToReceiveAudio: true,
 
         offerToReceiveVideo: this.aramaTuru === "VIDEO",
-      }); // createOffer tamamlandıktan sonra arama kapatılmış olabilir.
+      });
+      this.aramaNesliniDogrula(nesil);
+      // createOffer tamamlandıktan sonra arama kapatılmış olabilir.
       // Kapalı PeerConnection'a setLocalDescription göndermiyoruz.
 
       if (
@@ -2169,7 +3050,18 @@ class AramaWebRTC {
         );
       }
 
+      // setLocalDescription ICE üretimini hemen başlatabilir. ACK gelmeden
+      // hiçbir adayın backend'e ulaşmaması için bayrağı önceden aç.
+      this.offerAckBekleniyor = true;
+      this.bekleyenGidenIceAdaylari = [];
       await peerConnection.setLocalDescription(offer);
+      this.aramaNesliniDogrula(nesil);
+      if (
+        this.peerConnection !== peerConnection ||
+        (peerConnection.signalingState as string) === "closed"
+      ) {
+        throw new Error("LocalDescription ayarlanırken arama sonlandırıldı.");
+      }
 
       console.log(" WebRTC Offer oluşturuldu.");
 
@@ -2183,11 +3075,20 @@ class AramaWebRTC {
         sdp: offer.sdp,
       }; // CALL_OFFER yalnızca local description ayarlandıktan sonra gönderilir.
 
-      this.aramaSinyaliGonder("CALL_OFFER", {
+      // Harici sinyal göndericisi CALL_OFFER_ACK gelmeden resolve olmaz.
+      await this.aramaSinyaliGonder("CALL_OFFER", {
         sdp: offer.sdp ?? undefined,
       });
+      this.aramaNesliniDogrula(nesil);
 
-      console.log(" CALL_OFFER karşı tarafa gönderildi.");
+      await this.bekleyenGidenIceAdaylariniGonder();
+      this.aramaNesliniDogrula(nesil);
+
+      await this.e2eeHandshakeOlustur(true);
+      this.aramaNesliniDogrula(nesil);
+      console.log(
+        " CALL_OFFER ACK alındı, ICE kuyruğu boşaltıldı ve E2EE başlatıldı.",
+      );
 
       return teklif;
     } finally {
@@ -2214,70 +3115,366 @@ class AramaWebRTC {
   async teklifiKabulEt(
     teklif: RTCSessionDescriptionInit,
   ): Promise<RTCSessionDescriptionInit> {
+    if (this.gelenAramaKabulPromise) {
+      console.warn("Gelen arama kabul işlemi zaten devam ediyor.");
+      return this.gelenAramaKabulPromise;
+    }
+
+    const kabulPromise = this.teklifiKabulEtIcerik(teklif);
+    this.gelenAramaKabulPromise = kabulPromise;
+
+    try {
+      return await kabulPromise;
+    } finally {
+      if (this.gelenAramaKabulPromise === kabulPromise) {
+        this.gelenAramaKabulPromise = null;
+      }
+    }
+  }
+
+  private async teklifiKabulEtIcerik(
+    teklif: RTCSessionDescriptionInit,
+  ): Promise<RTCSessionDescriptionInit> {
+    console.log("========== GELEN ARAMA KABUL KONTROLÜ ==========");
+    console.log("Aktif oturum:", this.aramaOturumId);
+    console.log("Aranan kullanıcı:", this.arananKullaniciId);
+    console.log("Mevcut kullanıcı:", this.mevcutKullaniciId);
+    console.log("Arama nesli:", this.aramaNesli);
+    console.log("================================================");
+
     if (this.mevcutKullaniciId === null || this.arananKullaniciId === null) {
       throw new Error("Arama kullanıcıları ayarlanmamış.");
     }
-    console.log(" Gelen teklif kabul ediliyor.");
+
     if (!this.aramaOturumId) {
       throw new Error("Gelen arama oturum kimliği bulunamadı.");
     }
 
+    if (!teklif.sdp) {
+      throw new Error("Teklif SDP bilgisi bulunamadı.");
+    }
+
+    const nesil = this.aramaNesli;
+    const oturumId = this.aramaOturumId;
+
+    this.aramaNesliniDogrula(nesil);
+
+    console.log("Gelen teklif kabul ediliyor.");
     console.log("Gelen arama oturum kimliği mevcut.");
 
     if (!this.hariciSinyalGonderici) {
       await this.webSocketBaglantisiAc();
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.aramaOturumId !== oturumId) {
+        throw new Error("Gelen arama oturumu değişti.");
+      }
 
       if (!this.webSocketBagliMi()) {
         throw new Error("Arama WebSocket bağlantısı hazır değil.");
       }
     }
 
-    this.aramaSonlandiriliyor = false; // Gelen aramanın zilini durdur.
+    this.aramaNesliniDogrula(nesil);
 
-    this.aramaSesiniDurdur(); // Cevapsız arama için açılmış geçici ses oturumunu kapat.
-    // Ardından normal WebRTC çağrı ses oturumunu temiz bir şekilde aç.
+    // Gelen aramanın zilini durdur.
+    this.aramaSesiniDurdur();
 
+    // Geçici gelen arama ses oturumunu kapat.
     this.gelenAramaAudioOturumunuKapat();
 
+    // Normal WebRTC çağrı ses oturumunu aç.
     this.aramaAudioOturumunuBaslat();
 
     const peerConnection = await this.baglantiOlustur();
 
-    if (!teklif.sdp) {
-      throw new Error("Teklif SDP bilgisi bulunamadı.");
+    this.aramaNesliniDogrula(nesil);
+
+    if (
+      this.peerConnection !== peerConnection ||
+      (peerConnection.signalingState as string) === "closed"
+    ) {
+      throw new Error("Gelen arama PeerConnection nesli değişti.");
     }
 
     const remoteDescription = new RTCSessionDescription({
       type: teklif.type,
-
       sdp: teklif.sdp,
     });
 
-    console.log(" RemoteDescription ayarlanıyor...");
+    console.log("RemoteDescription ayarlanıyor...");
 
     await peerConnection.setRemoteDescription(remoteDescription);
 
+    this.aramaNesliniDogrula(nesil);
+
+    if (
+      this.peerConnection !== peerConnection ||
+      (peerConnection.signalingState as string) === "closed"
+    ) {
+      throw new Error("RemoteDescription sırasında arama sonlandırıldı.");
+    }
+
     this.remoteDescriptionHazir = true;
 
-    console.log(" RemoteDescription hazır.");
+    // Uzak SDP geldikten sonra bekleyen E2EE sender'larını
+    // gerçek MID değerlerine göre yeniden eşleştir.
+    const remoteSections = (teklif.sdp ?? "").split(/(?=m=)/);
+    const transceivers = peerConnection.getTransceivers();
+
+    for (const pending of this.e2eeBekleyenGondericiler) {
+      const mediaSection = remoteSections.find(
+        (section) => section.startsWith(`m=${pending.track.kind} `),
+      );
+
+      const remoteMid = mediaSection
+        ?.match(/(?:^|\r?\n)a=mid:([^\r\n]+)/)?.[1]
+        ?.trim();
+
+      if (!remoteMid) {
+        throw new Error(
+          `E2EE: ${pending.track.kind} için uzak SDP MID bulunamadı.`,
+        );
+      }
+
+      const target = transceivers.find(
+        (item: any) =>
+          item.mid === remoteMid &&
+          item.receiver?.track?.kind === pending.track.kind &&
+          !item.stopped,
+      );
+
+      if (!target?.sender) {
+        throw new Error(
+          `E2EE: ${pending.track.kind} MID=${remoteMid} sender bulunamadı.`,
+        );
+      }
+
+      if (target.sender.track && target.sender.track !== pending.track) {
+        throw new Error(
+          `E2EE: MID=${remoteMid} sender üzerinde beklenmeyen track var.`,
+        );
+      }
+
+      const oldSender = pending.sender;
+
+      if (oldSender !== target.sender) {
+        console.warn("E2EE SENDER MID DÜZELTMESİ:", {
+          kind: pending.track.kind,
+          trackId: pending.track.id,
+          oldMid: transceivers.find(
+            (item: any) => item.sender === oldSender,
+          )?.mid ?? null,
+          newMid: target.mid,
+        });
+
+        pending.sender = target.sender;
+        pending.detached = target.sender.track == null;
+      }
+
+      if (
+        target.direction === "recvonly" ||
+        target.direction === "inactive"
+      ) {
+        target.direction = "sendrecv";
+      }
+
+      console.log("E2EE SENDER MID DOĞRULANDI:", {
+        kind: pending.track.kind,
+        mid: target.mid,
+        direction: target.direction,
+        senderTrackId: target.sender.track?.id ?? null,
+      });
+    }
+
+    console.log("RemoteDescription hazır.");
 
     await this.bekleyenIceAdaylariniEkle();
 
-    console.log(" WebRTC Answer oluşturuluyor...");
+    this.aramaNesliniDogrula(nesil);
 
+    if (this.peerConnection !== peerConnection) {
+      throw new Error("ICE işlemi sırasında PeerConnection değişti.");
+    }
+
+    console.log("WebRTC Answer oluşturuluyor...");
+    const videoSection = (teklif.sdp ?? "")
+      .split(/(?=m=)/)
+      .find((section) => section.startsWith("m=video "));
+
+    const videoMid = videoSection
+      ?.match(/(?:^|\r?\n)a=mid:([^\r\n]+)/)?.[1]
+      ?.trim();
+
+    const videoTransceiver = peerConnection
+      .getTransceivers()
+      .find(
+        (t) =>
+          t.mid === videoMid &&
+          t.receiver.track?.kind === "video" &&
+          !t.stopped,
+      );
+
+    console.log("========== ANSWER ÖNCESİ VIDEO DURUMU ==========");
+    console.log("VIDEO TRANSCEIVER:", {
+      mid: videoTransceiver?.mid,
+      direction: videoTransceiver?.direction,
+      currentDirection: videoTransceiver?.currentDirection,
+      senderTrack: videoTransceiver?.sender.track?.id ?? null,
+      senderTrackKind: videoTransceiver?.sender.track?.kind ?? null,
+      senderTrackEnabled: videoTransceiver?.sender.track?.enabled ?? null,
+    });
+
+    const videoOfferSection = teklif.sdp
+      ?.split(/(?=m=)/)
+      .find((section) => section.startsWith("m=video"));
+
+    console.log(
+      "GELEN OFFER VIDEO YÖNÜ:",
+      videoOfferSection?.match(
+        /a=(sendrecv|sendonly|recvonly|inactive)/,
+      )?.[0] ?? "YÖN BULUNAMADI",
+    );
+    console.log("========== TÜM TRANSCEIVER DURUMLARI ==========");
+
+    peerConnection.getTransceivers().forEach((t, index) => {
+      console.log(`TRANSCEIVER ${index}:`, {
+        mid: t.mid,
+        direction: t.direction,
+        currentDirection: t.currentDirection,
+        senderTrackId: t.sender.track?.id ?? null,
+        senderTrackKind: t.sender.track?.kind ?? null,
+        receiverTrackId: t.receiver.track?.id ?? null,
+        receiverTrackKind: t.receiver.track?.kind ?? null,
+        receiverTrackState: t.receiver.track?.readyState ?? null,
+      });
+    });
+
+    console.log("========== OFFER MEDIA BÖLÜMLERİ ==========");
+
+    const offerSections = (teklif.sdp ?? "").split(/(?=m=)/);
+
+    offerSections.forEach((section, index) => {
+      if (!section.startsWith("m=")) return;
+
+      console.log(`OFFER MEDIA ${index}:`, {
+        media: section.split("\r\n")[0],
+        mid: section.match(/a=mid:(.+)/)?.[1] ?? null,
+        direction:
+          section.match(/a=(sendrecv|sendonly|recvonly|inactive)/)?.[0] ??
+          "DEFAULT",
+      });
+    });
+    // Önce E2EE el sıkışmasını tamamla.
+    // Track bağlanacak ancak Answer gönderilene kadar kapalı kalacak.
+    try {
+      await this.e2eeHandshakeOlustur(false);
+
+      this.aramaNesliniDogrula(nesil);
+
+      const handshake = this.e2eeHandshake;
+
+      if (!handshake) {
+        throw new Error("E2EE handshake oturumu oluşturulamadı.");
+      }
+
+      await handshake.waitUntilReady(45_000);
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (
+        this.peerConnection !== peerConnection ||
+        this.e2eeHandshake !== handshake
+      ) {
+        throw new Error("E2EE oturumu değişti.");
+      }
+
+      // Native E2EE sender hazır. Track'i Answer öncesinde bağla.
+      // Track.enabled false kalmaya devam eder.
+      await this.e2eeGondericileriEtkinlestir(false);
+
+      this.aramaNesliniDogrula(nesil);
+    } catch (e2eeHata) {
+      const ayniAramaHalaAktif =
+        this.aramaNesli === nesil &&
+        this.aramaOturumId === oturumId &&
+        this.peerConnection === peerConnection &&
+        !this.aramaSonlandiriliyor;
+
+      if (ayniAramaHalaAktif) {
+        this.e2eeHatasi(e2eeHata);
+      } else {
+        console.warn("Eski gelen arama E2EE hatası yok sayıldı:", e2eeHata);
+      }
+
+      throw e2eeHata;
+    }
+
+    // Sender track bağlıyken Answer oluştur.
     const answer = await peerConnection.createAnswer();
+
+    // GEÇİCİ SDP TEŞHİSİ
+    const answerVideoSection = answer.sdp
+      ?.split(/(?=m=)/)
+      .find((section: string) => section.startsWith("m=video"));
+
+    console.log("========== ANSWER VIDEO SDP ==========");
+    console.log(answerVideoSection ?? "ANSWER VIDEO SECTION BULUNAMADI");
+
+    console.log(
+      "ANSWER VIDEO YÖNÜ:",
+      answerVideoSection?.match(
+        /a=(sendrecv|sendonly|recvonly|inactive)/,
+      )?.[0] ?? "YÖN BULUNAMADI",
+    );
+
+    console.log("ANSWER ÖNCESİ TRANSCEIVER:");
+    console.log({
+      direction: videoTransceiver?.direction,
+      currentDirection: videoTransceiver?.currentDirection,
+      senderTrack: videoTransceiver?.sender.track?.id ?? null,
+    });
+
+    this.aramaNesliniDogrula(nesil);
+
+    if (
+      this.peerConnection !== peerConnection ||
+      (peerConnection.signalingState as string) === "closed"
+    ) {
+      throw new Error("Answer oluşturulurken arama sonlandırıldı.");
+    }
 
     await peerConnection.setLocalDescription(answer);
 
-    console.log(" WebRTC Answer oluşturuldu.");
+    this.aramaNesliniDogrula(nesil);
 
-    this.aramaSinyaliGonder("CALL_ANSWER", {
+    if (
+      this.peerConnection !== peerConnection ||
+      (peerConnection.signalingState as string) === "closed"
+    ) {
+      throw new Error("LocalDescription sırasında arama sonlandırıldı.");
+    }
+
+    console.log("WebRTC Answer oluşturuldu.");
+
+    await this.aramaSinyaliGonder("CALL_ANSWER", {
       sdp: answer.sdp ?? undefined,
     });
 
+    this.aramaNesliniDogrula(nesil);
+
+    if (this.peerConnection !== peerConnection) {
+      throw new Error("CALL_ANSWER gönderilirken PeerConnection değişti.");
+    }
+
+    // Answer gönderildi. Artık yerel medya track'lerini etkinleştir.
+    await this.e2eeGondericileriEtkinlestir(true);
+
+    this.aramaNesliniDogrula(nesil);
+
     return {
       type: answer.type,
-
       sdp: answer.sdp,
     };
   }
@@ -2301,7 +3498,9 @@ class AramaWebRTC {
    */
 
   async cevabiIsle(cevap: RTCSessionDescriptionInit) {
-    if (!this.peerConnection) {
+    const peerConnection = this.peerConnection;
+
+    if (!peerConnection) {
       throw new Error("PeerConnection bulunamadı.");
     }
 
@@ -2309,26 +3508,33 @@ class AramaWebRTC {
       throw new Error("Cevap SDP bilgisi bulunamadı.");
     }
 
+    const nesil = this.aramaNesli;
+
+    this.aramaNesliniDogrula(nesil);
+
     if (this.cevapIsleniyor) {
-      console.warn(
-        "⚠️ WebRTC Answer zaten işleniyor, ikinci cevap yok sayıldı.",
-      );
+      console.warn("WebRTC Answer zaten işleniyor, ikinci cevap yok sayıldı.");
       return;
     }
 
-    if (this.peerConnection.signalingState !== "have-local-offer") {
-      const mevcutRemote = this.peerConnection.remoteDescription;
+    if (peerConnection.signalingState !== "have-local-offer") {
+      const mevcutRemote = peerConnection.remoteDescription;
 
       if (mevcutRemote?.type === "answer") {
-        console.warn(
-          "⚠️ WebRTC Answer zaten işlendi, ikinci cevap yok sayıldı.",
-        );
+        console.warn("WebRTC Answer zaten işlendi.");
         this.remoteDescriptionHazir = true;
+
         await this.bekleyenIceAdaylariniEkle();
+
+        this.aramaNesliniDogrula(nesil);
+
+        if (this.peerConnection !== peerConnection) {
+          throw new Error("ICE işlemi sırasında PeerConnection değişti.");
+        }
       } else {
         console.warn(
-          "⚠️ WebRTC Answer beklenen signalingState'te değil:",
-          this.peerConnection.signalingState,
+          "WebRTC Answer beklenen signalingState'te değil:",
+          peerConnection.signalingState,
         );
       }
 
@@ -2338,8 +3544,6 @@ class AramaWebRTC {
     this.cevapIsleniyor = true;
 
     try {
-      const peerConnection = this.peerConnection;
-
       console.log("WebRTC Answer işleniyor...");
       console.log("Answer signaling state:", peerConnection.signalingState);
 
@@ -2350,69 +3554,123 @@ class AramaWebRTC {
 
       await peerConnection.setRemoteDescription(remoteDescription);
 
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.peerConnection !== peerConnection) {
+        throw new Error("RemoteDescription sırasında PeerConnection değişti.");
+      }
+
       this.remoteDescriptionHazir = true;
 
       console.log("WebRTC Answer işlendi.");
-      console.log(
-        "Answer sonrası signaling state:",
-        peerConnection.signalingState,
-      );
 
       await this.bekleyenIceAdaylariniEkle();
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.peerConnection !== peerConnection) {
+        throw new Error("ICE işlemi sırasında PeerConnection değişti.");
+      }
+
+      const handshake = this.e2eeHandshake;
+
+      if (!handshake) {
+        throw new Error("E2EE: CALL_ANSWER geldi ancak handshake bulunamadı.");
+      }
+
+      await handshake.waitUntilReady(45_000);
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (
+        this.peerConnection !== peerConnection ||
+        this.e2eeHandshake !== handshake
+      ) {
+        throw new Error(
+          "E2EE: Anahtar doğrulaması sırasında arama oturumu değişti.",
+        );
+      }
+
+      await this.e2eeGondericileriEtkinlestir();
+
+      this.aramaNesliniDogrula(nesil);
+
+      if (this.peerConnection !== peerConnection) {
+        throw new Error("E2EE etkinleştirilirken PeerConnection değişti.");
+      }
     } catch (hata) {
-      console.error("❌ WebRTC Answer işlenemedi:", hata);
+      console.error("WebRTC Answer işlenemedi:", hata);
+
+      if (
+        this.aramaNesli === nesil &&
+        !this.aramaSonlandiriliyor &&
+        this.peerConnection === peerConnection &&
+        this.e2eeHandshake
+      ) {
+        this.e2eeHatasi(hata);
+      }
+
       throw hata;
     } finally {
-      this.cevapIsleniyor = false;
+      if (this.aramaNesli === nesil && this.peerConnection === peerConnection) {
+        this.cevapIsleniyor = false;
+      }
     }
   }
 
   async iceAdayiEkle(aday: RTCIceCandidateInit) {
-    if (!this.peerConnection) {
-      console.warn("  PeerConnection hazır değil. ICE bekletiliyor.");
+    const nesil = this.aramaNesli;
 
+    this.aramaNesliniDogrula(nesil);
+
+    const peerConnection = this.peerConnection;
+
+    if (!peerConnection) {
+      console.warn("PeerConnection hazır değil. ICE bekletiliyor.");
       this.bekleyenIceAdaylari.push(aday);
-
       return;
     }
 
     if (!this.remoteDescriptionHazir) {
-      console.log(" RemoteDescription hazır değil. ICE bekletiliyor.");
-
+      console.log("RemoteDescription hazır değil. ICE bekletiliyor.");
       this.bekleyenIceAdaylari.push(aday);
-
       return;
     }
 
     try {
       const candidate = new RTCIceCandidate(aday);
 
-      await this.peerConnection.addIceCandidate(candidate);
+      await peerConnection.addIceCandidate(candidate);
 
-      console.log(" ICE Candidate eklendi.");
+      if (
+        nesil !== this.aramaNesli ||
+        this.aramaSonlandiriliyor ||
+        this.peerConnection !== peerConnection
+      ) {
+        console.warn("Eski arama ICE sonucu yok sayıldı.");
+        return;
+      }
+
+      console.log("ICE Candidate eklendi.");
     } catch (hata) {
-      console.error(" ICE Candidate eklenemedi:", hata);
+      if (
+        nesil !== this.aramaNesli ||
+        this.aramaSonlandiriliyor ||
+        this.peerConnection !== peerConnection
+      ) {
+        console.warn("Eski arama ICE hatası yok sayıldı:", hata);
+        return;
+      }
+
+      console.error("ICE Candidate eklenemedi:", hata);
     }
-  } /*\*
-
-
-
-   \* =========================================================
-
-
-
-   \* BEKLEYEN ICE
-
-
-
-   \* =========================================================
-
-
-
-   */
+  }
 
   private async bekleyenIceAdaylariniEkle() {
-    if (!this.peerConnection || !this.remoteDescriptionHazir) {
+    const nesil = this.aramaNesli;
+    const peerConnection = this.peerConnection;
+
+    if (!peerConnection || !this.remoteDescriptionHazir) {
       return;
     }
 
@@ -2420,9 +3678,10 @@ class AramaWebRTC {
       return;
     }
 
-    console.log(
-      " Bekleyen ICE adayları ekleniyor:",
+    this.aramaNesliniDogrula(nesil);
 
+    console.log(
+      "Bekleyen ICE adayları ekleniyor:",
       this.bekleyenIceAdaylari.length,
     );
 
@@ -2430,38 +3689,92 @@ class AramaWebRTC {
 
     this.bekleyenIceAdaylari = [];
 
-    for (const aday of adaylar) {
+    for (let i = 0; i < adaylar.length; i++) {
+      if (
+        nesil !== this.aramaNesli ||
+        this.aramaSonlandiriliyor ||
+        this.peerConnection !== peerConnection
+      ) {
+        console.warn("ICE kuyruğu eski arama nedeniyle durduruldu.");
+        return;
+      }
+
+      if (!this.remoteDescriptionHazir) {
+        this.bekleyenIceAdaylari.unshift(...adaylar.slice(i));
+        console.warn("RemoteDescription kapandı. Kalan ICE adayları korundu.");
+        return;
+      }
+
       try {
-        const candidate = new RTCIceCandidate(aday);
+        const candidate = new RTCIceCandidate(adaylar[i]);
 
-        await this.peerConnection.addIceCandidate(candidate);
+        await peerConnection.addIceCandidate(candidate);
 
-        console.log(" Bekleyen ICE eklendi.");
+        if (
+          nesil !== this.aramaNesli ||
+          this.aramaSonlandiriliyor ||
+          this.peerConnection !== peerConnection
+        ) {
+          console.warn("Eski aramanın ICE sonucu yok sayıldı.");
+          return;
+        }
+
+        console.log("Bekleyen ICE eklendi.");
       } catch (hata) {
-        console.error(" Bekleyen ICE eklenemedi:", hata);
+        if (
+          nesil !== this.aramaNesli ||
+          this.aramaSonlandiriliyor ||
+          this.peerConnection !== peerConnection
+        ) {
+          console.warn("Eski aramanın ICE işlemi durduruldu:", hata);
+          return;
+        }
+
+        console.error("Bekleyen ICE eklenemedi:", hata);
+
+        // Aynı oturumda başarısız olan ve henüz işlenmeyen adayları koru.
+        this.bekleyenIceAdaylari.unshift(...adaylar.slice(i));
+        return;
       }
     }
-  } /*\*
+  }
 
+  private iceGonder(aday: RTCIceCandidateInit): void {
+    const nesil = this.aramaNesli;
 
+    if (this.aramaSonlandiriliyor || !this.aramaOturumId) {
+      console.warn("Eski veya kapanan aramaya ait ICE adayı gönderilmedi.");
+      return;
+    }
 
-   \* =========================================================
+    // Bütün adaylar aynı kuyruktan ve üretim sırasıyla gönderilir.
+    this.bekleyenGidenIceAdaylari.push(aday);
 
+    if (this.offerAckBekleniyor || this.gidenIceAktarimiSuruyor) {
+      console.log(
+        "⏳ GİDEN ICE ACK/AKTARIM NEDENİYLE BEKLETİLDİ:",
+        this.bekleyenGidenIceAdaylari.length,
+      );
+      return;
+    }
 
+    console.log(
+      "📤 GİDEN ICE KUYRUĞU BAŞLATILIYOR:",
+      this.bekleyenGidenIceAdaylari.length,
+    );
 
-   \* ICE GÖNDER
+    void this.bekleyenGidenIceAdaylariniGonder().catch((hata) => {
+      if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+        return;
+      }
 
+      const error =
+        hata instanceof Error
+          ? hata
+          : new Error("ICE kuyruk aktarımı başarısız.");
 
-
-   \* =========================================================
-
-
-
-   */
-
-  private iceGonder(aday: RTCIceCandidateInit) {
-    this.aramaSinyaliGonder("CALL_ICE", {
-      aday,
+      console.error("❌ GİDEN ICE KUYRUK AKTARIMI BAŞARISIZ:", error);
+      this.olayCalistir("hata", error);
     });
   } /*\*
 
@@ -2494,7 +3807,9 @@ class AramaWebRTC {
 
     this.aramaAudioOturumunuKapat();
 
-    this.aramaSinyaliGonder("CALL_REJECT");
+    void this.aramaSinyaliGonder("CALL_REJECT").catch((hata) => {
+      console.warn("CALL_REJECT gönderilemedi:", hata);
+    });
   } /*\*
 
 
@@ -2513,97 +3828,306 @@ class AramaWebRTC {
 
    */
 
-  async aramayiBitir(karsiTarafBitirdi = false) {
-    if (this.aramaSonlandiriliyor) {
-      console.log(" Arama zaten sonlandırılıyor. İkinci cleanup atlandı.");
+  private statsOlcumunuDurdur(): void {
+    if (this.statsTimer !== null) {
+      clearInterval(this.statsTimer);
+      this.statsTimer = null;
+    }
 
+    this.statsOkumaSuruyor = false;
+  }
+
+  private statsOlcumunuBaslat(
+    peerConnection: RTCPeerConnection,
+    nesil: number,
+  ): void {
+    this.statsOlcumunuDurdur();
+
+    let okumaSuruyor = false;
+
+    const olcumYap = async (): Promise<void> => {
+      if (
+        okumaSuruyor ||
+        nesil !== this.aramaNesli ||
+        this.peerConnection !== peerConnection ||
+        this.aramaSonlandiriliyor ||
+        peerConnection.connectionState !== "connected"
+      ) {
+        return;
+      }
+
+      okumaSuruyor = true;
+      this.statsOkumaSuruyor = true;
+
+      try {
+        const rapor = await peerConnection.getStats();
+
+        if (
+          nesil !== this.aramaNesli ||
+          this.peerConnection !== peerConnection ||
+          this.aramaSonlandiriliyor
+        ) {
+          return;
+        }
+
+        const sonuclar: any[] = [];
+
+        rapor.forEach((stat: any) => {
+          if (stat.type !== "inbound-rtp" && stat.type !== "outbound-rtp") {
+            return;
+          }
+
+          const codec = stat.codecId ? rapor.get(stat.codecId) : undefined;
+
+          sonuclar.push({
+            id: stat.id,
+            type: stat.type,
+            kind: stat.kind ?? stat.mediaType,
+
+            // Gönderim ve alım verileri
+            bytesSent: stat.bytesSent,
+            packetsSent: stat.packetsSent,
+            bytesReceived: stat.bytesReceived,
+            packetsReceived: stat.packetsReceived,
+            packetsLost: stat.packetsLost,
+
+            // Video kare istatistikleri
+            framesEncoded: stat.framesEncoded,
+            framesSent: stat.framesSent,
+            framesReceived: stat.framesReceived,
+            framesDecoded: stat.framesDecoded,
+            framesDropped: stat.framesDropped,
+            keyFramesEncoded: stat.keyFramesEncoded,
+            keyFramesDecoded: stat.keyFramesDecoded,
+
+            // Görüntü boyutu ve performans
+            frameWidth: stat.frameWidth,
+            frameHeight: stat.frameHeight,
+            framesPerSecond: stat.framesPerSecond,
+            totalDecodeTime: stat.totalDecodeTime,
+
+            // Ses istatistikleri
+            audioLevel: stat.audioLevel,
+            totalSamplesReceived: stat.totalSamplesReceived,
+            totalSamplesSent: stat.totalSamplesSent,
+            concealedSamples: stat.concealedSamples,
+            jitter: stat.jitter,
+
+            // Codec ve bağlantı bilgileri
+            codecId: stat.codecId,
+            codecMimeType: codec?.mimeType,
+            codecPayloadType: codec?.payloadType,
+            mid: stat.mid,
+            ssrc: stat.ssrc,
+            trackIdentifier: stat.trackIdentifier,
+
+            // Ek bağlantı bilgileri
+            retransmittedPacketsSent: stat.retransmittedPacketsSent,
+            retransmittedBytesSent: stat.retransmittedBytesSent,
+            nackCount: stat.nackCount,
+            pliCount: stat.pliCount,
+            firCount: stat.firCount,
+          });
+        });
+
+        console.log(
+          "📊 WEBRTC RTP DETAYLI İSTATİSTİKLERİ:",
+          JSON.stringify(
+            {
+              aramaNesli: nesil,
+              zaman: new Date().toISOString(),
+              sonuclar,
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (error) {
+        console.error("❌ WEBRTC GETSTATS HATASI:", error);
+      } finally {
+        okumaSuruyor = false;
+
+        if (nesil === this.aramaNesli) {
+          this.statsOkumaSuruyor = false;
+        }
+      }
+    };
+
+    void olcumYap();
+
+    this.statsTimer = setInterval(() => {
+      void olcumYap();
+    }, 3000);
+  }
+
+  async aramayiBitir(karsiTarafBitirdi = false) {
+    console.log("========== ARAMA TEMİZLEME ÇAĞRILDI ==========");
+    console.log("Karşı taraf bitirdi:", karsiTarafBitirdi);
+    console.log("Mevcut oturum:", this.aramaOturumId);
+    console.log("Mevcut kullanıcı:", this.mevcutKullaniciId);
+    console.log("Karşı kullanıcı:", this.arananKullaniciId);
+    console.log("Arama nesli:", this.aramaNesli);
+    console.trace("ARAMAYI_BITIR ÇAĞRI ZİNCİRİ");
+    console.log("==============================================");
+    console.log(
+      "🔴 ARAMAYI BITIR ÇAĞRI YIĞINI:",
+      {
+        karsiTarafBitirdi,
+        sessionId: this.aramaOturumId,
+        peerUserId: this.arananKullaniciId,
+        generation: this.aramaNesli,
+      },
+      new Error().stack,
+    );
+    if (this.aramaSonlandiriliyor) {
+      console.log("Arama zaten sonlandırılıyor. İkinci cleanup atlandı.");
       return;
     }
 
     this.aramaSonlandiriliyor = true;
+    this.statsOlcumunuDurdur();
+    const cleanupNesli = ++this.aramaNesli;
 
-    this.aramaSesiniDurdur();
+    // Eski aramanın tüm kaynaklarını await öncesinde sabitle.
+    const eskiSessionId = this.aramaOturumId;
+    const eskiHedefKullaniciId = this.arananKullaniciId;
+    const eskiAramaTuru = this.aramaTuru;
+    const eskiHandshake = this.e2eeHandshake;
+    const eskiPeerConnection = this.peerConnection;
+    const eskiYerelStream = this.yerelStream;
+    const eskiHariciGonderici = this.hariciSinyalGonderici;
+    const eskiStompClient = this.stompClient;
+    const eskiWebSocketBagli = this.webSocketBagli;
 
-    this.gelenAramaAudioOturumunuKapat();
-
-    console.log(
-      karsiTarafBitirdi
-        ? " Karşı taraf aramayı bitirdi. WebRTC bağlantısı kapatılıyor."
-        : " WebRTC görüşmesi sonlandırılıyor.",
-    );
-
-    if (
-      !karsiTarafBitirdi &&
-      this.arananKullaniciId &&
-      (this.hariciSinyalGonderici ||
-        (this.stompClient && this.stompClient.connected && this.webSocketBagli))
-    ) {
-      console.log(" Kullanıcı aramayı kapattı. CALL_END gönderiliyor.");
-
-      this.aramaSinyaliGonder("CALL_END");
-    } else if (karsiTarafBitirdi) {
-      console.log(" Gelen CALL_END için tekrar CALL_END gönderilmiyor.");
-    }
-
-    this.sesYonlendirmesiniKapat();
-
-    if (this.yerelStream) {
-      this.yerelStream.getTracks().forEach((track) => {
-        try {
-          track.stop();
-        } catch (hata) {
-          console.warn("  Yerel track kapatma hatası:", hata);
-        }
-      });
-
-      this.yerelStream = null;
-    }
-
-    if (this.peerConnection) {
-      try {
-        this.peerConnection.ontrack = null;
-
-        this.peerConnection.onicecandidate = null;
-
-        this.peerConnection.onconnectionstatechange = null;
-
-        this.peerConnection.oniceconnectionstatechange = null;
-
-        this.peerConnection.onicegatheringstatechange = null;
-
-        this.peerConnection.onsignalingstatechange = null;
-
-        this.peerConnection.close();
-      } catch (hata) {
-        console.warn("PeerConnection kapatma hatası:", hata);
-      }
-
-      this.peerConnection = null;
-    }
-
+    // Yeni arama eski kaynaklara erişemesin.
+    this.e2eeHandshake = null;
+    this.peerConnection = null;
+    this.yerelStream = null;
     this.uzakStream = null;
 
+    this.bekleyenGelenTeklif = null;
+    this.e2eeBekleyenSinyaller = [];
+    this.e2eeBekleyenGondericiler = [];
     this.bekleyenIceAdaylari = [];
+    this.bekleyenGidenIceAdaylari = [];
 
+    this.offerAckBekleniyor = false;
+    this.gidenIceAktarimiSuruyor = false;
+    this.gidenIceTekrarDenemeIstendi = false;
     this.remoteDescriptionHazir = false;
     this.sonGelenOfferSdp = null;
+    console.log("⚠️ ARAMA OTURUM KİMLİĞİ SİLİNİYOR:", {
+      aramaOturumId: this.aramaOturumId,
+      aramaNesli: this.aramaNesli,
+    });
     this.aramaOturumId = null;
     this.cevapIsleniyor = false;
     this.ringtoneBaslatiliyor = false;
-
     this.webRtcBaglandiBildirildi = false;
-
-    this.offerOlusturuluyor = false; // Cleanup sonrasında yeni arama başlayabilsin.
-    // Devam eden eski Promise varsa kendi finally bloğunda zaten temizlenir.
-
+    this.offerOlusturuluyor = false;
     this.aramaBaslatPromise = null;
+
+    // Ortak Android ses oturumunu ilk await öncesinde kapat.
+    this.aramaSesiniDurdur();
+    this.gelenAramaAudioOturumunuKapat();
+    this.sesYonlendirmesiniKapat();
+
+    console.log(
+      karsiTarafBitirdi
+        ? "Karşı taraf aramayı bitirdi. Eski WebRTC kaynakları kapatılıyor."
+        : "WebRTC görüşmesi sonlandırılıyor.",
+    );
+
+    // CALL_END yalnızca eski aramanın sabitlenmiş bilgileriyle gönderilir.
+    if (!karsiTarafBitirdi && eskiHedefKullaniciId && eskiSessionId) {
+      const sinyal: BackendAramaSinyali = {
+        hedefKullaniciId: eskiHedefKullaniciId,
+        tur: eskiAramaTuru,
+        tip: "CALL_END",
+        sdp: null,
+        aday: null,
+        sdpMid: null,
+        sdpMLineIndex: null,
+        aramaOturumId: eskiSessionId,
+        e2eeVerisi: null,
+      };
+
+      try {
+        if (eskiHariciGonderici) {
+          await eskiHariciGonderici(sinyal);
+        } else if (
+          eskiStompClient &&
+          eskiStompClient.connected &&
+          eskiWebSocketBagli
+        ) {
+          eskiStompClient.publish({
+            destination: "/app/arama/sinyal",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(sinyal),
+          });
+        }
+      } catch (hata) {
+        console.warn("CALL_END gönderilemedi:", hata);
+      }
+    } else if (karsiTarafBitirdi) {
+      console.log("Gelen CALL_END için tekrar CALL_END gönderilmiyor.");
+    }
+
+    // Yalnızca eski handshake kapatılıyor.
+    if (eskiHandshake) {
+      try {
+        await eskiHandshake.close(false);
+      } catch (hata) {
+        console.warn("Eski E2EE handshake temizliği başarısız:", hata);
+      }
+    }
+
+    // Eski medya akışını kapat.
+    if (eskiYerelStream) {
+      eskiYerelStream.getTracks().forEach((track) => {
+        try {
+          track.stop();
+        } catch (hata) {
+          console.warn("Eski yerel track kapatma hatası:", hata);
+        }
+      });
+    }
+
+    // Yalnızca eski PeerConnection kapatılıyor.
+    if (eskiPeerConnection) {
+      try {
+        eskiPeerConnection.ontrack = null;
+        eskiPeerConnection.onicecandidate = null;
+        eskiPeerConnection.onconnectionstatechange = null;
+        eskiPeerConnection.oniceconnectionstatechange = null;
+        eskiPeerConnection.onicegatheringstatechange = null;
+        eskiPeerConnection.onsignalingstatechange = null;
+        eskiPeerConnection.close();
+      } catch (hata) {
+        console.warn("Eski PeerConnection kapatma hatası:", hata);
+      }
+    }
+    // Temizlik sırasında yeni arama başladıysa yeni aramanın
+    // kaynaklarına dokunma, ancak eski temizliğin kilidini mutlaka aç.
+    if (cleanupNesli !== this.aramaNesli) {
+      console.log("Eski arama temizlendi; yeni arama durumu korundu.");
+
+      this.aramaSonlandiriliyor = false;
+
+      console.log("Eski aramanın sonlandırma kilidi açıldı.");
+      return;
+    }
 
     if (!karsiTarafBitirdi) {
       this.olayCalistir("baglantiKoptu");
-      this.aramaSonlandiriliyor = false;
-
-      console.log("✅ Arama temizliği tamamlandı, sonlandırma kilidi açıldı.");
     }
+
+    // Her iki sonlandırma yolunda da kilit açılmalı.
+    // Yeni aramanın temizleme işlemi engellenmemeli.
+    this.aramaSonlandiriliyor = false;
+    console.log("Arama temizliği tamamlandı. Sonlandırma kilidi açıldı.", {
+      karsiTarafBitirdi,
+    });
   } /*\*
 
 
@@ -2944,6 +4468,11 @@ class AramaWebRTC {
     this.uzakStream = null;
 
     this.bekleyenIceAdaylari = [];
+    this.bekleyenGidenIceAdaylari = [];
+    this.offerAckBekleniyor = false;
+    this.gidenIceAktarimiSuruyor = false;
+    this.e2eeBekleyenSinyaller = [];
+    this.e2eeBekleyenGondericiler = [];
 
     this.remoteDescriptionHazir = false;
 

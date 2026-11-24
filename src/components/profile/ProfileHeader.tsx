@@ -1,4 +1,4 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 type UserProfile = {
@@ -14,6 +14,8 @@ type ProfileHeaderProps = {
 };
 
 export default function ProfileHeader({ user }: ProfileHeaderProps) {
+  const { t } = useTranslation("myProfile");
+
   if (!user) {
     return (
       <View style={styles.container}>
@@ -21,7 +23,7 @@ export default function ProfileHeader({ user }: ProfileHeaderProps) {
           <Text style={styles.avatarText}>👤</Text>
         </View>
 
-        <Text style={styles.name}>Profil</Text>
+        <Text style={styles.name}>{t("header.profile")}</Text>
       </View>
     );
   }
@@ -40,7 +42,7 @@ export default function ProfileHeader({ user }: ProfileHeaderProps) {
         )}
       </View>
 
-      <Text style={styles.name}>{adSoyad || "Profil"}</Text>
+      <Text style={styles.name}>{adSoyad || t("header.profile")}</Text>
 
       <Text style={styles.username}>@{user.username}</Text>
     </View>

@@ -1,0 +1,587 @@
+diff --git a/node_modules/react-native-webrtc/android/build.gradle b/node_modules/react-native-webrtc/android/build.gradle
+index 033a226..537bc27 100644
+--- a/node_modules/react-native-webrtc/android/build.gradle
++++ b/node_modules/react-native-webrtc/android/build.gradle
+@@ -31,6 +31,6 @@ android {
+ 
+ dependencies {
+     implementation "com.facebook.react:react-android:+"
+-    api 'org.jitsi:webrtc:124.+'
++    api 'org.jitsi:webrtc:124.0.0-e2ee'
+     implementation "androidx.core:core:1.7.0"
+ }
+diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
+index 510435b..ace9811 100644
+--- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
++++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
+@@ -412,6 +412,9 @@ class PeerConnectionObserver implements PeerConnection.Observer {
+         Log.d(TAG, "onAddTrack");
+ 
+         ThreadUtils.runOnExecutor(() -> {
++            // Uzak alıcının E2EE frame decryptor bağlantısı.
++            webRTCModule.attachE2EEReceiverIfReady(this.id, receiver);
++
+             RtpTransceiver transceiver = null;
+             for (RtpTransceiver t : this.peerConnection.getTransceivers()) {
+                 if (Objects.equals(t.getReceiver().id(), receiver.id())) {
+@@ -472,7 +475,19 @@ class PeerConnectionObserver implements PeerConnection.Observer {
+      * semantics are specified. The transceiver will be disposed automatically.
+      */
+     @Override
+-    public void onTrack(final RtpTransceiver transceiver) {}
++    public void onTrack(final RtpTransceiver transceiver) {
++        ThreadUtils.runOnExecutor(() -> {
++            if (transceiver == null || transceiver.getReceiver() == null) {
++                Log.w(TAG, "E2EE onTrack: receiver bulunamadı");
++                return;
++            }
++
++            webRTCModule.attachE2EEReceiverIfReady(
++                    this.id,
++                    transceiver.getReceiver()
++            );
++        });
++    }
+ 
+     /*
+      * Triggered when a previously added remote track is removed by the remote
+diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
+index d5a9fb4..49680fb 100644
+--- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
++++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
+@@ -1,12 +1,12 @@
+ package com.oney.WebRTCModule;
+ 
++import android.util.Base64;
+ import android.util.Log;
+ import android.util.Pair;
+ import android.util.SparseArray;
+ 
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+-
+ import com.facebook.react.bridge.Arguments;
+ import com.facebook.react.bridge.Callback;
+ import com.facebook.react.bridge.Promise;
+@@ -52,6 +52,11 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+ 
+     // Need to expose the peer connection codec factories here to get capabilities
+     private final SparseArray<PeerConnectionObserver> mPeerConnectionObservers;
++    private final SparseArray<E2EESession> mE2EESessions = new SparseArray<>();
++    private final SparseArray<Boolean> mE2EEInitialized = new SparseArray<>();
++    private final SparseArray<Boolean> mE2EEConfirmationCreated = new SparseArray<>();
++    private final SparseArray<Boolean> mE2EEPeerConfirmed = new SparseArray<>();
++    private final SparseArray<Boolean> mE2EERequired = new SparseArray<>();
+     final Map<String, MediaStream> localStreams;
+ 
+     // Store generated certificates by ID to avoid exposing private keys to JS
+@@ -74,6 +79,25 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+         Logging.Severity loggingSeverity = options.loggingSeverity;
+         String fieldTrials = options.fieldTrials;
+ 
++        // E2EE AAD TEST: GenericDescriptorAuth iki cihazda da kapalı.
++        if (fieldTrials == null) {
++            fieldTrials = "";
++        }
++
++        // Önceden tanımlanmış GenericDescriptorAuth ayarını kaldır.
++        fieldTrials = fieldTrials.replaceAll(
++                "(^|/)WebRTC-GenericDescriptorAuth/[^/]+/",
++                "$1"
++        );
++
++        if (!fieldTrials.isEmpty() && !fieldTrials.endsWith("/")) {
++            fieldTrials += "/";
++        }
++
++        // Diğer Field Trial ayarlarını koruyarak testi etkinleştir.
++        fieldTrials += "WebRTC-GenericDescriptorAuth/Disabled/";
++
++
+         PeerConnectionFactory.initialize(PeerConnectionFactory.InitializationOptions.builder(reactContext)
+                         .setFieldTrials(fieldTrials)
+                         .setNativeLibraryLoader(new LibraryLoader())
+@@ -132,6 +156,351 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+         return (pco == null) ? null : pco.getPeerConnection();
+     }
+ 
++    // These helpers must run on the WebRTC executor.
++  void attachE2EEReceiverIfReady(int pcId, RtpReceiver receiver) {
++    E2EESession session = mE2EESessions.get(pcId);
++
++    if (session == null) {
++        Log.w("E2EE-RECEIVER", "Session null, pcId=" + pcId);
++        return;
++    }
++
++    if (!mE2EEInitialized.get(pcId, false)) {
++        Log.w("E2EE-RECEIVER", "E2EE initialized değil, pcId=" + pcId);
++        return;
++    }
++
++    if (!mE2EEPeerConfirmed.get(pcId, false)) {
++        Log.w("E2EE-RECEIVER", "Peer confirmation bekleniyor, pcId=" + pcId);
++        return;
++    }
++
++    if (receiver == null) {
++        Log.w("E2EE-RECEIVER", "Receiver null, pcId=" + pcId);
++        return;
++    }
++
++    receiver.setFrameDecryptor(session);
++
++    Log.i(
++        "E2EE-RECEIVER",
++        "DECRYPTOR BAĞLANDI pcId=" + pcId
++            + " receiverId=" + receiver.id()
++    );
++}
++    private void attachE2EESenderIfReady(int pcId, RtpSender sender) {
++        E2EESession session = mE2EESessions.get(pcId);
++        if (session == null || !mE2EEInitialized.get(pcId, false)
++                || !mE2EEPeerConfirmed.get(pcId, false)
++                || sender == null) {
++            return;
++        }
++        sender.setFrameEncryptor(session);
++        if (!sender.hasFrameEncryptor()) {
++            throw new IllegalStateException("E2EE sender encryptor bağlanamadı");
++        }
++    }
++
++    private void closeE2EESessionInternal(int pcId) {
++        E2EESession session = mE2EESessions.get(pcId);
++        if (session == null) {
++            mE2EEInitialized.remove(pcId);
++            mE2EEConfirmationCreated.remove(pcId);
++            mE2EEPeerConfirmed.remove(pcId);
++
++            // E2EE zorunlu bağlantıda oturum kayıpsa bağlantı açık bırakılamaz.
++            if (mE2EERequired.get(pcId, false)) {
++                PeerConnectionObserver observer = mPeerConnectionObservers.get(pcId);
++                PeerConnection pc = observer == null ? null : observer.getPeerConnection();
++
++                if (pc != null) {
++                    try {
++                        Log.e(TAG, "E2EE oturumu bulunamadı; PeerConnection fail-closed kapatılıyor");
++                        pc.close();
++                    } catch (Exception e) {
++                        Log.e(TAG, "E2EE oturum kaybında PeerConnection kapatılamadı", e);
++                    }
++                }
++            }
++            return;
++        }
++
++        try {
++            PeerConnectionObserver observer = mPeerConnectionObservers.get(pcId);
++            PeerConnection pc = observer == null ? null : observer.getPeerConnection();
++
++            if (pc != null) {
++                boolean senderShutdownFailed = false;
++
++                // Önce track'leri kaldır. Herhangi biri başarısızsa encryptor'lara
++                // dokunmadan PeerConnection'ı kapat.
++                for (RtpSender sender : pc.getSenders()) {
++                    try {
++                        if (sender.track() != null && !sender.setTrack(null, false)) {
++                            senderShutdownFailed = true;
++                            Log.e(TAG, "E2EE sender track kaldırılamadı; bağlantı kapatılacak");
++                            break;
++                        }
++                    } catch (Exception e) {
++                        senderShutdownFailed = true;
++                        Log.e(TAG, "E2EE sender track kaldırma hatası; bağlantı kapatılacak", e);
++                        break;
++                    }
++                }
++
++                if (senderShutdownFailed) {
++                    try {
++                        pc.close();
++                    } catch (Exception e) {
++                        Log.e(TAG, "E2EE güvenlik kapatması başarısız", e);
++                    }
++                }
++
++                // Track'ler kaldırıldıktan veya bağlantı kapatıldıktan sonra encryptor'ları ayır.
++                for (RtpSender sender : pc.getSenders()) {
++                    try {
++                        sender.setFrameEncryptor(null);
++                    } catch (Exception e) {
++                        Log.e(TAG, "E2EE encryptor ayrılamadı; bağlantı kapatılıyor", e);
++                        try {
++                            pc.close();
++                        } catch (Exception closeError) {
++                            Log.e(TAG, "PeerConnection kapatma hatası", closeError);
++                        }
++                    }
++                }
++
++                for (RtpReceiver receiver : pc.getReceivers()) {
++                    try {
++                        receiver.setFrameDecryptor(null);
++                    } catch (Exception e) {
++                        Log.e(TAG, "E2EE receiver decryptor ayrılamadı; bağlantı kapatılıyor", e);
++                        try {
++                            pc.close();
++                        } catch (Exception closeError) {
++                            Log.e(TAG, "Receiver güvenlik kapatması başarısız", closeError);
++                        }
++                    }
++                }
++            }
++        } finally {
++            mE2EESessions.remove(pcId);
++            mE2EEInitialized.remove(pcId);
++            mE2EEConfirmationCreated.remove(pcId);
++            mE2EEPeerConfirmed.remove(pcId);
++            session.close();
++        }
++    }
++
++    @ReactMethod
++    public void e2eeCreateSession(int pcId, Promise promise) {
++        ThreadUtils.runOnExecutor(() -> {
++            try {
++                PeerConnectionObserver observer = mPeerConnectionObservers.get(pcId);
++                if (observer == null || observer.getPeerConnection() == null) {
++                    promise.reject("E2EE_PC_MISSING", "PeerConnection bulunamadı");
++                    return;
++                }
++
++                if (mE2EESessions.get(pcId) != null) {
++                    promise.reject("E2EE_SESSION_EXISTS", "E2EE oturumu zaten mevcut");
++                    return;
++                }
++
++                E2EESession session = new E2EESession();
++                try {
++                    byte[] publicKey = session.getPublicKey();
++                    mE2EESessions.put(pcId, session);
++                    promise.resolve(Base64.encodeToString(publicKey, Base64.NO_WRAP));
++                } catch (Exception e) {
++                    session.close();
++                    throw e;
++                }
++            } catch (Exception e) {
++                promise.reject("E2EE_CREATE_FAILED", e);
++            }
++        });
++    }
++
++    @ReactMethod
++    public void e2eeInitializeSession(
++            int pcId,
++            String peerPublicKeyBase64,
++            String saltBase64,
++            String transcriptHashBase64,
++            boolean isInitiator,
++            Promise promise) {
++
++        ThreadUtils.runOnExecutor(() -> {
++            byte[] peerPublicKey = null;
++            byte[] salt = null;
++            byte[] transcriptHash = null;
++
++            try {
++                E2EESession session = mE2EESessions.get(pcId);
++                PeerConnectionObserver observer = mPeerConnectionObservers.get(pcId);
++
++                if (session == null || observer == null
++                        || observer.getPeerConnection() == null) {
++                    promise.reject("E2EE_SESSION_MISSING", "E2EE oturumu veya bağlantı bulunamadı");
++                    return;
++                }
++
++                if (mE2EEInitialized.get(pcId, false)) {
++                    promise.reject("E2EE_ALREADY_INITIALIZED", "E2EE oturumu zaten başlatılmış");
++                    return;
++                }
++
++                peerPublicKey = Base64.decode(peerPublicKeyBase64, Base64.DEFAULT);
++                salt = Base64.decode(saltBase64, Base64.DEFAULT);
++                transcriptHash = Base64.decode(transcriptHashBase64, Base64.DEFAULT);
++
++                if (peerPublicKey.length != 32 || salt.length != 32
++                        || transcriptHash.length != 32) {
++                    promise.reject("E2EE_INVALID_KEY_MATERIAL", "Anahtar malzemeleri 32 byte olmalı");
++                    return;
++                }
++
++                // IMPORTANT:
++                // The application must authenticate the peer key before calling this method.
++                if (!session.initialize(peerPublicKey, salt, transcriptHash, isInitiator)) {
++                    promise.reject("E2EE_INITIALIZATION_FAILED", "Native E2EE başlatılamadı");
++                    return;
++                }
++
++                PeerConnection pc = observer.getPeerConnection();
++
++                // Anahtarlar hazır; gönderim peer key confirmation tamamlanana
++                // kadar kapalı kalır. Alıcı decryptor'ları önceden bağlanır.
++                mE2EEInitialized.put(pcId, true);
++                mE2EEConfirmationCreated.put(pcId, false);
++                mE2EEPeerConfirmed.put(pcId, false);
++
++                for (RtpReceiver receiver : pc.getReceivers()) {
++                    attachE2EEReceiverIfReady(pcId, receiver);
++                }
++
++                promise.resolve(true);
++
++            } catch (Exception e) {
++                closeE2EESessionInternal(pcId);
++                promise.reject("E2EE_INITIALIZATION_FAILED", e);
++            } finally {
++                if (peerPublicKey != null) java.util.Arrays.fill(peerPublicKey, (byte) 0);
++                if (salt != null) java.util.Arrays.fill(salt, (byte) 0);
++                if (transcriptHash != null) java.util.Arrays.fill(transcriptHash, (byte) 0);
++            }
++        });
++    }
++
++    @ReactMethod
++    public void e2eeCreateKeyConfirmation(int pcId, Promise promise) {
++        ThreadUtils.runOnExecutor(() -> {
++            byte[] confirmation = null;
++            try {
++                E2EESession session = mE2EESessions.get(pcId);
++                if (session == null || !mE2EEInitialized.get(pcId, false)) {
++                    promise.reject("E2EE_NOT_INITIALIZED", "E2EE anahtarları hazır değil");
++                    return;
++                }
++                if (mE2EEConfirmationCreated.get(pcId, false)
++                        || mE2EEPeerConfirmed.get(pcId, false)) {
++                    promise.reject("E2EE_CONFIRMATION_ALREADY_CREATED",
++                            "Anahtar onayı daha önce oluşturulmuş");
++                    return;
++                }
++
++                confirmation = session.createKeyConfirmation();
++                if (confirmation == null || confirmation.length != 32) {
++                    throw new IllegalStateException("Geçersiz key confirmation uzunluğu");
++                }
++
++                String encoded = Base64.encodeToString(confirmation, Base64.NO_WRAP);
++                mE2EEConfirmationCreated.put(pcId, true);
++                promise.resolve(encoded);
++            } catch (Exception e) {
++                closeE2EESessionInternal(pcId);
++                promise.reject("E2EE_CONFIRMATION_CREATE_FAILED", e);
++            } finally {
++                if (confirmation != null) {
++                    java.util.Arrays.fill(confirmation, (byte) 0);
++                }
++            }
++        });
++    }
++
++    @ReactMethod
++    public void e2eeVerifyPeerKeyConfirmation(
++            int pcId, String confirmationBase64, Promise promise) {
++        ThreadUtils.runOnExecutor(() -> {
++            byte[] confirmation = null;
++            try {
++                E2EESession session = mE2EESessions.get(pcId);
++                PeerConnectionObserver observer = mPeerConnectionObservers.get(pcId);
++
++                if (session == null || observer == null
++                        || observer.getPeerConnection() == null
++                        || !mE2EEInitialized.get(pcId, false)) {
++                    promise.reject("E2EE_SESSION_MISSING", "E2EE oturumu hazır değil");
++                    return;
++                }
++                if (!mE2EEConfirmationCreated.get(pcId, false)
++                        || mE2EEPeerConfirmed.get(pcId, false)) {
++                    promise.reject("E2EE_CONFIRMATION_STATE_INVALID",
++                            "Yerel key confirmation oluşturulmamış veya oturum zaten onaylanmış");
++                    return;
++                }
++
++                confirmation = Base64.decode(confirmationBase64, Base64.DEFAULT);
++                if (confirmation.length != 32
++                        || !session.verifyPeerKeyConfirmation(confirmation)) {
++                    closeE2EESessionInternal(pcId);
++                    promise.reject("E2EE_PEER_CONFIRMATION_FAILED",
++                            "Karşı tarafın key confirmation doğrulanamadı");
++                    return;
++                }
++
++                mE2EEPeerConfirmed.put(pcId, true);
++                PeerConnection pc = observer.getPeerConnection();
++
++                for (RtpSender sender : pc.getSenders()) {
++                    attachE2EESenderIfReady(pcId, sender);
++                    if (sender.track() != null && !sender.hasFrameEncryptor()) {
++                        throw new IllegalStateException(
++                                "Medya göndericisine E2EE encryptor bağlanamadı");
++                    }
++                }
++
++                // Peer key confirmation başarılı.
++                // Mevcut alıcıların decryptor bağlantılarını şimdi kur.
++                for (RtpReceiver receiver : pc.getReceivers()) {
++                    attachE2EEReceiverIfReady(pcId, receiver);
++                }
++
++                promise.resolve(true);
++            } catch (Exception e) {
++                closeE2EESessionInternal(pcId);
++                promise.reject("E2EE_PEER_CONFIRMATION_FAILED", e);
++            } finally {
++                if (confirmation != null) {
++                    java.util.Arrays.fill(confirmation, (byte) 0);
++                }
++            }
++        });
++    }
++
++    @ReactMethod
++    public void e2eeCloseSession(int pcId, Promise promise) {
++        ThreadUtils.runOnExecutor(() -> {
++            try {
++                closeE2EESessionInternal(pcId);
++                promise.resolve(true);
++            } catch (Exception e) {
++                promise.reject("E2EE_CLOSE_FAILED", e);
++            }
++        });
++    }
++
+     void sendEvent(String eventName, @Nullable ReadableMap params) {
+         getReactApplicationContext()
+                 .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+@@ -411,6 +780,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                         }
+                         observer.setPeerConnection(peerConnection);
+                         mPeerConnectionObservers.put(id, observer);
++                        mE2EERequired.put(id, true);
+                         return true;
+                     })
+                     .get();
+@@ -506,6 +876,13 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                             transceiver = pco.addTransceiver(SerializeUtils.parseMediaType(kind),
+                                     SerializeUtils.parseTransceiverOptions(options.getMap("init")));
+                         } else if (options.hasKey("trackId")) {
++                            if (mE2EERequired.get(id, false)
++                                    && (mE2EESessions.get(id) == null
++                                    || !mE2EEInitialized.get(id, false)
++                                    || !mE2EEPeerConfirmed.get(id, false))) {
++                                Log.e(TAG, "E2EE: onay öncesi track içeren transceiver engellendi");
++                                return null;
++                            }
+                             String trackId = options.getString("trackId");
+                             MediaStreamTrack track = getLocalTrack(trackId);
+                             transceiver = pco.addTransceiver(
+@@ -521,6 +898,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                             Log.d(TAG, "peerConnectionAddTransceiver() Error adding transceiver");
+                             return null;
+                         }
++                        attachE2EESenderIfReady(id, transceiver.getSender());
+                         WritableMap params = Arguments.createMap();
+                         // We need to get a unique order at which the transceiver was created
+                         // to reorder the cached array of transceivers on the JS layer.
+@@ -546,6 +924,14 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                             return null;
+                         }
+ 
++                        if (mE2EERequired.get(id, false)
++                                && (mE2EESessions.get(id) == null
++                                || !mE2EEInitialized.get(id, false)
++                                || !mE2EEPeerConfirmed.get(id, false))) {
++                            Log.e(TAG, "E2EE: peer confirmation öncesi addTrack engellendi");
++                            return null;
++                        }
++
+                         MediaStreamTrack track = getLocalTrack(trackId);
+                         if (track == null) {
+                             Log.w(TAG, "peerConnectionAddTrack() couldn't find track " + trackId);
+@@ -562,6 +948,7 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                             }
+                         }
+                         RtpSender sender = pco.getPeerConnection().addTrack(track, streamIds);
++                        attachE2EESenderIfReady(id, sender);
+ 
+                         // Need to get the corresponding transceiver as well
+                         RtpTransceiver transceiver = pco.getTransceiver(sender.id());
+@@ -679,8 +1066,25 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+                     return;
+                 }
+ 
+-                MediaStreamTrack track = getLocalTrack(trackId);
+-                sender.setTrack(track, false);
++                MediaStreamTrack track = trackId == null ? null : getLocalTrack(trackId);
++
++                if (track != null && mE2EERequired.get(id, false)) {
++                    if (mE2EESessions.get(id) == null
++                            || !mE2EEPeerConfirmed.get(id, false)
++                            || !mE2EEInitialized.get(id, false)
++                            || !sender.hasFrameEncryptor()) {
++                        promise.reject("E2EE_SENDER_NOT_READY",
++                                "E2EE doğrulaması tamamlanmadan medya gönderilemez");
++                        return;
++                    }
++                }
++
++                boolean replaced = sender.setTrack(track, false);
++                if (!replaced) {
++                    promise.reject("SENDER_REPLACE_TRACK_FAILED",
++                            "Gönderici track değişikliği başarısız");
++                    return;
++                }
+                 promise.resolve(true);
+             } catch (Exception e) {
+                 Log.d(TAG, "senderReplaceTrack(): " + e.getMessage());
+@@ -1340,9 +1744,13 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+             PeerConnectionObserver pco = mPeerConnectionObservers.get(id);
+             if (pco == null || pco.getPeerConnection() == null) {
+                 Log.d(TAG, "peerConnectionClose() peerConnection is null");
++                closeE2EESessionInternal(id);
++                mE2EERequired.remove(id);
+                 return;
+             }
++            closeE2EESessionInternal(id);
+             pco.close();
++            mE2EERequired.remove(id);
+         });
+     }
+ 
+@@ -1352,9 +1760,15 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+             PeerConnectionObserver pco = mPeerConnectionObservers.get(id);
+             if (pco == null || pco.getPeerConnection() == null) {
+                 Log.d(TAG, "peerConnectionDispose() peerConnection is null");
++                closeE2EESessionInternal(id);
++                mPeerConnectionObservers.remove(id);
++                mE2EERequired.remove(id);
++                return;
+             }
++            closeE2EESessionInternal(id);
+             pco.dispose();
+             mPeerConnectionObservers.remove(id);
++            mE2EERequired.remove(id);
+         });
+     }
+ 
+diff --git a/node_modules/react-native-webrtc/src/RTCRtpSender.ts b/node_modules/react-native-webrtc/src/RTCRtpSender.ts
+index 4366b32..a74b00c 100644
+--- a/node_modules/react-native-webrtc/src/RTCRtpSender.ts
++++ b/node_modules/react-native-webrtc/src/RTCRtpSender.ts
+@@ -29,11 +29,11 @@ export default class RTCRtpSender {
+     }
+ 
+     async replaceTrack(track: MediaStreamTrack | null): Promise<void> {
+-        try {
+-            await WebRTCModule.senderReplaceTrack(this._peerConnectionId, this._id, track ? track.id : null);
+-        } catch (e) {
+-            return;
+-        }
++        await WebRTCModule.senderReplaceTrack(
++            this._peerConnectionId,
++            this._id,
++            track ? track.id : null
++        );
+ 
+         this._track = track;
+     }

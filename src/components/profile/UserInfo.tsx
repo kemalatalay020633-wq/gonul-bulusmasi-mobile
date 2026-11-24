@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, View } from "react-native";
 
 type UserProfile = {
@@ -22,30 +23,57 @@ type UserInfoProps = {
 };
 
 export default function UserInfo({ user }: UserInfoProps) {
+  const { t } = useTranslation("myProfile");
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Hesap Bilgilerim</Text>
+      <Text style={styles.title}>{t("accountInfo.title")}</Text>
+
       <View style={styles.card}>
-        <BilgiSatiri etiket="Kullanıcı Adı" deger={user.username} />
-        <BilgiSatiri etiket="E-posta" deger={user.email} />
+        <BilgiSatiri etiket={t("accountInfo.username")} deger={user.username} />
+
+        <BilgiSatiri etiket={t("accountInfo.email")} deger={user.email} />
+
         <BilgiSatiri
-          etiket="Ad Soyad"
+          etiket={t("accountInfo.fullName")}
           deger={`${user.firstName} ${user.lastName}`.trim()}
         />
-        <BilgiSatiri etiket="Doğum Tarihi" deger={user.birthDate || "-"} />
-        <BilgiSatiri etiket="Telefon" deger={user.phoneNumber || "-"} />
-        <BilgiSatiri etiket="Şehir" deger={user.city || "-"} />
+
         <BilgiSatiri
-          etiket="Hesap Durumu"
-          deger={user.active ? "Aktif" : "Pasif"}
+          etiket={t("accountInfo.birthDate")}
+          deger={user.birthDate || "-"}
         />
+
         <BilgiSatiri
-          etiket="E-posta Durumu"
-          deger={user.emailVerified ? "Doğrulandı" : "Doğrulanmadı"}
+          etiket={t("accountInfo.phone")}
+          deger={user.phoneNumber || "-"}
         />
+
+        <BilgiSatiri etiket={t("accountInfo.city")} deger={user.city || "-"} />
+
         <BilgiSatiri
-          etiket="Telefon Durumu"
-          deger={user.phoneVerified ? "Doğrulandı" : "Doğrulanmadı"}
+          etiket={t("accountInfo.accountStatus")}
+          deger={
+            user.active ? t("accountInfo.active") : t("accountInfo.inactive")
+          }
+        />
+
+        <BilgiSatiri
+          etiket={t("accountInfo.emailStatus")}
+          deger={
+            user.emailVerified
+              ? t("accountInfo.verified")
+              : t("accountInfo.notVerified")
+          }
+        />
+
+        <BilgiSatiri
+          etiket={t("accountInfo.phoneStatus")}
+          deger={
+            user.phoneVerified
+              ? t("accountInfo.verified")
+              : t("accountInfo.notVerified")
+          }
           son
         />
       </View>
@@ -73,12 +101,14 @@ const styles = StyleSheet.create({
     width: "100%",
     marginBottom: 4,
   },
+
   title: {
     fontSize: 17,
     fontWeight: "900",
     color: "#F4C45B",
     marginBottom: 11,
   },
+
   card: {
     width: "100%",
     backgroundColor: "#410052",
@@ -88,6 +118,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 5,
   },
+
   row: {
     width: "100%",
     minHeight: 43,
@@ -97,16 +128,19 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+
   rowBorder: {
     borderBottomWidth: 1,
     borderBottomColor: "#704078",
   },
+
   label: {
     flex: 1,
     fontSize: 13,
     fontWeight: "700",
     color: "#E8C8F0",
   },
+
   value: {
     flex: 1.25,
     textAlign: "right",

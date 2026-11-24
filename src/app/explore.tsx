@@ -1,126 +1,106 @@
-import { Image } from 'expo-image';
-import { SymbolView } from 'expo-symbols';
-import { Platform, Pressable, ScrollView, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from "react-i18next";
+import {
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-import { ExternalLink } from '@/components/external-link';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Collapsible } from '@/components/ui/collapsible';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+export default function ExploreScreen() {
+  const { t } = useTranslation();
 
-export default function TabTwoScreen() {
-  const safeAreaInsets = useSafeAreaInsets();
-  const insets = {
-    ...safeAreaInsets,
-    bottom: safeAreaInsets.bottom + BottomTabInset + Spacing.three,
+  const dokumaniAc = () => {
+    Linking.openURL("https://docs.expo.dev").catch(() => {
+      console.warn("Dokümantasyon bağlantısı açılamadı.");
+    });
   };
-  const theme = useTheme();
 
-  const contentPlatformStyle = Platform.select({
-    android: {
-      paddingTop: insets.top,
-      paddingLeft: insets.left,
-      paddingRight: insets.right,
-      paddingBottom: insets.bottom,
+  const bolumler = [
+    {
+      baslik: t("explore.sections.routing.title"),
+      aciklama: t("explore.sections.routing.description"),
+      detay: t("explore.sections.routing.layoutDescription"),
+      ekBilgi: t("explore.sections.routing.layoutEnd"),
+      ikon: "🧭",
     },
-    web: {
-      paddingTop: Spacing.six,
-      paddingBottom: Spacing.four,
+    {
+      baslik: t("explore.sections.platforms.title"),
+      aciklama: t("explore.sections.platforms.description"),
+      detay: t("explore.sections.platforms.descriptionEnd"),
+      ikon: "📱",
     },
-  });
+    {
+      baslik: t("explore.sections.images.title"),
+      aciklama: t("explore.sections.images.description"),
+      detay: t("explore.sections.images.descriptionEnd"),
+      ikon: "🖼️",
+    },
+    {
+      baslik: t("explore.sections.themes.title"),
+      aciklama: t("explore.sections.themes.description"),
+      detay: t("explore.sections.themes.descriptionEnd"),
+      ikon: "🎨",
+    },
+    {
+      baslik: t("explore.sections.animations.title"),
+      aciklama: t("explore.sections.animations.description"),
+      detay: t("explore.sections.animations.descriptionEnd"),
+      ikon: "✨",
+    },
+  ];
 
   return (
     <ScrollView
-      style={[styles.scrollView, { backgroundColor: theme.background }]}
-      contentInset={insets}
-      contentContainerStyle={[styles.contentContainer, contentPlatformStyle]}>
-      <ThemedView style={styles.container}>
-        <ThemedView style={styles.titleContainer}>
-          <ThemedText type="subtitle">Explore</ThemedText>
-          <ThemedText style={styles.centerText} themeColor="textSecondary">
-            This starter app includes example{'\n'}code to help you get started.
-          </ThemedText>
+      style={styles.scrollView}
+      contentContainerStyle={styles.contentContainer}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerIcon}>🌍</Text>
 
-          <ExternalLink href="https://docs.expo.dev" asChild>
-            <Pressable style={({ pressed }) => pressed && styles.pressed}>
-              <ThemedView type="backgroundElement" style={styles.linkButton}>
-                <ThemedText type="link">Expo documentation</ThemedText>
-                <SymbolView
-                  tintColor={theme.text}
-                  name={{ ios: 'arrow.up.right.square', android: 'link', web: 'link' }}
-                  size={12}
-                />
-              </ThemedView>
-            </Pressable>
-          </ExternalLink>
-        </ThemedView>
+          <Text style={styles.title}>{t("explore.title")}</Text>
 
-        <ThemedView style={styles.sectionsWrapper}>
-          <Collapsible title="File-based routing">
-            <ThemedText type="small">
-              This app has two screens: <ThemedText type="code">src/app/index.tsx</ThemedText> and{' '}
-              <ThemedText type="code">src/app/explore.tsx</ThemedText>
-            </ThemedText>
-            <ThemedText type="small">
-              The layout file in <ThemedText type="code">src/app/_layout.tsx</ThemedText> sets up
-              the tab navigator.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/router/introduction">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+          <Text style={styles.description}>{t("explore.description")}</Text>
 
-          <Collapsible title="Android, iOS, and web support">
-            <ThemedView type="backgroundElement" style={styles.collapsibleContent}>
-              <ThemedText type="small">
-                You can open this project on Android, iOS, and the web. To open the web version,
-                press <ThemedText type="smallBold">w</ThemedText> in the terminal running this
-                project.
-              </ThemedText>
-              <Image
-                source={require('@/assets/images/tutorial-web.png')}
-                style={styles.imageTutorial}
-              />
-            </ThemedView>
-          </Collapsible>
+          <Pressable
+            onPress={dokumaniAc}
+            style={({ pressed }) => [
+              styles.documentButton,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={styles.documentButtonText}>
+              {t("explore.expoDocumentation")} ↗
+            </Text>
+          </Pressable>
+        </View>
 
-          <Collapsible title="Images">
-            <ThemedText type="small">
-              For static images, you can use the <ThemedText type="code">@2x</ThemedText> and{' '}
-              <ThemedText type="code">@3x</ThemedText> suffixes to provide files for different
-              screen densities.
-            </ThemedText>
-            <Image source={require('@/assets/images/react-logo.png')} style={styles.imageReact} />
-            <ExternalLink href="https://reactnative.dev/docs/images">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+        <View style={styles.sections}>
+          {bolumler.map((bolum, index) => (
+            <View key={index} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Text style={styles.cardIcon}>{bolum.ikon}</Text>
 
-          <Collapsible title="Light and dark mode components">
-            <ThemedText type="small">
-              This template has light and dark mode support. The{' '}
-              <ThemedText type="code">useColorScheme()</ThemedText> hook lets you inspect what the
-              user&apos;s current color scheme is, and so you can adjust UI colors accordingly.
-            </ThemedText>
-            <ExternalLink href="https://docs.expo.dev/develop/user-interface/color-themes/">
-              <ThemedText type="linkPrimary">Learn more</ThemedText>
-            </ExternalLink>
-          </Collapsible>
+                <Text style={styles.cardTitle}>{bolum.baslik}</Text>
+              </View>
 
-          <Collapsible title="Animations">
-            <ThemedText type="small">
-              This template includes an example of an animated component. The{' '}
-              <ThemedText type="code">src/components/ui/collapsible.tsx</ThemedText> component uses
-              the powerful <ThemedText type="code">react-native-reanimated</ThemedText> library to
-              animate opening this hint.
-            </ThemedText>
-          </Collapsible>
-        </ThemedView>
-        {Platform.OS === 'web' && <WebBadge />}
-      </ThemedView>
+              <Text style={styles.cardDescription}>{bolum.aciklama}</Text>
+
+              <Text style={styles.cardDetail}>{bolum.detay}</Text>
+
+              {"ekBilgi" in bolum && bolum.ekBilgi ? (
+                <Text style={styles.cardDetail}>{bolum.ekBilgi}</Text>
+              ) : null}
+            </View>
+          ))}
+        </View>
+
+        <Text style={styles.footer}>Gönül Buluşması</Text>
+      </View>
     </ScrollView>
   );
 }
@@ -128,53 +108,114 @@ export default function TabTwoScreen() {
 const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
+    backgroundColor: "#F5F7FB",
   },
+
   contentContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-  },
-  container: {
-    maxWidth: MaxContentWidth,
     flexGrow: 1,
+    alignItems: "center",
+    paddingBottom: 40,
   },
-  titleContainer: {
-    gap: Spacing.three,
-    alignItems: 'center',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.six,
+
+  container: {
+    width: "100%",
+    maxWidth: 700,
+    paddingHorizontal: 18,
   },
-  centerText: {
-    textAlign: 'center',
+
+  header: {
+    alignItems: "center",
+    paddingTop: Platform.OS === "web" ? 35 : 25,
+    paddingBottom: 28,
   },
+
+  headerIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+
+  title: {
+    fontSize: 27,
+    fontWeight: "800",
+    color: "#263653",
+    textAlign: "center",
+    marginBottom: 10,
+  },
+
+  description: {
+    fontSize: 15,
+    color: "#68758B",
+    textAlign: "center",
+    lineHeight: 23,
+  },
+
+  documentButton: {
+    backgroundColor: "#5268D8",
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 20,
+  },
+
+  documentButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+
   pressed: {
     opacity: 0.7,
   },
-  linkButton: {
-    flexDirection: 'row',
-    paddingHorizontal: Spacing.four,
-    paddingVertical: Spacing.two,
-    borderRadius: Spacing.five,
-    justifyContent: 'center',
-    gap: Spacing.one,
-    alignItems: 'center',
+
+  sections: {
+    gap: 14,
   },
-  sectionsWrapper: {
-    gap: Spacing.five,
-    paddingHorizontal: Spacing.four,
-    paddingTop: Spacing.three,
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E8ECF3",
   },
-  collapsibleContent: {
-    alignItems: 'center',
+
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    gap: 10,
   },
-  imageTutorial: {
-    width: '100%',
-    aspectRatio: 296 / 171,
-    borderRadius: Spacing.three,
-    marginTop: Spacing.two,
+
+  cardIcon: {
+    fontSize: 25,
   },
-  imageReact: {
-    width: 100,
-    height: 100,
-    alignSelf: 'center',
+
+  cardTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#263653",
+  },
+
+  cardDescription: {
+    fontSize: 14,
+    color: "#46536A",
+    lineHeight: 22,
+    marginBottom: 8,
+  },
+
+  cardDetail: {
+    fontSize: 13,
+    color: "#778398",
+    lineHeight: 21,
+    marginTop: 5,
+  },
+
+  footer: {
+    textAlign: "center",
+    color: "#8994A7",
+    fontSize: 13,
+    marginTop: 28,
+    marginBottom: 15,
   },
 });

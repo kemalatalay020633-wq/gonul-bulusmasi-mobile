@@ -1,6 +1,8 @@
+import { tokenGetir } from "../../../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   ScrollView,
@@ -64,11 +66,18 @@ type Profile = {
 };
 
 type EnumSecenegi = {
-  kod: string | number;
-  aciklama: string;
+  kod?: string | number;
+  code?: string | number;
+  id?: string | number;
+  value?: string | number;
+  aciklama?: string;
+  description?: string;
+  name?: string;
+  label?: string;
 };
 
 export default function ProfilDetay() {
+  const { t, i18n } = useTranslation("profileDetails");
   const navigation = useNavigation<any>();
 
   const route = useRoute<any>();
@@ -113,7 +122,7 @@ export default function ProfilDetay() {
     const text = await response.text();
 
     if (!response.ok) {
-      throw new Error("Profil bilgileri alınamadı.");
+      throw new Error(t("profileDetails:loadFailed"));
     }
 
     if (!text.trim()) {
@@ -147,18 +156,156 @@ export default function ProfilDetay() {
     kod: string | number | null,
   ) => {
     if (kod === null || kod === undefined || String(kod).trim() === "") {
-      return "Belirtilmemiş";
+      return t("profileDetails:notSpecified");
     }
 
-    const bulunan = liste.find((item) => Number(item.kod) === Number(kod));
+    const kodMetni = String(kod).trim();
+    const bulunan = liste.find((item) => {
+      const itemKodu = item.kod ?? item.code ?? item.id ?? item.value;
+      return itemKodu !== undefined && String(itemKodu).trim() === kodMetni;
+    });
 
-    return bulunan?.aciklama ?? "Belirtilmemiş";
+    if (!bulunan) {
+      return t("profileDetails:notSpecified");
+    }
+
+    return (
+      bulunan.aciklama ??
+      bulunan.description ??
+      bulunan.name ??
+      bulunan.label ??
+      t("profileDetails:notSpecified")
+    );
+  };
+
+  // Medeni durum enum kodlarını seçili uygulama dilinde gösterir.
+  // Backend kodları ve kayıtlı profil değeri değiştirilmez.
+  const medeniDurumuCevir = (kod: string | number | null) => {
+    if (kod === null || kod === undefined || String(kod).trim() === "") {
+      return t("profileDetails:notSpecified");
+    }
+
+    const dil = (i18n.resolvedLanguage || i18n.language || "tr")
+      .split("-")[0]
+      .split("_")[0]
+      .toLowerCase();
+
+    const ceviriler: Record<string, Record<string, string>> = {
+      "1": {
+        tr: "Bekar",
+        en: "Single",
+        de: "Ledig",
+        ar: "أعزب",
+        ru: "Не женат / Не замужем",
+      },
+      "2": {
+        tr: "Evli",
+        en: "Married",
+        de: "Verheiratet",
+        ar: "متزوج",
+        ru: "Женат / Замужем",
+      },
+      "3": {
+        tr: "Boşanmış",
+        en: "Divorced",
+        de: "Geschieden",
+        ar: "مطلق / مطلقة",
+        ru: "В разводе",
+      },
+      "4": {
+        tr: "Dul",
+        en: "Widowed",
+        de: "Verwitwet",
+        ar: "أرمل / أرملة",
+        ru: "Вдовец / Вдова",
+      },
+      "998": {
+        tr: "Belirtmek İstemiyorum",
+        en: "Prefer not to say",
+        de: "Keine Angabe",
+        ar: "أفضل عدم الإفصاح",
+        ru: "Не хочу указывать",
+      },
+      "999": {
+        tr: "Diğer",
+        en: "Other",
+        de: "Andere",
+        ar: "أخرى",
+        ru: "Другое",
+      },
+    };
+
+    const kodMetni = String(kod).trim();
+    const bulunan = medeniDurumlar.find(
+      (item) => String(item.kod).trim() === kodMetni,
+    );
+
+    // API sayısal kod gönderiyorsa doğrudan koddan çevir.
+    let medeniKod = /^\d+$/.test(kodMetni) ? kodMetni : "";
+
+    // API enum adı veya Türkçe açıklama gönderirse de aynı koda eşleştir.
+    if (!medeniKod) {
+      const normalize = (deger: string) =>
+        deger
+          .trim()
+          .toLocaleLowerCase("tr-TR")
+          .replace(/ı/g, "i")
+          .replace(/İ/g, "i")
+          .replace(/â/g, "a")
+          .replace(/[^a-z0-9]+/g, "");
+
+      const anahtar = normalize(bulunan?.aciklama || kodMetni);
+      const kodEslesmeleri: Record<string, string> = {
+        bekar: "1",
+        bekâr: "1",
+        single: "1",
+        evli: "2",
+        married: "2",
+        bosanmis: "3",
+        divorced: "3",
+        geschieden: "3",
+        dul: "4",
+        widowed: "4",
+        verwitwet: "4",
+        belirtmekistemiyorum: "998",
+        tercih: "998",
+        prefernottosay: "998",
+        diger: "999",
+        other: "999",
+        andere: "999",
+      };
+      medeniKod = kodEslesmeleri[anahtar] || "";
+    }
+
+    const kayit = medeniKod ? ceviriler[medeniKod] : undefined;
+    if (kayit) {
+      return kayit[dil] || kayit.tr;
+    }
+
+    return bulunan?.aciklama ?? kodMetni;
+  };
+
+  const egitimBasliginiGetir = () => {
+    const dil = (i18n.resolvedLanguage || i18n.language || "tr")
+      .split("-")[0]
+      .split("_")[0]
+      .toLowerCase();
+
+    const ceviriler: Record<string, string> = {
+      tr: "Eğitim",
+      en: "Education",
+      de: "Ausbildung",
+      ar: "التعليم",
+      ru: "Образование",
+    };
+
+    return ceviriler[dil] || ceviriler.tr;
   };
 
   const soruMetniniGetir = (soruId: number) => {
     const soru = sorular.find((item) => Number(item.id) === Number(soruId));
 
-    return soru?.question || "Profil sorusu";
+    return soru?.question || t("profileDetails:profileQuestion");
   };
 
   const profilDon = () => {
@@ -178,7 +325,7 @@ export default function ProfilDetay() {
         setYukleniyor(true);
         setHata("");
 
-        const token = await AsyncStorage.getItem("token");
+        const token = await tokenGetir();
 
         if (!token) {
           if (aktif) {
@@ -189,7 +336,7 @@ export default function ProfilDetay() {
         }
 
         if (!hedefKullanıcıId) {
-          throw new Error("Kullanıcı profili bulunamadi.");
+          throw new Error(t("profileDetails:notFound"));
         }
 
         // ========================================
@@ -267,13 +414,9 @@ export default function ProfilDetay() {
         try {
           const [meslek, egitim, medeni, mezhep, ilgi] = await Promise.all([
             apiGetir("/enums/meslekler", token).catch(() => []),
-
             apiGetir("/enums/egitimler", token).catch(() => []),
-
             apiGetir("/enums/medeni-durumlar", token).catch(() => []),
-
             apiGetir("/enums/mezhepler", token).catch(() => []),
-
             apiGetir("/enums/ilgi-alanlari", token).catch(() => []),
           ]);
 
@@ -296,7 +439,7 @@ export default function ProfilDetay() {
           return;
         }
 
-        setHata("Profil detayları şu anda alınamıyor. Lütfen tekrar deneyin.");
+        setHata(t("profileDetails:detailsLoadFailed"));
       } finally {
         if (aktif) {
           setYukleniyor(false);
@@ -320,9 +463,7 @@ export default function ProfilDetay() {
       <View style={styles.yukleniyor}>
         <ActivityIndicator size="large" />
 
-        <Text style={styles.yukleniyorText}>
-          Profil detayları yükleniyor...
-        </Text>
+        <Text style={styles.yukleniyorText}>{t("profileDetails:loading")}</Text>
       </View>
     );
   }
@@ -335,12 +476,14 @@ export default function ProfilDetay() {
     return (
       <View style={styles.hataContainer}>
         <View style={styles.hataCard}>
-          <Text style={styles.hataBaslik}>Profil Detayi</Text>
+          <Text style={styles.hataBaslik}>{t("profileDetails:title")}</Text>
 
           <Text style={styles.hataText}>{hata}</Text>
 
           <TouchableOpacity style={styles.outlineButton} onPress={profilDon}>
-            <Text style={styles.outlineButtonText}>← Profile Dön</Text>
+            <Text style={styles.outlineButtonText}>
+              {t("profileDetails:back")}
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -360,12 +503,14 @@ export default function ProfilDetay() {
   // ILGI ALANLARI
   // ========================================
 
-  const ilgiAlanlariMetni = profile?.interests
-    ? String(profile.interests)
-        .split(",")
-        .map((ilgi) => enumAciklamasiGetir(ilgiAlanlari, ilgi.trim()))
-        .join(", ")
-    : "";
+  const ilgiAlanlariMetni =
+    profile?.interests !== null && profile?.interests !== undefined
+      ? String(profile.interests)
+          .split(",")
+          .map((ilgi) => enumAciklamasiGetir(ilgiAlanlari, ilgi.trim()))
+          .filter((metin) => metin !== t("profileDetails:notSpecified"))
+          .join(", ")
+      : "";
 
   return (
     <View style={styles.container}>
@@ -387,7 +532,9 @@ export default function ProfilDetay() {
               {user?.firstName} {user?.lastName}
             </Text>
 
-            <Text style={styles.topSubtitle}>Detayli Profil</Text>
+            <Text style={styles.topSubtitle}>
+              {t("profileDetails:subtitle")}
+            </Text>
           </View>
         </View>
 
@@ -419,13 +566,15 @@ export default function ProfilDetay() {
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>Profil Bilgileri</Text>
+            <Text style={styles.sectionTitle}>
+              {t("profileDetails:profileInfo")}
+            </Text>
 
             <View style={styles.summaryBox}>
               {/* Kullanıcı adi */}
 
               <View style={styles.summaryRow}>
-                <Text style={styles.label}>Kullanıcı adi</Text>
+                <Text style={styles.label}>{t("profileDetails:username")}</Text>
 
                 <Text style={styles.value}>{user.username}</Text>
               </View>
@@ -434,7 +583,7 @@ export default function ProfilDetay() {
 
               {user.city && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>Sehir</Text>
+                  <Text style={styles.label}>{t("profileDetails:city")}</Text>
 
                   <Text style={styles.value}>{user.city}</Text>
                 </View>
@@ -444,7 +593,7 @@ export default function ProfilDetay() {
 
               {yas !== null && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>Yaş</Text>
+                  <Text style={styles.label}>{t("profileDetails:age")}</Text>
 
                   <Text style={styles.value}>{yas}</Text>
                 </View>
@@ -454,7 +603,9 @@ export default function ProfilDetay() {
 
               {profile?.profession && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>Meslek</Text>
+                  <Text style={styles.label}>
+                    {t("profileDetails:profession")}
+                  </Text>
 
                   <Text style={styles.value}>
                     {enumAciklamasiGetir(meslekler, profile.profession)}
@@ -466,7 +617,7 @@ export default function ProfilDetay() {
 
               {profile?.education && (
                 <View style={styles.summaryRow}>
-                  <Text style={styles.label}>Eğitim</Text>
+                  <Text style={styles.label}>{egitimBasliginiGetir()}</Text>
 
                   <Text style={styles.value}>
                     {enumAciklamasiGetir(egitimler, profile.education)}
@@ -483,7 +634,7 @@ export default function ProfilDetay() {
 
         {profile?.about && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Hakkinda</Text>
+            <Text style={styles.sectionTitle}>{t("profileDetails:about")}</Text>
 
             <View style={styles.aboutBox}>
               <Text style={styles.aboutText}>{profile.about}</Text>
@@ -497,14 +648,18 @@ export default function ProfilDetay() {
 
         {profile && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Genel Bilgiler</Text>
+            <Text style={styles.sectionTitle}>
+              {t("profileDetails:generalInfo")}
+            </Text>
 
             <View style={styles.infoGrid}>
               {/* Boy */}
 
               {profile.height !== null && (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoLabel}>Boy</Text>
+                  <Text style={styles.infoLabel}>
+                    {t("profileDetails:height")}
+                  </Text>
 
                   <Text style={styles.infoValue}>{profile.height} cm</Text>
                 </View>
@@ -514,7 +669,9 @@ export default function ProfilDetay() {
 
               {profile.weight !== null && (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoLabel}>Kilo</Text>
+                  <Text style={styles.infoLabel}>
+                    {t("profileDetails:weight")}
+                  </Text>
 
                   <Text style={styles.infoValue}>{profile.weight} kg</Text>
                 </View>
@@ -524,10 +681,12 @@ export default function ProfilDetay() {
 
               {profile.maritalStatus && (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoLabel}>Medeni Durum</Text>
+                  <Text style={styles.infoLabel}>
+                    {t("profileDetails:maritalStatus")}
+                  </Text>
 
                   <Text style={styles.infoValue}>
-                    {enumAciklamasiGetir(medeniDurumlar, profile.maritalStatus)}
+                    {medeniDurumuCevir(profile.maritalStatus)}
                   </Text>
                 </View>
               )}
@@ -536,7 +695,9 @@ export default function ProfilDetay() {
 
               {profile.religion && (
                 <View style={styles.infoCard}>
-                  <Text style={styles.infoLabel}>Din</Text>
+                  <Text style={styles.infoLabel}>
+                    {t("profileDetails:religion")}
+                  </Text>
 
                   <Text style={styles.infoValue}>
                     {enumAciklamasiGetir(mezhepler, profile.religion)}
@@ -553,7 +714,9 @@ export default function ProfilDetay() {
 
         {ilgiAlanlariMetni && (
           <View style={styles.sectionCard}>
-            <Text style={styles.sectionTitle}>Ilgi Alanlari</Text>
+            <Text style={styles.sectionTitle}>
+              {t("profileDetails:interests")}
+            </Text>
 
             <View style={styles.aboutBox}>
               <Text style={styles.aboutText}>{ilgiAlanlariMetni}</Text>
@@ -569,13 +732,15 @@ export default function ProfilDetay() {
           <View style={styles.questionHeader}>
             <Text style={styles.questionIcon}>❓</Text>
 
-            <Text style={styles.sectionTitle}>Sorular ve Cevaplar</Text>
+            <Text style={styles.sectionTitle}>
+              {t("profileDetails:questionsAnswers")}
+            </Text>
           </View>
 
           {cevaplar.length === 0 ? (
             <View style={styles.emptyBox}>
               <Text style={styles.emptyText}>
-                Bu profil için henüz cevaplanmış soru bulunmuyor.
+                {t("profileDetails:emptyAnswers")}
               </Text>
             </View>
           ) : (
@@ -602,14 +767,18 @@ export default function ProfilDetay() {
             style={styles.bottomOutlineButton}
             onPress={profilDon}
           >
-            <Text style={styles.bottomOutlineText}>← Profile Dön</Text>
+            <Text style={styles.bottomOutlineText}>
+              {t("profileDetails:back")}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.bottomPrimaryButton}
             onPress={() => navigation.navigate("messages")}
           >
-            <Text style={styles.bottomPrimaryText}>Tüm Mesajlar</Text>
+            <Text style={styles.bottomPrimaryText}>
+              {t("profileDetails:allMessages")}
+            </Text>
           </TouchableOpacity>
         </View>
 

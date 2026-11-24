@@ -1,3 +1,4 @@
+import { tokenGetir } from "../../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import {
@@ -33,16 +34,16 @@ function MessageItem({
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
-    const tokenGetir = async () => {
+    const tokenYukle = async () => {
       try {
-        const mevcutToken = await AsyncStorage.getItem("token");
+        const mevcutToken = await tokenGetir();
         setToken(mevcutToken);
       } catch (hata) {
         console.error("MEDYA TOKEN ALINAMADI:", hata);
       }
     };
 
-    void tokenGetir();
+    void tokenYukle();
   }, []);
 
   const isMine =

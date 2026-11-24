@@ -2,6 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import axios from "axios";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +24,7 @@ type Navigasyon = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SifreSifirlamaScreen() {
   const navigation = useNavigation<Navigasyon>();
+  const { t } = useTranslation();
 
   const [email, setEmail] = useState("");
   const [kod, setKod] = useState("");
@@ -32,12 +34,15 @@ export default function SifreSifirlamaScreen() {
   const [yukleniyor, setYukleniyor] = useState(false);
   const [mesaj, setMesaj] = useState("");
   const [basarili, setBasarili] = useState(false);
+  const [bilgiMesaji, setBilgiMesaji] = useState(false);
 
   const kodGonder = async () => {
     const temizEmail = email.trim().toLowerCase();
 
+    setBilgiMesaji(false);
+
     if (!temizEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(temizEmail)) {
-      setMesaj("Geçerli bir e-posta adresi gir.");
+      setMesaj(t("passwordReset.errors.invalidEmail"));
       return;
     }
 
@@ -53,9 +58,8 @@ export default function SifreSifirlamaScreen() {
 
       setEmail(temizEmail);
       setKodGonderildi(true);
-      setMesaj(
-        "Talebin alındı. Hesabın bu e-posta adresiyle kayıtlıysa sıfırlama kodu gönderilecektir.",
-      );
+      setBilgiMesaji(true);
+      setMesaj(t("passwordReset.requestReceived"));
     } catch (error: unknown) {
       if (__DEV__) {
         console.log(
@@ -66,10 +70,11 @@ export default function SifreSifirlamaScreen() {
         );
       }
 
+      setBilgiMesaji(false);
       setMesaj(
         axios.isAxiosError(error) && !error.response
-          ? "Sunucuya bağlanılamadı. İnternet ve backend bağlantısını kontrol et."
-          : "Kod isteği şu anda tamamlanamadı. Biraz sonra tekrar dene.",
+          ? t("passwordReset.errors.connection")
+          : t("passwordReset.errors.requestFailed"),
       );
     } finally {
       setYukleniyor(false);
@@ -80,18 +85,20 @@ export default function SifreSifirlamaScreen() {
     const temizEmail = email.trim().toLowerCase();
     const temizKod = kod.trim();
 
+    setBilgiMesaji(false);
+
     if (!/^\d{6}$/.test(temizKod)) {
-      setMesaj("E-postana gelen 6 haneli kodu gir.");
+      setMesaj(t("passwordReset.errors.invalidCode"));
       return;
     }
 
     if (yeniSifre.length < 8 || yeniSifre.length > 72) {
-      setMesaj("Yeni şifre 8 ile 72 karakter arasında olmalı.");
+      setMesaj(t("passwordReset.errors.passwordLength"));
       return;
     }
 
     if (yeniSifre !== yeniSifreTekrar) {
-      setMesaj("Girdiğin şifreler birbiriyle aynı değil.");
+      setMesaj(t("passwordReset.errors.passwordMismatch"));
       return;
     }
 
@@ -110,12 +117,13 @@ export default function SifreSifirlamaScreen() {
       );
 
       setBasarili(true);
+
       Alert.alert(
-        "Şifre yenilendi",
-        "Yeni şifrenle giriş yapabilirsin.",
+        t("passwordReset.resetSuccessTitle"),
+        t("passwordReset.resetSuccessMessage"),
         [
           {
-            text: "Giriş ekranına dön",
+            text: t("passwordReset.returnLogin"),
             onPress: () => navigation.navigate("index"),
           },
         ],
@@ -135,12 +143,13 @@ export default function SifreSifirlamaScreen() {
         ? error.response?.status
         : undefined;
 
+      setBilgiMesaji(false);
       setMesaj(
         !axios.isAxiosError(error) || !error.response
-          ? "Sunucuya bağlanılamadı. Backend bağlantısını kontrol et."
+          ? t("passwordReset.errors.connectionShort")
           : durum === 429
-            ? "Çok fazla deneme yapıldı. Bir süre bekleyip tekrar dene."
-            : "Şifre yenilenemedi. E-posta adresini ve kodu kontrol et; kodun süresi dolmuş olabilir.",
+            ? t("passwordReset.errors.tooMany")
+            : t("passwordReset.errors.resetFailed"),
       );
     } finally {
       setYukleniyor(false);
@@ -164,26 +173,27 @@ export default function SifreSifirlamaScreen() {
 
             <Text style={styles.baslik}>
               {basarili
-                ? "Şifren yenilendi"
+                ? t("passwordReset.successTitle")
                 : kodGonderildi
-                  ? "Yeni şifreni belirle"
-                  : "Şifremi Unuttum"}
+                  ? t("passwordReset.newPasswordTitle")
+                  : t("passwordReset.title")}
             </Text>
 
             <Text style={styles.aciklama}>
               {basarili
-                ? "Hesabına yeni şifrenle giriş yapabilirsin."
+                ? t("passwordReset.successDescription")
                 : kodGonderildi
-                  ? "E-posta adresine gelen 6 haneli kodu ve yeni şifreni gir."
-                  : "E-posta adresini gir. Hesabın kayıtlıysa sana şifre sıfırlama kodu gönderilecek."}
+                  ? t("passwordReset.newPasswordDescription")
+                  : t("passwordReset.description")}
             </Text>
 
             {!basarili && (
               <>
-                <Text style={styles.etiket}>E-posta adresi</Text>
+                <Text style={styles.etiket}>{t("passwordReset.email")}</Text>
+
                 <TextInput
                   style={styles.girdi}
-                  placeholder="ornek@eposta.com"
+                  placeholder={t("passwordReset.emailPlaceholder")}
                   placeholderTextColor="#999"
                   value={email}
                   onChangeText={setEmail}
@@ -196,10 +206,11 @@ export default function SifreSifirlamaScreen() {
 
                 {kodGonderildi && (
                   <>
-                    <Text style={styles.etiket}>6 haneli doğrulama kodu</Text>
+                    <Text style={styles.etiket}>{t("passwordReset.code")}</Text>
+
                     <TextInput
                       style={styles.girdi}
-                      placeholder="123456"
+                      placeholder={t("passwordReset.codePlaceholder")}
                       placeholderTextColor="#999"
                       value={kod}
                       onChangeText={(deger) =>
@@ -210,10 +221,13 @@ export default function SifreSifirlamaScreen() {
                       editable={!yukleniyor}
                     />
 
-                    <Text style={styles.etiket}>Yeni şifre</Text>
+                    <Text style={styles.etiket}>
+                      {t("passwordReset.newPassword")}
+                    </Text>
+
                     <TextInput
                       style={styles.girdi}
-                      placeholder="En az 8 karakter"
+                      placeholder={t("passwordReset.passwordPlaceholder")}
                       placeholderTextColor="#999"
                       value={yeniSifre}
                       onChangeText={setYeniSifre}
@@ -224,10 +238,13 @@ export default function SifreSifirlamaScreen() {
                       editable={!yukleniyor}
                     />
 
-                    <Text style={styles.etiket}>Yeni şifre tekrar</Text>
+                    <Text style={styles.etiket}>
+                      {t("passwordReset.repeatPassword")}
+                    </Text>
+
                     <TextInput
                       style={styles.girdi}
-                      placeholder="Yeni şifreni tekrar gir"
+                      placeholder={t("passwordReset.repeatPlaceholder")}
                       placeholderTextColor="#999"
                       value={yeniSifreTekrar}
                       onChangeText={setYeniSifreTekrar}
@@ -242,10 +259,7 @@ export default function SifreSifirlamaScreen() {
 
                 {!!mesaj && (
                   <Text
-                    style={[
-                      styles.mesaj,
-                      mesaj.includes("Talebin alındı") && styles.bilgiMesaji,
-                    ]}
+                    style={[styles.mesaj, bilgiMesaji && styles.bilgiMesaji]}
                   >
                     {mesaj}
                   </Text>
@@ -261,8 +275,8 @@ export default function SifreSifirlamaScreen() {
                   ) : (
                     <Text style={styles.butonYazi}>
                       {kodGonderildi
-                        ? "Şifremi Yenile"
-                        : "Sıfırlama Kodu Gönder"}
+                        ? t("passwordReset.reset")
+                        : t("passwordReset.sendCode")}
                     </Text>
                   )}
                 </Pressable>
@@ -276,11 +290,12 @@ export default function SifreSifirlamaScreen() {
                       setYeniSifre("");
                       setYeniSifreTekrar("");
                       setMesaj("");
+                      setBilgiMesaji(false);
                     }}
                     disabled={yukleniyor}
                   >
                     <Text style={styles.ikincilYazi}>
-                      E-posta adresini değiştir
+                      {t("passwordReset.changeEmail")}
                     </Text>
                   </Pressable>
                 )}
@@ -292,7 +307,7 @@ export default function SifreSifirlamaScreen() {
                 style={styles.buton}
                 onPress={() => navigation.navigate("index")}
               >
-                <Text style={styles.butonYazi}>Giriş Yap</Text>
+                <Text style={styles.butonYazi}>{t("passwordReset.login")}</Text>
               </Pressable>
             )}
 
@@ -302,7 +317,9 @@ export default function SifreSifirlamaScreen() {
                 onPress={() => navigation.navigate("index")}
                 disabled={yukleniyor}
               >
-                <Text style={styles.geriYazi}>← Giriş ekranına dön</Text>
+                <Text style={styles.geriYazi}>
+                  {t("passwordReset.backLogin")}
+                </Text>
               </Pressable>
             )}
           </View>

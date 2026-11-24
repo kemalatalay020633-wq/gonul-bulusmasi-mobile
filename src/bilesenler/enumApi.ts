@@ -1,3 +1,4 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_ADRESI } from "../config/api";
 
@@ -7,7 +8,7 @@ export type EnumSecenegi = {
 };
 
 const tokenAl = async (): Promise<string> => {
-  return (await AsyncStorage.getItem("token")) ?? "";
+  return (await tokenGetir()) ?? "";
 };
 
 const enumGetir = async (endpoint: string): Promise<EnumSecenegi[]> => {

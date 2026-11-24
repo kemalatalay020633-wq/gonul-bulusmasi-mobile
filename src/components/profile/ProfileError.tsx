@@ -1,4 +1,4 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 type ProfileErrorProps = {
@@ -7,6 +7,8 @@ type ProfileErrorProps = {
 };
 
 export default function ProfileError({ error, onHome }: ProfileErrorProps) {
+  const { t } = useTranslation("myProfile");
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -14,18 +16,16 @@ export default function ProfileError({ error, onHome }: ProfileErrorProps) {
           <Text style={styles.icon}>⚠️</Text>
         </View>
 
-        <Text style={styles.title}>Profil Yüklenemedi</Text>
+        <Text style={styles.title}>{t("error.title")}</Text>
 
-        <Text style={styles.errorText}>
-          {error || "Profil bilgileri alınırken bir hata oluştu."}
-        </Text>
+        <Text style={styles.errorText}>{error || t("error.description")}</Text>
 
         <TouchableOpacity
           style={styles.button}
           onPress={onHome}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>🏠 Ana Sayfaya Dön</Text>
+          <Text style={styles.buttonText}>🏠 {t("error.homeButton")}</Text>
         </TouchableOpacity>
       </View>
     </View>

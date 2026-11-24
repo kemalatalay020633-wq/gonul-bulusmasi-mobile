@@ -1,4 +1,6 @@
+import { tokenGetir } from "../services/tokenServisi";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   ActivityIndicator,
@@ -99,6 +101,7 @@ type BegenenKullanici = {
 
 export default function Begenenler() {
   const navigation = useNavigation<any>();
+  const { t } = useTranslation("likers");
 
   const [begenenler, setBegenenler] = useState<BegenenKullanici[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -176,13 +179,10 @@ export default function Begenenler() {
       }
 
       const sayisalDegerler: Record<string, string> = {
-        "0": "Bekâr",
-
-        "1": "Evli",
-
-        "2": "Boşanmış",
-
-        "3": "Dul",
+        "0": t("maritalStatus.single"),
+        "1": t("maritalStatus.married"),
+        "2": t("maritalStatus.divorced"),
+        "3": t("maritalStatus.widowed"),
       };
 
       if (sayisalDegerler[deger]) {
@@ -190,13 +190,11 @@ export default function Begenenler() {
       }
 
       const metinselDegerler: Record<string, string> = {
-        BEKAR: "Bekâr",
-
-        EVLI: "Evli",
-
-        BOŞANMIS: "Boşanmış",
-
-        DUL: "Dul",
+        BEKAR: t("maritalStatus.single"),
+        EVLI: t("maritalStatus.married"),
+        BOŞANMIS: t("maritalStatus.divorced"),
+        BOSANMIS: t("maritalStatus.divorced"),
+        DUL: t("maritalStatus.widowed"),
       };
 
       if (metinselDegerler[deger]) {
@@ -210,7 +208,7 @@ export default function Begenenler() {
       return deger;
     },
 
-    [],
+    [t],
   );
 
   /*
@@ -339,10 +337,10 @@ export default function Begenenler() {
       /*
        * TOKEN
        */
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
-        throw new Error("Oturum bulunamadı.");
+        throw new Error(t("errors.sessionMissing"));
       }
 
       /*
@@ -351,13 +349,13 @@ export default function Begenenler() {
       const userId = await AsyncStorage.getItem("userId");
 
       if (!userId) {
-        throw new Error("Kullanıcı ID bulunamadı.");
+        throw new Error(t("errors.userIdMissing"));
       }
 
       const kullaniciId = Number(userId);
 
       if (!Number.isFinite(kullaniciId) || kullaniciId <= 0) {
-        throw new Error("Kullanıcı ID bulunamadı.");
+        throw new Error(t("errors.userIdMissing"));
       }
 
       /*
@@ -380,7 +378,7 @@ export default function Begenenler() {
       const responseText = await response.text();
 
       if (!response.ok) {
-        throw new Error("Beğenenler şu anda alınamıyor. Lütfen tekrar dene.");
+        throw new Error(t("errors.loadFailed"));
       }
 
       let begeniler: LikeDto[] = [];
@@ -435,11 +433,11 @@ export default function Begenenler() {
     } catch (error) {
       console.error("BEĞENENLER HATASI:", error);
 
-      setHata(error instanceof Error ? error.message : "Beğenenler alınamadı.");
+      setHata(error instanceof Error ? error.message : t("errors.loadFailed"));
     } finally {
       setYukleniyor(false);
     }
-  }, [kullaniciGetir, profilleriGetir]);
+  }, [kullaniciGetir, profilleriGetir, t]);
   /*
 
    * =========================================================
@@ -528,7 +526,7 @@ export default function Begenenler() {
         <Pressable style={styles.geriButonu} onPress={geriDon}>
           <Text style={styles.geriIcon}>‹</Text>
 
-          <Text style={styles.geriText}>Geri</Text>
+          <Text style={styles.geriText}>{t("back")}</Text>
         </Pressable>
 
         {/* BAŞLIK */}
@@ -539,11 +537,9 @@ export default function Begenenler() {
           </View>
 
           <View style={styles.baslikBilgi}>
-            <Text style={styles.baslik}>Seni Beğenenler</Text>
+            <Text style={styles.baslik}>{t("title")}</Text>
 
-            <Text style={styles.baslikAciklama}>
-              Seni beğenen kişileri gör.
-            </Text>
+            <Text style={styles.baslikAciklama}>{t("subtitle")}</Text>
           </View>
         </View>
 
@@ -551,12 +547,12 @@ export default function Begenenler() {
 
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
+            <Text style={styles.hataBaslik}>{t("errorTitle")}</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
             <Pressable style={styles.tekrarButonu} onPress={begenenleriGetir}>
-              <Text style={styles.tekrarButonuText}>Tekrar Dene</Text>
+              <Text style={styles.tekrarButonuText}>{t("retry")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -567,11 +563,9 @@ export default function Begenenler() {
           <View style={styles.bosKart}>
             <Text style={styles.bosIkon}>♡</Text>
 
-            <Text style={styles.bosBaslik}>Henüz seni beğenen yok</Text>
+            <Text style={styles.bosBaslik}>{t("emptyTitle")}</Text>
 
-            <Text style={styles.bosText}>
-              Seni beğenen kişiler burada görünecek.
-            </Text>
+            <Text style={styles.bosText}>{t("emptyDescription")}</Text>
           </View>
         ) : null}
 
@@ -590,6 +584,12 @@ export default function Begenenler() {
             const begenenKullaniciId = Number(begeni.userId);
 
             const medeniDurum = medeniDurumGetir(profil?.maritalStatus);
+            const cinsiyetDegeri = (kullanici?.gender || "").toUpperCase();
+            const cinsiyet = ["ERKEK", "MALE", "MAN"].includes(cinsiyetDegeri)
+              ? t("gender.male")
+              : ["KADIN", "FEMALE", "WOMAN"].includes(cinsiyetDegeri)
+                ? t("gender.female")
+                : kullanici?.gender;
 
             return (
               <View key={begeni.id} style={styles.kullaniciKart}>
@@ -622,7 +622,7 @@ export default function Begenenler() {
                     <Text style={styles.adSoyad} numberOfLines={1}>
                       {adSoyad ||
                         kullanici?.username ||
-                        `Kullanıcı #${begenenKullaniciId}`}
+                        t("userWithId", { id: begenenKullaniciId })}
                     </Text>
 
                     {kullanici?.username ? (
@@ -632,7 +632,7 @@ export default function Begenenler() {
                     ) : null}
 
                     {yas !== null ? (
-                      <Text style={styles.detay}>{yas} yaşında</Text>
+                      <Text style={styles.detay}>{t("age", { age: yas })}</Text>
                     ) : null}
 
                     {kullanici?.city ? (
@@ -641,7 +641,7 @@ export default function Begenenler() {
 
                     {medeniDurum ? (
                       <Text style={styles.detay}>
-                        Medeni durum: {medeniDurum}
+                        {t("maritalStatusLabel", { status: medeniDurum })}
                       </Text>
                     ) : null}
 
@@ -649,7 +649,7 @@ export default function Begenenler() {
                       <Text style={styles.detay}>{kullanici.gender}</Text>
                     ) : null}
 
-                    <Text style={styles.begeniBilgisi}>Seni beğendi ♡</Text>
+                    <Text style={styles.begeniBilgisi}>{t("likedYou")} ♡</Text>
                   </View>
                 </View>
 
@@ -660,7 +660,9 @@ export default function Begenenler() {
 
                   onPress={() => profileGit(begenenKullaniciId)}
                 >
-                  <Text style={styles.profilButonuText}>👤 Profili Gör</Text>
+                  <Text style={styles.profilButonuText}>
+                    👤 {t("viewProfile")}
+                  </Text>
                 </Pressable>
               </View>
             );

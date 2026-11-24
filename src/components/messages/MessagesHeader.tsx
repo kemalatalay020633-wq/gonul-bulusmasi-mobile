@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type MessagesHeaderProps = {
@@ -15,6 +16,8 @@ export default function MessagesHeader({
   yeniMesajSayisi = 0,
   onBack,
 }: MessagesHeaderProps) {
+  const { t } = useTranslation("messages");
+
   const kullaniciSecili = selectedUserId !== null;
 
   return (
@@ -22,6 +25,8 @@ export default function MessagesHeader({
       <View style={styles.leftArea}>
         {onBack ? (
           <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("header.back", { defaultValue: "Geri" })}
             style={styles.backButton}
             onPress={onBack}
             android_ripple={{
@@ -36,13 +41,13 @@ export default function MessagesHeader({
 
         <View style={styles.titleArea}>
           <Text style={styles.eyebrow}>
-            {kullaniciSecili ? "GÖNÜL BULUŞMASI" : "SOHBETLERİN"}
+            {kullaniciSecili ? t("header.brand") : t("header.conversations")}
           </Text>
 
           <Text style={styles.title} numberOfLines={1}>
             {kullaniciSecili && selectedUserName
               ? selectedUserName
-              : "Mesajlar"}
+              : t("header.title")}
           </Text>
 
           {kullaniciSecili ? (
@@ -65,20 +70,26 @@ export default function MessagesHeader({
                 ]}
               >
                 {selectedUserActive === null
-                  ? "Sohbet"
+                  ? t("header.chat")
                   : selectedUserActive
-                    ? "Çevrimiçi"
-                    : "Çevrimdışı"}
+                    ? t("header.online")
+                    : t("header.offline")}
               </Text>
             </View>
           ) : (
-            <Text style={styles.subtitle}>Güzel bir sohbet başlat</Text>
+            <Text style={styles.subtitle}>{t("header.subtitle")}</Text>
           )}
         </View>
       </View>
 
       {yeniMesajSayisi > 0 ? (
-        <View style={styles.notification}>
+        <View
+          style={styles.notification}
+          accessibilityLabel={t("header.unreadMessages", {
+            count: yeniMesajSayisi,
+            defaultValue: `${yeniMesajSayisi} unread messages`,
+          })}
+        >
           <Text style={styles.notificationIcon}>✉</Text>
 
           <View style={styles.notificationBadge}>

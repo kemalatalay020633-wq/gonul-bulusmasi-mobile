@@ -1,5 +1,8 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
+import type { TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -94,16 +97,19 @@ function fotografAdresiniHazirla(
     : `${SUNUCU_ADRESI}/${temiz}`;
 }
 
-async function yanitiKontrolEt<T>(response: Response): Promise<T> {
+async function yanitiKontrolEt<T>(
+  response: Response,
+  t: TFunction,
+): Promise<T> {
   if (!response.ok) {
     const mesaj =
       response.status === 401 || response.status === 403
-        ? "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın."
+        ? t("posts.sessionInvalid")
         : response.status === 429
-          ? "Çok fazla işlem yapıldı. Lütfen biraz bekleyin."
+          ? t("posts.tooMany")
           : response.status >= 500
-            ? "Sunucuda bir sorun oluştu. Lütfen daha sonra tekrar deneyin."
-            : "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
+            ? t("posts.serverError")
+            : t("posts.genericError");
 
     throw new Error(mesaj);
   }
@@ -113,10 +119,10 @@ async function yanitiKontrolEt<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-function tarihFormatla(tarih: string): string {
+function tarihFormatla(tarih: string, locale: string): string {
   const deger = new Date(tarih);
   if (Number.isNaN(deger.getTime())) return tarih;
-  return deger.toLocaleString("tr-TR", {
+  return deger.toLocaleString(locale, {
     dateStyle: "medium",
     timeStyle: "short",
   });
@@ -163,6 +169,7 @@ function PaylasimFotografi({
   korumali,
   token,
 }: PaylasimFotografiProps) {
+  const { t } = useTranslation();
   const [goruntuAdresi, setGoruntuAdresi] = useState<string | null>(null);
 
   useEffect(() => {
@@ -179,7 +186,7 @@ function PaylasimFotografi({
         }
 
         if (!token) {
-          console.warn("Paylaşım fotoğrafı için oturum token'ı bulunamadı.");
+          console.warn(t("posts.sessionPhotoMissing"));
           return;
         }
 
@@ -195,7 +202,8 @@ function PaylasimFotografi({
         if (!response.ok) {
           const hataMetni = await response.text();
           throw new Error(
-            hataMetni || `Fotoğraf alınamadı. HTTP ${response.status}`,
+            hataMetni ||
+              t("posts.photoNotReceived", { status: response.status }),
           );
         }
 
@@ -206,7 +214,10 @@ function PaylasimFotografi({
         if (!icerikTuru.startsWith("image/")) {
           const yanit = await response.text();
           throw new Error(
-            `Sunucu fotoğraf yerine ${icerikTuru} döndürdü. ${yanit.slice(0, 160)}`,
+            t("posts.photoWrongType", {
+              type: icerikTuru,
+              detail: yanit.slice(0, 160),
+            }),
           );
         }
 
@@ -215,7 +226,7 @@ function PaylasimFotografi({
         if (iptalEdildi) return;
 
         if (veri.byteLength === 0) {
-          throw new Error("Sunucudan boş fotoğraf verisi geldi.");
+          throw new Error(t("posts.emptyPhoto"));
         }
 
         const base64 = arrayBufferiBase64eCevir(veri);
@@ -260,6 +271,7 @@ function PaylasimFotografi({
 }
 
 export default function PaylasimlarEkrani() {
+  const { t, i18n } = useTranslation();
   const sonSayfaRef = useRef(false);
   const navigation = useNavigation<any>();
   const [paylasimlar, setPaylasimlar] = useState<Paylasim[]>([]);
@@ -267,7 +279,7 @@ export default function PaylasimlarEkrani() {
   const [metin, setMetin] = useState("");
   const [seciliFotograf, setSeciliFotograf] = useState<Asset | null>(null);
   const [fotografUrl, setFotografUrl] = useState("");
-  const [kullaniciAdi, setKullaniciAdi] = useState("Kullanıcı");
+  const [kullaniciAdi, setKullaniciAdi] = useState(t("posts.user"));
   const [kullaniciId, setKullaniciId] = useState<number | null>(null);
   const [cinsiyet, setCinsiyet] = useState<string | null>(null);
   const [paylasimIzni, setPaylasimIzni] = useState<boolean | null>(null);
@@ -287,7 +299,7 @@ export default function PaylasimlarEkrani() {
   const uyariGoster = (
     baslik: string,
     mesaj: string,
-    butonlar: UyariButonu[] = [{ text: "Tamam" }],
+    butonlar: UyariButonu[] = [{ text: t("posts.ok") }],
   ) => setUyariPenceresi({ baslik, mesaj, butonlar });
 
   const yuklemeKilidi = useRef(false);
@@ -298,18 +310,16 @@ export default function PaylasimlarEkrani() {
     setCinsiyet(null);
 
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const id = await AsyncStorage.getItem("userId");
       const ad = await AsyncStorage.getItem("username");
       setOturumToken(token);
       setKullaniciId(id ? Number(id) : null);
-      setKullaniciAdi(ad || "Kullanıcı");
+      setKullaniciAdi(ad || t("posts.user"));
 
       if (!token || !id || !Number.isFinite(Number(id))) {
         setPaylasimIzni(false);
-        setHata(
-          "Paylaşım izni için oturum bilgileri bulunamadı. Lütfen tekrar giriş yap.",
-        );
+        setHata(t("posts.sessionMissing"));
         return null;
       }
 
@@ -326,9 +336,7 @@ export default function PaylasimlarEkrani() {
       );
 
       if (!kullaniciResponse.ok) {
-        throw new Error(
-          "Kullanıcı bilgileri alınamadı. Lütfen tekrar deneyin.",
-        );
+        throw new Error(t("posts.userInfoFailed"));
       }
       const kullaniciVerisi = await kullaniciResponse.json();
       const gelenCinsiyet = String(kullaniciVerisi?.gender ?? "")
@@ -345,7 +353,7 @@ export default function PaylasimlarEkrani() {
 
       if (gelenCinsiyet !== "ERKEK") {
         setPaylasimIzni(false);
-        setHata("Cinsiyet bilgisi doğrulanamadı. Paylaşım izni verilemedi.");
+        setHata(t("posts.genderUnknown"));
         return token;
       }
 
@@ -362,9 +370,7 @@ export default function PaylasimlarEkrani() {
       );
 
       if (!premiumResponse.ok) {
-        throw new Error(
-          "Premium üyelik bilgisi kontrol edilemedi. Lütfen tekrar deneyin.",
-        );
+        throw new Error(t("posts.premiumCheckFailed"));
       }
 
       const premiumVerisi = await premiumResponse.json();
@@ -378,9 +384,7 @@ export default function PaylasimlarEkrani() {
               : null;
 
       if (premiumAktif === null) {
-        throw new Error(
-          "Premium yanıtı beklenen biçimde değil. Paylaşım izni verilemedi.",
-        );
+        throw new Error(t("posts.premiumInvalid"));
       }
 
       setPaylasimIzni(premiumAktif);
@@ -391,15 +395,13 @@ export default function PaylasimlarEkrani() {
 
       setPaylasimIzni(false);
       setHata(
-        err instanceof Error
-          ? err.message
-          : "Paylaşım yetkisi kontrol edilemedi.",
+        err instanceof Error ? err.message : t("posts.permissionCheckFailed"),
       );
       return null;
     } finally {
       setYetkiKontrolYukleniyor(false);
     }
-  }, []);
+  }, [t]);
 
   const paylasimlariYukle = useCallback(
     async (istenenSayfa = 0, yenileme = false) => {
@@ -420,13 +422,10 @@ export default function PaylasimlarEkrani() {
 
         setHata("");
 
-        const token = await AsyncStorage.getItem("token");
+        const token = await tokenGetir();
 
         if (!token) {
-          uyariGoster(
-            "Giriş yapmalısın",
-            "Paylaşımları görmek için hesabına giriş yap.",
-          );
+          uyariGoster(t("posts.loginRequiredTitle"), t("posts.loginView"));
           return;
         }
 
@@ -441,7 +440,7 @@ export default function PaylasimlarEkrani() {
           },
         );
 
-        const sonuc = await yanitiKontrolEt<SayfaliPaylasim>(response);
+        const sonuc = await yanitiKontrolEt<SayfaliPaylasim>(response, t);
 
         setPaylasimlar((onceki) => {
           if (istenenSayfa === 0) {
@@ -463,11 +462,7 @@ export default function PaylasimlarEkrani() {
       } catch (err) {
         console.error("PAYLAŞIMLARI YÜKLEME HATASI:", err);
 
-        setHata(
-          err instanceof Error
-            ? err.message
-            : "Paylaşımlar yüklenemedi. Lütfen tekrar deneyin.",
-        );
+        setHata(err instanceof Error ? err.message : t("posts.loadFailed"));
       } finally {
         yuklemeKilidi.current = false;
         setYukleniyor(false);
@@ -475,7 +470,7 @@ export default function PaylasimlarEkrani() {
       }
     },
 
-    [],
+    [t],
   );
 
   useEffect(() => {
@@ -492,7 +487,7 @@ export default function PaylasimlarEkrani() {
   // Böylece önizleme ve yükleme işlemi iki kaynakta da aynı şekilde çalışır.
   const fotografiHazirla = (asset: Asset | undefined) => {
     if (!asset?.uri) {
-      setHata("Fotoğraf dosyasına erişilemedi. Lütfen tekrar deneyin.");
+      setHata(t("posts.photoUnavailable"));
       return;
     }
 
@@ -502,12 +497,12 @@ export default function PaylasimlarEkrani() {
         asset.type,
       )
     ) {
-      setHata("Yalnızca JPEG, PNG, WebP veya GIF fotoğrafı seçebilirsin.");
+      setHata(t("posts.photoTypes"));
       return;
     }
 
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
-      setHata("Fotoğraf en fazla 10 MB olabilir.");
+      setHata(t("posts.photoMax"));
       return;
     }
 
@@ -534,14 +529,14 @@ export default function PaylasimlarEkrani() {
           sonuc.errorCode,
           sonuc.errorMessage,
         );
-        setHata("Fotoğraf galerisi açılamadı. Lütfen tekrar deneyin.");
+        setHata(t("posts.galleryFailed"));
         return;
       }
 
       fotografiHazirla(sonuc.assets?.[0]);
     } catch (err) {
       console.error("FOTOĞRAF SEÇME HATASI:", err);
-      setHata("Fotoğraf seçilemedi. Lütfen tekrar deneyin.");
+      setHata(t("posts.selectPhotoFailed"));
     }
   };
 
@@ -562,8 +557,8 @@ export default function PaylasimlarEkrani() {
         console.error("KAMERA HATASI:", sonuc.errorCode, sonuc.errorMessage);
         setHata(
           sonuc.errorCode === "permission"
-            ? "Kamera izni verilmedi. Android ayarlarından kamera iznini aç."
-            : "Kamera açılamadı. Lütfen tekrar deneyin.",
+            ? t("posts.cameraPermission")
+            : t("posts.cameraFailed"),
         );
         return;
       }
@@ -571,7 +566,7 @@ export default function PaylasimlarEkrani() {
       fotografiHazirla(sonuc.assets?.[0]);
     } catch (err) {
       console.error("FOTOĞRAF ÇEKME HATASI:", err);
-      setHata("Fotoğraf çekilemedi. Lütfen tekrar deneyin.");
+      setHata(t("posts.takePhotoFailed"));
     }
   };
 
@@ -585,28 +580,25 @@ export default function PaylasimlarEkrani() {
     setBilgi("");
 
     try {
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
-        uyariGoster(
-          "Giriş yapmalısın",
-          "Paylaşım oluşturmak için hesabına giriş yap.",
-        );
+        uyariGoster(t("posts.loginRequiredTitle"), t("posts.loginCreate"));
         return;
       }
 
       if (yetkiKontrolYukleniyor || paylasimIzni !== true) {
         uyariGoster(
           yetkiKontrolYukleniyor
-            ? "Kontrol devam ediyor"
+            ? t("posts.checking")
             : cinsiyet === "ERKEK"
-              ? "Premium üyelik gerekli"
-              : "Paylaşım izni doğrulanamadı",
+              ? t("posts.premiumRequired")
+              : t("posts.permissionUnverified"),
           yetkiKontrolYukleniyor
-            ? "Paylaşım yetkin kontrol ediliyor. Biraz sonra tekrar dene."
+            ? t("posts.checkingDesc")
             : cinsiyet === "ERKEK"
-              ? "Paylaşım oluşturmak için aktif bir Premium üyeliğin olmalı."
-              : "Paylaşım yetkisi doğrulanamadı. Tekrar kontrol etmeyi dene.",
+              ? t("posts.premiumDesc")
+              : t("posts.permissionDesc"),
         );
         return;
       }
@@ -615,14 +607,12 @@ export default function PaylasimlarEkrani() {
       const temizFotografUrl = fotografUrl.trim();
 
       if (!temizMetin && !temizFotografUrl && !seciliFotograf) {
-        setHata("Bir metin veya fotoğraf eklemelisin.");
+        setHata(t("posts.contentRequired"));
         return;
       }
 
       if (temizMetin.length > 2000 || temizFotografUrl.length > 500) {
-        setHata(
-          "Metin en fazla 2000, fotoğraf bağlantısı 500 karakter olabilir.",
-        );
+        setHata(t("posts.lengthLimit"));
         return;
       }
 
@@ -634,7 +624,7 @@ export default function PaylasimlarEkrani() {
             throw new Error();
           }
         } catch {
-          setHata("Fotoğraf bağlantısı geçerli bir HTTPS adresi olmalıdır.");
+          setHata(t("posts.httpsRequired"));
           return;
         }
       }
@@ -662,7 +652,7 @@ export default function PaylasimlarEkrani() {
           body: formData,
         });
 
-        await yanitiKontrolEt<Paylasim>(response);
+        await yanitiKontrolEt<Paylasim>(response, t);
       } else {
         const response = await fetch(API_URL, {
           method: "POST",
@@ -677,13 +667,13 @@ export default function PaylasimlarEkrani() {
           }),
         });
 
-        await yanitiKontrolEt<Paylasim>(response);
+        await yanitiKontrolEt<Paylasim>(response, t);
       }
 
       setMetin("");
       setFotografUrl("");
       setSeciliFotograf(null);
-      setBilgi("Paylaşımın başarıyla yayınlandı.");
+      setBilgi(t("posts.published"));
 
       // Mevcut yükleme devam ediyorsa kilit açıldıktan sonra yenilemeyi dene.
       if (!yuklemeKilidi.current) {
@@ -692,11 +682,7 @@ export default function PaylasimlarEkrani() {
     } catch (err) {
       console.error("PAYLAŞIM OLUŞTURMA HATASI:", err);
 
-      setHata(
-        err instanceof Error
-          ? err.message
-          : "Paylaşım oluşturulamadı. Lütfen tekrar deneyin.",
-      );
+      setHata(err instanceof Error ? err.message : t("posts.createFailed"));
     } finally {
       setGonderiliyor(false);
     }
@@ -704,59 +690,53 @@ export default function PaylasimlarEkrani() {
 
   const paylasimSil = (paylasim: Paylasim) => {
     if (!kullaniciId || String(paylasim.kullaniciId) !== String(kullaniciId)) {
-      setHata("Yalnızca kendi paylaşımını silebilirsin.");
+      setHata(t("posts.ownDeleteOnly"));
       return;
     }
 
-    uyariGoster(
-      "Paylaşımı sil",
-      "Bu paylaşımı kalıcı olarak silmek istiyor musun?",
-      [
-        { text: "Vazgeç", style: "cancel" },
-        {
-          text: "Sil",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setHata("");
+    uyariGoster(t("posts.deleteTitle"), t("posts.deleteConfirm"), [
+      { text: t("posts.cancel"), style: "cancel" },
+      {
+        text: t("posts.delete"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setHata("");
 
-              const token = await AsyncStorage.getItem("token");
+            const token = await tokenGetir();
 
-              if (!token) {
-                uyariGoster(
-                  "Giriş yapmalısın",
-                  "Paylaşımı silmek için tekrar giriş yap.",
-                );
-                return;
-              }
-
-              const response = await fetch(`${API_URL}/${paylasim.id}`, {
-                method: "DELETE",
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              });
-
-              await yanitiKontrolEt<void>(response);
-
-              setPaylasimlar((onceki) =>
-                onceki.filter((oge) => oge.id !== paylasim.id),
+            if (!token) {
+              uyariGoster(
+                t("posts.loginRequiredTitle"),
+                t("posts.loginDelete"),
               );
-
-              setBilgi("Paylaşım silindi.");
-            } catch (err) {
-              console.error("PAYLAŞIM SİLME HATASI:", err);
-
-              setHata(
-                err instanceof Error
-                  ? err.message
-                  : "Paylaşım silinemedi. Lütfen tekrar deneyin.",
-              );
+              return;
             }
-          },
+
+            const response = await fetch(`${API_URL}/${paylasim.id}`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            await yanitiKontrolEt<void>(response, t);
+
+            setPaylasimlar((onceki) =>
+              onceki.filter((oge) => oge.id !== paylasim.id),
+            );
+
+            setBilgi(t("posts.deleted"));
+          } catch (err) {
+            console.error("PAYLAŞIM SİLME HATASI:", err);
+
+            setHata(
+              err instanceof Error ? err.message : t("posts.deleteFailed"),
+            );
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const renderPaylasim = ({ item }: { item: Paylasim }) => {
@@ -770,10 +750,10 @@ export default function PaylasimlarEkrani() {
           </View>
           <View style={styles.kullaniciBilgisi}>
             <Text style={styles.kullaniciAdi}>
-              {item.kullaniciAdi || "Kullanıcı"}
+              {item.kullaniciAdi || t("posts.user")}
             </Text>
             <Text style={styles.tarih}>
-              {tarihFormatla(item.olusturmaTarihi)}
+              {tarihFormatla(item.olusturmaTarihi, i18n.language)}
             </Text>
           </View>
           {item.kullaniciId === kullaniciId && (
@@ -781,7 +761,7 @@ export default function PaylasimlarEkrani() {
               style={styles.silButonu}
               onPress={() => paylasimSil(item)}
             >
-              <Text style={styles.silButonuYazi}>Sil</Text>
+              <Text style={styles.silButonuYazi}>{t("posts.delete")}</Text>
             </Pressable>
           )}
         </View>
@@ -881,12 +861,10 @@ export default function PaylasimlarEkrani() {
                     if (navigation.canGoBack()) navigation.goBack();
                   }}
                 >
-                  <Text style={styles.geriButonuYazi}>‹ Geri</Text>
+                  <Text style={styles.geriButonuYazi}>‹ {t("posts.back")}</Text>
                 </Pressable>
-                <Text style={styles.baslik}>Gönül Buluşması</Text>
-                <Text style={styles.altBaslik}>
-                  Paylaş, keşfet, iletişim kur.
-                </Text>
+                <Text style={styles.baslik}>{t("posts.appName")}</Text>
+                <Text style={styles.altBaslik}>{t("posts.tagline")}</Text>
               </View>
               {!!hata && (
                 <View style={styles.hataKutusu}>
@@ -905,7 +883,7 @@ export default function PaylasimlarEkrani() {
                 <View style={styles.yetkiKarti}>
                   <ActivityIndicator color={MOR} />
                   <Text style={styles.yetkiBaslik}>
-                    Paylaşım yetkisi kontrol ediliyor...
+                    {t("posts.checkingPermission")}
                   </Text>
                 </View>
               ) : paylasimIzni ? (
@@ -918,15 +896,13 @@ export default function PaylasimlarEkrani() {
                     </View>
                     <View>
                       <Text style={styles.kullaniciAdi}>{kullaniciAdi}</Text>
-                      <Text style={styles.tarih}>
-                        Yeni bir paylaşım oluştur
-                      </Text>
+                      <Text style={styles.tarih}>{t("posts.newPost")}</Text>
                     </View>
                   </View>
                   <TextInput
                     value={metin}
                     onChangeText={setMetin}
-                    placeholder="Aklından neler geçiyor?"
+                    placeholder={t("posts.postPlaceholder")}
                     placeholderTextColor="#9CA3AF"
                     multiline
                     maxLength={2000}
@@ -934,7 +910,7 @@ export default function PaylasimlarEkrani() {
                     style={styles.metinAlani}
                   />
                   <Text style={styles.karakterSayisi}>
-                    {metin.length}/2000 karakter
+                    {t("posts.characters", { count: metin.length })}
                   </Text>
                   <TextInput
                     value={fotografUrl}
@@ -942,7 +918,7 @@ export default function PaylasimlarEkrani() {
                       setFotografUrl(deger);
                       if (deger) setSeciliFotograf(null);
                     }}
-                    placeholder="Fotoğraf bağlantısı (isteğe bağlı)"
+                    placeholder={t("posts.photoUrl")}
                     placeholderTextColor="#9CA3AF"
                     autoCapitalize="none"
                     keyboardType="url"
@@ -955,7 +931,7 @@ export default function PaylasimlarEkrani() {
                       onPress={() => void fotografCek()}
                     >
                       <Text style={styles.galeriButonuYazi}>
-                        📷 Fotoğraf çek
+                        📷 {t("posts.takePhoto")}
                       </Text>
                     </Pressable>
 
@@ -964,13 +940,15 @@ export default function PaylasimlarEkrani() {
                       onPress={() => void fotografSec()}
                     >
                       <Text style={styles.galeriButonuYazi}>
-                        ▧ Galeriden seç
+                        ▧ {t("posts.chooseGallery")}
                       </Text>
                     </Pressable>
 
                     {!!seciliFotograf && (
                       <Pressable onPress={fotografiKaldir}>
-                        <Text style={styles.fotografiKaldir}>Kaldır</Text>
+                        <Text style={styles.fotografiKaldir}>
+                          {t("posts.remove")}
+                        </Text>
                       </Pressable>
                     )}
                   </View>
@@ -999,7 +977,9 @@ export default function PaylasimlarEkrani() {
                     {gonderiliyor ? (
                       <ActivityIndicator color="#FFFFFF" />
                     ) : (
-                      <Text style={styles.paylasButonuYazi}>Paylaş</Text>
+                      <Text style={styles.paylasButonuYazi}>
+                        {t("posts.share")}
+                      </Text>
                     )}
                   </Pressable>
                 </View>
@@ -1007,31 +987,30 @@ export default function PaylasimlarEkrani() {
                 <View style={styles.yetkiKarti}>
                   <Text style={styles.yetkiBaslik}>
                     {cinsiyet === "ERKEK"
-                      ? "Premium üyelik gerekli"
-                      : "Paylaşım oluşturulamıyor"}
+                      ? t("posts.premiumRequired")
+                      : t("posts.cannotCreate")}
                   </Text>
                   <Text style={styles.yetkiMetni}>
                     {cinsiyet === "ERKEK"
-                      ? "Paylaşım oluşturmak için aktif ve süresi dolmamış Premium üyeliğin olmalı."
-                      : hata ||
-                        "Paylaşım yetkisi doğrulanamadı. Ekranı yenileyip tekrar dene."}
+                      ? t("posts.premiumExpiredDesc")
+                      : hata || t("posts.refreshRetry")}
                   </Text>
                   <Pressable
                     style={styles.yetkiYenileButonu}
                     onPress={() => void kimlikBilgileriniYukle()}
                   >
                     <Text style={styles.yetkiYenileYazi}>
-                      Tekrar kontrol et
+                      {t("posts.retryCheck")}
                     </Text>
                   </Pressable>
                 </View>
               )}
               <View style={styles.listeBasligi}>
                 <View>
-                  <Text style={styles.listeBaslikMetni}>Son paylaşımlar</Text>
-                  <Text style={styles.tarih}>
-                    Topluluğun paylaşımlarını keşfet.
+                  <Text style={styles.listeBaslikMetni}>
+                    {t("posts.recentPosts")}
                   </Text>
+                  <Text style={styles.tarih}>{t("posts.discoverPosts")}</Text>
                 </View>
                 <Pressable
                   style={styles.yenileButonu}
@@ -1047,15 +1026,13 @@ export default function PaylasimlarEkrani() {
             yukleniyor ? (
               <View style={styles.durumAlani}>
                 <ActivityIndicator size="large" color={MOR} />
-                <Text style={styles.durumMetni}>Paylaşımlar yükleniyor...</Text>
+                <Text style={styles.durumMetni}>{t("posts.loadingPosts")}</Text>
               </View>
             ) : (
               <View style={styles.bosListe}>
                 <Text style={styles.bosListeIkon}>▧</Text>
-                <Text style={styles.kullaniciAdi}>Henüz paylaşım yok</Text>
-                <Text style={styles.tarih}>
-                  İlk paylaşımı sen yapabilirsin.
-                </Text>
+                <Text style={styles.kullaniciAdi}>{t("posts.noPosts")}</Text>
+                <Text style={styles.tarih}>{t("posts.firstPost")}</Text>
               </View>
             )
           }
@@ -1069,7 +1046,9 @@ export default function PaylasimlarEkrani() {
                 {yukleniyor ? (
                   <ActivityIndicator color={MOR} />
                 ) : (
-                  <Text style={styles.dahaFazlaYazi}>Daha fazla göster</Text>
+                  <Text style={styles.dahaFazlaYazi}>
+                    {t("posts.showMore")}
+                  </Text>
                 )}
               </Pressable>
             ) : null

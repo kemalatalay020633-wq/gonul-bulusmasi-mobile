@@ -1,6 +1,9 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import type { TFunction } from "i18next";
 import { useCallback, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   RefreshControl,
@@ -45,7 +48,11 @@ function bildirimIkonunuGetir(type?: string) {
   }
 }
 
-function tarihGoster(tarih?: string) {
+function tarihGoster(
+  tarih: string | undefined,
+  t: TFunction<"notifications">,
+  dil: string,
+) {
   if (!tarih) return "";
 
   const zaman = new Date(tarih);
@@ -55,17 +62,17 @@ function tarihGoster(tarih?: string) {
   const fark = simdi.getTime() - zaman.getTime();
   const dakika = Math.floor(fark / 60000);
 
-  if (dakika < 1) return "Az önce";
-  if (dakika < 60) return `${dakika} dakika önce`;
+  if (dakika < 1) return t("time.justNow");
+  if (dakika < 60) return t("time.minutesAgo", { count: dakika });
 
   const saat = Math.floor(dakika / 60);
-  if (saat < 24) return `${saat} saat önce`;
+  if (saat < 24) return t("time.hoursAgo", { count: saat });
 
   const gun = Math.floor(saat / 24);
-  if (gun === 1) return "Dün";
-  if (gun < 7) return `${gun} gün önce`;
+  if (gun === 1) return t("time.yesterday");
+  if (gun < 7) return t("time.daysAgo", { count: gun });
 
-  return zaman.toLocaleDateString("tr-TR", {
+  return zaman.toLocaleDateString(dil || "tr-TR", {
     day: "2-digit",
     month: "long",
     year: zaman.getFullYear() !== simdi.getFullYear() ? "numeric" : undefined,
@@ -74,6 +81,7 @@ function tarihGoster(tarih?: string) {
 
 export default function BildirimlerScreen() {
   const navigation = useNavigation<any>();
+  const { t, i18n } = useTranslation("notifications");
 
   const [bildirimler, setBildirimler] = useState<Bildirim[]>([]);
   const [yukleniyor, setYukleniyor] = useState(true);
@@ -82,65 +90,64 @@ export default function BildirimlerScreen() {
   const [tumunuOkuma, setTumunuOkuma] = useState(false);
   const [hata, setHata] = useState("");
 
-  const bildirimleriYukle = useCallback(async (yenile = false) => {
-    try {
-      if (yenile) setYenileniyor(true);
-      else setYukleniyor(true);
+  const bildirimleriYukle = useCallback(
+    async (yenile = false) => {
+      try {
+        if (yenile) setYenileniyor(true);
+        else setYukleniyor(true);
 
-      setHata("");
+        setHata("");
 
-      const token = await AsyncStorage.getItem("token");
-      const kullaniciId = await AsyncStorage.getItem("userId");
+        const token = await tokenGetir();
+        const kullaniciId = await AsyncStorage.getItem("userId");
 
-      if (!token || !kullaniciId) {
-        throw new Error(
-          "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
-        );
-      }
+        if (!token || !kullaniciId) {
+          throw new Error(t("errors.sessionRequired"));
+        }
 
-      const cevap = await fetch(
-        `${API_ADRESI}/${encodeURIComponent(kullaniciId)}`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
+        const cevap = await fetch(
+          `${API_ADRESI}/${encodeURIComponent(kullaniciId)}`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
           },
-        },
-      );
-
-      if (!cevap.ok) {
-        const sunucuMesaji = await cevap.text().catch(() => "");
-        throw new Error(
-          sunucuMesaji || `Bildirimler alınamadı. HTTP ${cevap.status}`,
         );
+
+        if (!cevap.ok) {
+          const sunucuMesaji = await cevap.text().catch(() => "");
+          throw new Error(
+            sunucuMesaji || t("errors.httpLoad", { status: cevap.status }),
+          );
+        }
+
+        const veri: unknown = await cevap.json();
+        if (!Array.isArray(veri)) {
+          throw new Error(t("errors.invalidList"));
+        }
+
+        const liste = (veri as Bildirim[])
+          .filter((item) => item && typeof item.id === "number")
+          .sort((a, b) => {
+            const tarihA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+            const tarihB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+            return tarihB - tarihA;
+          });
+
+        setBildirimler(liste);
+      } catch (err) {
+        const mesaj =
+          err instanceof Error ? err.message : t("errors.loadFailed");
+        setHata(mesaj);
+      } finally {
+        setYukleniyor(false);
+        setYenileniyor(false);
       }
-
-      const veri: unknown = await cevap.json();
-      if (!Array.isArray(veri)) {
-        throw new Error("Sunucudan beklenen bildirim listesi alınamadı.");
-      }
-
-      const liste = (veri as Bildirim[])
-        .filter((item) => item && typeof item.id === "number")
-        .sort((a, b) => {
-          const tarihA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-          const tarihB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-          return tarihB - tarihA;
-        });
-
-      setBildirimler(liste);
-    } catch (err) {
-      const mesaj =
-        err instanceof Error
-          ? err.message
-          : "Bildirimler yüklenirken hata oluştu.";
-      setHata(mesaj);
-    } finally {
-      setYukleniyor(false);
-      setYenileniyor(false);
-    }
-  }, []);
+    },
+    [t],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -154,11 +161,11 @@ export default function BildirimlerScreen() {
     try {
       setIslemdekiId(bildirim.id);
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const kullaniciId = await AsyncStorage.getItem("userId");
 
       if (!token || !kullaniciId) {
-        throw new Error("Oturum bilgisi bulunamadı.");
+        throw new Error(t("errors.sessionMissing"));
       }
 
       const cevap = await fetch(
@@ -175,7 +182,7 @@ export default function BildirimlerScreen() {
       if (!cevap.ok) {
         const sunucuMesaji = await cevap.text().catch(() => "");
         throw new Error(
-          sunucuMesaji || `Bildirim güncellenemedi. HTTP ${cevap.status}`,
+          sunucuMesaji || t("errors.httpUpdate", { status: cevap.status }),
         );
       }
 
@@ -186,9 +193,7 @@ export default function BildirimlerScreen() {
       );
     } catch (err) {
       const mesaj =
-        err instanceof Error
-          ? err.message
-          : "Bildirim okunmuş olarak işaretlenemedi.";
+        err instanceof Error ? err.message : t("errors.markReadFailed");
       setHata(mesaj);
     } finally {
       setIslemdekiId(null);
@@ -202,11 +207,11 @@ export default function BildirimlerScreen() {
     try {
       setTumunuOkuma(true);
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const kullaniciId = await AsyncStorage.getItem("userId");
 
       if (!token || !kullaniciId) {
-        throw new Error("Oturum bilgisi bulunamadı.");
+        throw new Error(t("errors.sessionMissing"));
       }
 
       const cevap = await fetch(
@@ -223,7 +228,7 @@ export default function BildirimlerScreen() {
       if (!cevap.ok) {
         const sunucuMesaji = await cevap.text().catch(() => "");
         throw new Error(
-          sunucuMesaji || `Bildirimler güncellenemedi. HTTP ${cevap.status}`,
+          sunucuMesaji || t("errors.httpUpdateAll", { status: cevap.status }),
         );
       }
 
@@ -232,7 +237,7 @@ export default function BildirimlerScreen() {
       );
     } catch (err) {
       const mesaj =
-        err instanceof Error ? err.message : "Bildirimler okundu yapılamadı.";
+        err instanceof Error ? err.message : t("errors.markAllReadFailed");
       setHata(mesaj);
     } finally {
       setTumunuOkuma(false);
@@ -241,24 +246,24 @@ export default function BildirimlerScreen() {
 
   const bildirimKategorileri = [
     {
-      baslik: "Beğenenler",
-      aciklama: "Seni beğenen kullanıcıları gör",
+      baslik: t("categories.likers.title"),
+      aciklama: t("categories.likers.description"),
       ikon: "♥",
       renk: "#E91E63",
       arkaPlan: "#54102F",
       sayfa: "begenenler",
     },
     {
-      baslik: "Favorilerime Ekleyenler",
-      aciklama: "Seni favorilerine ekleyen kullanıcılar",
+      baslik: t("categories.favorites.title"),
+      aciklama: t("categories.favorites.description"),
       ikon: "★",
       renk: GOLD,
       arkaPlan: "#543B12",
       sayfa: "favorilerimeEkleyenler",
     },
     {
-      baslik: "Profilime Bakanlar",
-      aciklama: "Profilini ziyaret eden kullanıcıları gör",
+      baslik: t("categories.profileViews.title"),
+      aciklama: t("categories.profileViews.description"),
       ikon: "◉",
       renk: "#D66BFF",
       arkaPlan: "#49145D",
@@ -293,7 +298,7 @@ export default function BildirimlerScreen() {
 
           <View style={styles.baslikAlani}>
             <Text style={styles.baslikIkon}>🔔</Text>
-            <Text style={styles.baslik}>Bildirimler</Text>
+            <Text style={styles.baslik}>{t("title")}</Text>
             <View style={styles.baslikSusleme}>
               <View style={styles.suslemeCizgi} />
               <Text style={styles.suslemeKalp}>♡</Text>
@@ -304,13 +309,11 @@ export default function BildirimlerScreen() {
           <View style={styles.bosAlan} />
         </View>
 
-        <Text style={styles.aciklama}>
-          Seninle ilgilenen kullanıcıları buradan takip edebilirsin.
-        </Text>
+        <Text style={styles.aciklama}>{t("description")}</Text>
 
         <View style={styles.bolumBaslikAlani}>
           <View style={styles.baslikCizgisi} />
-          <Text style={styles.bolumBaslik}>Etkileşimlerin</Text>
+          <Text style={styles.bolumBaslik}>{t("interactions")}</Text>
         </View>
 
         {bildirimKategorileri.map((item) => (
@@ -341,7 +344,7 @@ export default function BildirimlerScreen() {
 
         <View style={[styles.sonBildirimBaslikSatiri, styles.bolumBaslikAlani]}>
           <View style={styles.baslikCizgisi} />
-          <Text style={styles.bolumBaslik}>Son Bildirimler</Text>
+          <Text style={styles.bolumBaslik}>{t("recentTitle")}</Text>
           <View style={styles.baslikSayac}>
             <Text style={styles.baslikSayacYazi}>{bildirimler.length}</Text>
           </View>
@@ -353,7 +356,7 @@ export default function BildirimlerScreen() {
               activeOpacity={0.75}
             >
               <Text style={styles.tumunuOkundu}>
-                {tumunuOkuma ? "İşleniyor..." : "Tümünü oku"}
+                {tumunuOkuma ? t("processing") : t("readAll")}
               </Text>
             </TouchableOpacity>
           )}
@@ -366,7 +369,7 @@ export default function BildirimlerScreen() {
               onPress={() => void bildirimleriYukle(true)}
               style={styles.tekrarDeneButonu}
             >
-              <Text style={styles.tekrarDeneYazi}>Tekrar dene</Text>
+              <Text style={styles.tekrarDeneYazi}>{t("retry")}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -374,7 +377,7 @@ export default function BildirimlerScreen() {
         {yukleniyor ? (
           <View style={styles.durumKutusu}>
             <ActivityIndicator size="large" color={GOLD} />
-            <Text style={styles.durumMetni}>Bildirimlerin yükleniyor...</Text>
+            <Text style={styles.durumMetni}>{t("loading")}</Text>
           </View>
         ) : bildirimler.length === 0 && hata === "" ? (
           <View style={styles.bosBildirim}>
@@ -382,10 +385,11 @@ export default function BildirimlerScreen() {
               <Text style={styles.bosBildirimIkon}>🔔</Text>
               <Text style={styles.zilKalp}>♥</Text>
             </View>
-            <Text style={styles.bosBildirimBaslik}>Henüz bildirimin yok</Text>
+            <Text style={styles.bosBildirimBaslik}>{t("empty.title")}</Text>
             <Text style={styles.bosBildirimAciklama}>
-              Yeni beğeniler, favoriler, eşleşmeler ve profil ziyaretleri burada
-              görüntülenecek.
+              {t("empty.description")}
+              {/*
+               */}
             </Text>
           </View>
         ) : (
@@ -419,13 +423,13 @@ export default function BildirimlerScreen() {
 
                 <View style={styles.sonBildirimYazi}>
                   <Text style={styles.sonBildirimKartBaslik}>
-                    {bildirim.title || "Yeni bildirim"}
+                    {bildirim.title || t("newNotification")}
                   </Text>
                   <Text style={styles.sonBildirimKartAciklama}>
-                    {bildirim.content || "Yeni bir etkinliğin var."}
+                    {bildirim.content || t("newActivity")}
                   </Text>
                   <Text style={styles.sonBildirimTarih}>
-                    {tarihGoster(bildirim.createdAt)}
+                    {tarihGoster(bildirim.createdAt, t, i18n.language)}
                   </Text>
                 </View>
 
@@ -434,7 +438,7 @@ export default function BildirimlerScreen() {
                     <ActivityIndicator size="small" color={GOLD} />
                   ) : okunmamis ? (
                     <View style={styles.yeniRozeti}>
-                      <Text style={styles.yeniRozetiYazi}>Yeni</Text>
+                      <Text style={styles.yeniRozetiYazi}>{t("newBadge")}</Text>
                     </View>
                   ) : (
                     <Text style={styles.okunduIsareti}>✓</Text>

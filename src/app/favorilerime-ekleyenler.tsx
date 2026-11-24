@@ -1,5 +1,7 @@
+import { tokenGetir } from "../services/tokenServisi";
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Pressable,
@@ -99,6 +101,7 @@ type FavoriyeEkleyenKullanici = {
  */
 
 export default function FavorilerimeEkleyenler() {
+  const { t } = useTranslation("favoritesAddedMe");
   const navigation = useNavigation<any>();
 
   /*
@@ -171,10 +174,10 @@ export default function FavorilerimeEkleyenler() {
        */
 
       const sayisalDegerler: Record<string, string> = {
-        "0": "Bekar",
-        "1": "Evli",
-        "2": "Bosanmis",
-        "3": "Dul",
+        "0": t("maritalStatus.single"),
+        "1": t("maritalStatus.married"),
+        "2": t("maritalStatus.divorced"),
+        "3": t("maritalStatus.widowed"),
       };
 
       if (sayisalDegerler[deger]) {
@@ -186,15 +189,15 @@ export default function FavorilerimeEkleyenler() {
        */
 
       const metinselDegerler: Record<string, string> = {
-        BEKAR: "Bekar",
-        EVLI: "Evli",
-        BOSANMIS: "Bosanmis",
-        DUL: "Dul",
+        BEKAR: t("maritalStatus.single"),
+        EVLI: t("maritalStatus.married"),
+        BOSANMIS: t("maritalStatus.divorced"),
+        DUL: t("maritalStatus.widowed"),
 
-        Bekar: "Bekar",
-        Evli: "Evli",
-        Bosanmis: "Bosanmis",
-        Dul: "Dul",
+        Bekar: t("maritalStatus.single"),
+        Evli: t("maritalStatus.married"),
+        Bosanmis: t("maritalStatus.divorced"),
+        Dul: t("maritalStatus.widowed"),
       };
       if (metinselDegerler[deger]) {
         return metinselDegerler[deger];
@@ -211,7 +214,7 @@ export default function FavorilerimeEkleyenler() {
 
       return deger;
     },
-    [],
+    [t],
   );
 
   /*
@@ -322,10 +325,10 @@ export default function FavorilerimeEkleyenler() {
        * TOKEN
        */
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
-        setHata("Oturum bulunamadi.");
+        setHata(t("errors.sessionNotFound"));
         return;
       }
 
@@ -342,7 +345,7 @@ export default function FavorilerimeEkleyenler() {
       const kullaniciId = Number(kayitliUserId);
 
       if (!kayitliUserId || !Number.isFinite(kullaniciId) || kullaniciId <= 0) {
-        setHata("Kullanici bilgisi bulunamadi.");
+        setHata(t("errors.userNotFound"));
         return;
       }
 
@@ -378,9 +381,7 @@ export default function FavorilerimeEkleyenler() {
       console.log("FAVORILER RESPONSE:", metin);
 
       if (!response.ok) {
-        throw new Error(
-          metin || "Favorilerinize ekleyen kullanicilar alinamadi.",
-        );
+        throw new Error(metin || t("errors.loadFailed"));
       }
 
       const favoriler: FavoriteDto[] = metin.trim() ? JSON.parse(metin) : [];
@@ -465,15 +466,11 @@ export default function FavorilerimeEkleyenler() {
     } catch (error) {
       console.error("FAVORILERIME EKLEYENLER HATASI:", error);
 
-      setHata(
-        error instanceof Error
-          ? error.message
-          : "Favorilerinize ekleyen kullanicilar alinamadi.",
-      );
+      setHata(error instanceof Error ? error.message : t("errors.loadFailed"));
     } finally {
       setYukleniyor(false);
     }
-  }, [kullaniciGetir, profilleriGetir]);
+  }, [kullaniciGetir, profilleriGetir, t]);
 
   /*
    * =======================================================
@@ -517,9 +514,7 @@ export default function FavorilerimeEkleyenler() {
         <View style={styles.yukleniyorContainer}>
           <ActivityIndicator size="large" color="#f59e0b" />
 
-          <Text style={styles.yukleniyorText}>
-            Favorilerine ekleyenler yükleniyor...
-          </Text>
+          <Text style={styles.yukleniyorText}>{t("loading")}</Text>
         </View>
       </SafeAreaView>
     );
@@ -555,10 +550,8 @@ export default function FavorilerimeEkleyenler() {
 
           <View style={styles.baslikAlani}>
             <Text style={styles.baslikIkon}>♡</Text>
-            <Text style={styles.baslik}>Favorilerime Ekleyenler</Text>
-            <Text style={styles.altBaslik}>
-              Seni favorilerine ekleyen kullanıcılar
-            </Text>
+            <Text style={styles.baslik}>{t("title")}</Text>
+            <Text style={styles.altBaslik}>{t("subtitle")}</Text>
           </View>
           <Text style={styles.koseKalp}>💗</Text>
         </View>
@@ -566,16 +559,16 @@ export default function FavorilerimeEkleyenler() {
         <View style={styles.ozetKart}>
           <View style={styles.ozetBolum}>
             <Text style={styles.ozetIkon}>💗</Text>
-            <Text style={styles.ozetEtiket}>Toplam</Text>
+            <Text style={styles.ozetEtiket}>{t("summary.total")}</Text>
             <Text style={styles.ozetSayi}>{kullanicilar.length}</Text>
-            <Text style={styles.ozetEtiket}>Kişi</Text>
+            <Text style={styles.ozetEtiket}>{t("summary.people")}</Text>
           </View>
           <View style={styles.ozetAyirici} />
           <View style={styles.ozetBolum}>
             <Text style={styles.ozetIkon}>⭐</Text>
-            <Text style={styles.ozetEtiket}>Yeni</Text>
+            <Text style={styles.ozetEtiket}>{t("summary.new")}</Text>
             <Text style={styles.ozetSayi}>{yeniEkleyenSayisi}</Text>
-            <Text style={styles.ozetEtiket}>Kişi</Text>
+            <Text style={styles.ozetEtiket}>{t("summary.people")}</Text>
           </View>
         </View>
         {/* =================================================
@@ -583,12 +576,12 @@ export default function FavorilerimeEkleyenler() {
         ================================================= */}
         {hata ? (
           <View style={styles.hataKart}>
-            <Text style={styles.hataBaslik}>Bir hata oluştu</Text>
+            <Text style={styles.hataBaslik}>{t("errors.title")}</Text>
 
             <Text style={styles.hataText}>{hata}</Text>
 
             <Pressable style={styles.tekrarButonu} onPress={favorilerimiGetir}>
-              <Text style={styles.tekrarButonuText}>Tekrar Dene</Text>
+              <Text style={styles.tekrarButonuText}>{t("retry")}</Text>
             </Pressable>
           </View>
         ) : null}
@@ -599,14 +592,9 @@ export default function FavorilerimeEkleyenler() {
           <View style={styles.bosKart}>
             <Text style={styles.bosYildiz}>♡</Text>
 
-            <Text style={styles.bosBaslik}>
-              Henüz seni favorilerine ekleyen yok
-            </Text>
+            <Text style={styles.bosBaslik}>{t("empty.title")}</Text>
 
-            <Text style={styles.bosText}>
-              Profilini güçlendirerek daha fazla kişinin seni fark etmesini
-              sağlayabilirsin.
-            </Text>
+            <Text style={styles.bosText}>{t("empty.description")}</Text>
           </View>
         ) : null}
         {/* =================================================
@@ -661,7 +649,7 @@ export default function FavorilerimeEkleyenler() {
                   {/* BILGILER */}
                   <View style={styles.bilgiler}>
                     <Text style={styles.adSoyad} numberOfLines={1}>
-                      {adSoyad || kullanici.username || "Kullanici"}
+                      {adSoyad || kullanici.username || t("fallbackUser")}
                     </Text>
 
                     {kullanici.username ? (
@@ -672,7 +660,7 @@ export default function FavorilerimeEkleyenler() {
 
                     {yas !== null || kullanici.city ? (
                       <Text style={styles.detay} numberOfLines={1}>
-                        {yas !== null ? `${yas} yaş` : ""}
+                        {yas !== null ? t("age", { age: yas }) : ""}
 
                         {yas !== null && kullanici.city ? " · " : ""}
 
@@ -700,7 +688,7 @@ export default function FavorilerimeEkleyenler() {
 
                     <Text style={styles.favoriBilgisi}>
                       <Text style={styles.cevrimiciNokta}>● </Text>
-                      Seni favorilerine ekledi
+                      {t("addedYouToFavorites")}
                     </Text>
                   </View>
                 </View>
@@ -709,7 +697,9 @@ export default function FavorilerimeEkleyenler() {
                   style={styles.profilButonu}
                   onPress={() => profileGit(kullanici.id)}
                 >
-                  <Text style={styles.profilButonuText}>◉ Profili Gör</Text>
+                  <Text style={styles.profilButonuText}>
+                    ◉ {t("viewProfile")}
+                  </Text>
                 </Pressable>
               </View>
             );

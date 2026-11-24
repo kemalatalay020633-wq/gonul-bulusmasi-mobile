@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { gecerliAccessTokenGetir } from "../services/api";
 
 import {
   ActivityIndicator,
@@ -11,16 +12,21 @@ import {
   Text,
   View,
 } from "react-native";
+import {
+  bekleyenAramayiGetir,
+  bekleyenAramayiSil,
+} from "../services/bekleyenAramaServisi";
+
+import { gelenAramaBildiriminiKapat } from "../services/aramaBildirimServisi";
 
 import aramaWebRTC, { AramaMesaji } from "../services/AramaWebRTC";
 
 // src/app/home.tsx
 
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 
 import { API_BASE_URL } from "../config/api";
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 //import stompTest from "../services/StompTest";
 
@@ -34,6 +40,14 @@ import ConversationPanel from "../components/messages/ConversationPanel";
 
 export default function Messages() {
   const navigation = useNavigation<any>();
+  const { t, i18n } = useTranslation();
+
+  const route = useRoute<any>();
+  const aramaModu = route.params?.aramaModu === true;
+  const gelenAramaArayuzuDisarida =
+    route.params?.gelenAramaArayuzuDisarida === true;
+  const gelenArayanId = route.params?.gelenArayanId;
+  const gelenAramaCallId = route.params?.callId;
 
   type UyariButonu = {
     text: string;
@@ -128,7 +142,12 @@ export default function Messages() {
 
   const [aramaTuru, setAramaTuru] = useState<"SES" | "VIDEO">("SES");
 
-  const [aramaDurumu, setAramaDurumu] = useState("Aranıyor...");
+  const [aramaDurumu, setAramaDurumu] = useState(t("messages.calling"));
+  // FCM aramasının aynı anda birden fazla kez yüklenmesini engeller.
+  const fcmAramaYuklemeDevamEdiyor = useRef(false);
+
+  // Başarıyla yüklenen aramanın tekrar işlenmesini engeller.
+  const yuklenenFcmAramaCallIdRef = useRef<string | null>(null);
 
   /*
 
@@ -172,8 +191,12 @@ export default function Messages() {
     AramaMesaji,
     { tip: "CALL_OFFER" }
   > | null>(null);
+  const [fcmAramaEylemi, setFcmAramaEylemi] = useState<{
+    actionId: string;
+    callId: string;
+  } | null>(null);
 
-  const [gelenAramaAdi, setGelenAramaAdi] = useState("Kullanıcı");
+  const [gelenAramaAdi, setGelenAramaAdi] = useState(t("messages.user"));
 
   const [gelenAramaTuru, setGelenAramaTuru] = useState<"SES" | "VIDEO">("SES");
 
@@ -231,25 +254,29 @@ export default function Messages() {
     if (selectedUserId === null || engellemeIslemiYapiliyor) return;
 
     uyariGoster(
-      engelle ? "Kullanıcıyı engelle" : "Engeli kaldır",
+      engelle ? t("messages.block.title") : t("messages.unblock.title"),
       engelle
-        ? `${selectedUserName || "Bu kullanıcı"} engellenecek. Bu kullanıcıyla mesajlaşmanız kısıtlanabilir.`
-        : `${selectedUserName || "Bu kullanıcı"} için engeli kaldırmak istiyor musunuz?`,
+        ? t("messages.block.confirm", {
+            name: selectedUserName || t("messages.thisUser"),
+          })
+        : t("messages.unblock.confirm", {
+            name: selectedUserName || t("messages.thisUser"),
+          }),
       [
-        { text: "Vazgeç", style: "cancel" },
+        { text: t("messages.cancel"), style: "cancel" },
         {
-          text: engelle ? "Engelle" : "Engeli kaldır",
+          text: engelle
+            ? t("messages.block.action")
+            : t("messages.unblock.action"),
           style: engelle ? "destructive" : "default",
           onPress: async () => {
             setEngellemeIslemiYapiliyor(true);
             setEngellemeHatasi("");
 
             try {
-              const token = await AsyncStorage.getItem("token");
+              const token = await gecerliAccessTokenGetir();
               if (!token) {
-                throw new Error(
-                  "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
-                );
+                throw new Error(t("messages.errors.sessionMissing"));
               }
 
               const cevap = await fetch(
@@ -266,7 +293,10 @@ export default function Messages() {
               if (!cevap.ok) {
                 const metin = await cevap.text().catch(() => "");
                 throw new Error(
-                  metin || `Engelleme işlemi başarısız (${cevap.status}).`,
+                  metin ||
+                    t("messages.errors.blockFailedHttp", {
+                      status: cevap.status,
+                    }),
                 );
               }
 
@@ -293,18 +323,24 @@ export default function Messages() {
               }
 
               uyariGoster(
-                engelle ? "Kullanıcı engellendi" : "Engel kaldırıldı",
                 engelle
-                  ? `${selectedUserName || "Bu kullanıcı"} engellendi.`
-                  : `${selectedUserName || "Bu kullanıcı"} için engel kaldırıldı.`,
+                  ? t("messages.block.successTitle")
+                  : t("messages.unblock.successTitle"),
+                engelle
+                  ? t("messages.block.success", {
+                      name: selectedUserName || t("messages.thisUser"),
+                    })
+                  : t("messages.unblock.success", {
+                      name: selectedUserName || t("messages.thisUser"),
+                    }),
               );
             } catch (hata) {
               const mesaj =
                 hata instanceof Error
                   ? hata.message
-                  : "Engelleme işlemi başarısız oldu.";
+                  : t("messages.errors.blockFailed");
               setEngellemeHatasi(mesaj);
-              uyariGoster("İşlem başarısız", mesaj);
+              uyariGoster(t("messages.errors.operationFailedTitle"), mesaj);
             } finally {
               setEngellemeIslemiYapiliyor(false);
             }
@@ -410,6 +446,13 @@ export default function Messages() {
    * Web tarafındaki API ile aynı endpoint kullanılır.
    * =========================================================
    */
+
+  /*
+   * =========================================================
+   * KULLANICI ENGELLEME DURUMUNU YÜKLE
+   * =========================================================
+   */
+
   useEffect(() => {
     let aktif = true;
 
@@ -426,11 +469,9 @@ export default function Messages() {
       setEngellemeHatasi("");
 
       try {
-        const token = await AsyncStorage.getItem("token");
+        const token = await gecerliAccessTokenGetir();
         if (!token) {
-          throw new Error(
-            "Oturum bilgisi bulunamadı. Lütfen tekrar giriş yapın.",
-          );
+          throw new Error(t("messages.errors.sessionMissing"));
         }
 
         const cevap = await fetch(
@@ -447,7 +488,8 @@ export default function Messages() {
         if (!cevap.ok) {
           const metin = await cevap.text().catch(() => "");
           throw new Error(
-            metin || `Engelleme durumu alınamadı (${cevap.status}).`,
+            metin ||
+              t("messages.errors.blockStatusHttp", { status: cevap.status }),
           );
         }
 
@@ -461,7 +503,7 @@ export default function Messages() {
           setEngellemeHatasi(
             hata instanceof Error
               ? hata.message
-              : "Engelleme durumu alınamadı.",
+              : t("messages.errors.blockStatus"),
           );
         }
       } finally {
@@ -504,7 +546,7 @@ export default function Messages() {
       return date;
     }
 
-    return tarih.toLocaleString("tr-TR");
+    return tarih.toLocaleString(i18n.language || "tr-TR");
   };
 
   /*
@@ -669,9 +711,11 @@ export default function Messages() {
 
       if (aramaIzniAktif) {
         uyariGoster(
-          "Arama iznini geri al",
+          t("messages.callPermission.revokeTitle"),
 
-          `${selectedUserName || "Bu kullanıcı"} artık sizi arayamayacak. Mevcut bir görüşme varsa kesilmez.`,
+          t("messages.callPermission.revokeConfirm", {
+            name: selectedUserName || t("messages.thisUser"),
+          }),
 
           [
             {
@@ -683,7 +727,7 @@ export default function Messages() {
             },
 
             {
-              text: "Geri Al",
+              text: t("messages.callPermission.revokeAction"),
 
               style: "destructive",
 
@@ -694,17 +738,19 @@ export default function Messages() {
                   setAramaIzniAktif(false);
 
                   uyariGoster(
-                    "Arama izni geri alındı",
+                    t("messages.callPermission.revokedTitle"),
 
-                    `${selectedUserName || "Bu kullanıcı"} artık sizi arayamaz.`,
+                    t("messages.callPermission.revoked", {
+                      name: selectedUserName || t("messages.thisUser"),
+                    }),
                   );
                 } catch (hata) {
                   uyariGoster(
-                    "İşlem başarısız",
+                    t("messages.errors.operationFailedTitle"),
 
                     hata instanceof Error
                       ? hata.message
-                      : "Arama izni geri alınamadı.",
+                      : t("messages.errors.callPermissionRevoke"),
                   );
                 } finally {
                   setAramaIzniYukleniyor(false);
@@ -722,13 +768,15 @@ export default function Messages() {
       setAramaIzniAktif(true);
 
       uyariGoster(
-        "Arama izni verildi",
+        t("messages.callPermission.grantedTitle"),
 
-        `${selectedUserName || "Bu kullanıcı"} artık sizi sesli ve görüntülü arayabilir.`,
+        t("messages.callPermission.granted", {
+          name: selectedUserName || t("messages.thisUser"),
+        }),
       );
     } catch (hata) {
       uyariGoster(
-        "İşlem başarısız",
+        t("messages.errors.operationFailedTitle"),
 
         hata instanceof Error ? hata.message : "Arama izni verilemedi.",
       );
@@ -771,9 +819,9 @@ export default function Messages() {
         console.log("📵 ARAMA ENGELLENDİ: Karşı taraf arama izni vermemiş.");
 
         uyariGoster(
-          "Arama izni yok",
+          t("messages.callPermission.missingTitle"),
 
-          "Bu kullanıcı size arama izni vermedi. Arama yapabilmek için karşı tarafın size arama izni vermesi gerekiyor.",
+          t("messages.callPermission.missingMessage"),
         );
 
         return false;
@@ -786,11 +834,11 @@ export default function Messages() {
       console.error("❌ ARAMA İZNİ KONTROL HATASI:", hata);
 
       uyariGoster(
-        "Arama başlatılamadı",
+        t("messages.errors.callStartTitle"),
 
         hata instanceof Error
           ? hata.message
-          : "Arama izni kontrol edilirken bir hata oluştu.",
+          : t("messages.errors.callPermissionCheck"),
       );
 
       return false;
@@ -815,7 +863,7 @@ export default function Messages() {
 
    */
 
-  const aramaEkranini2SaniyeSonraKapat = (mesaj = "Arama sona erdi.") => {
+  const aramaEkranini2SaniyeSonraKapat = (mesaj = t("messages.callEnded")) => {
     if (aramaKapanmaZamanlayicisi.current) {
       clearTimeout(aramaKapanmaZamanlayicisi.current);
 
@@ -835,7 +883,7 @@ export default function Messages() {
 
       setUzakStreamUrl(null);
 
-      setAramaDurumu("Aranıyor...");
+      setAramaDurumu(t("messages.calling"));
 
       aramaKapanmaZamanlayicisi.current = null;
     }, 2000);
@@ -1048,7 +1096,7 @@ export default function Messages() {
 
     setAramaTuru("SES");
 
-    setAramaDurumu("Aranıyor...");
+    setAramaDurumu(t("messages.calling"));
 
     setYerelStreamUrl(null);
 
@@ -1359,7 +1407,7 @@ export default function Messages() {
     } catch (hata) {
       console.error("❌ SESLİ ARAMA BAŞLATMA HATASI:", hata);
 
-      setAramaDurumu("Arama başlatılamadı.");
+      setAramaDurumu(t("messages.errors.callStart"));
 
       /*
 
@@ -1544,7 +1592,7 @@ export default function Messages() {
 
     setAramaTuru("VIDEO");
 
-    setAramaDurumu("Aranıyor...");
+    setAramaDurumu(t("messages.calling"));
 
     setYerelStreamUrl(null);
 
@@ -1795,7 +1843,7 @@ export default function Messages() {
     } catch (hata) {
       console.error("❌ GÖRÜNTÜLÜ ARAMA BAŞLATMA HATASI:", hata);
 
-      setAramaDurumu("Arama başlatılamadı.");
+      setAramaDurumu(t("messages.errors.callStart"));
 
       /*
 
@@ -1823,7 +1871,7 @@ export default function Messages() {
         console.error("❌ BİLİNMEYEN HATA:", hata);
       }
 
-      aramaEkranini2SaniyeSonraKapat("Arama başlatılamadı.");
+      aramaEkranini2SaniyeSonraKapat(t("messages.errors.callStart"));
     } finally {
       goruntuluAramaDevamEdiyor.current = false;
 
@@ -1898,47 +1946,86 @@ export default function Messages() {
 
 
    */
-
+  // WebRTC kullanıcı kimliğini her durumda ayarla.
   useEffect(() => {
-    if (currentUserId === null) {
+    if (currentUserId === null || currentUserId === undefined) {
       return;
     }
 
     const kullaniciId = Number(currentUserId);
 
-    if (!Number.isFinite(kullaniciId)) {
-      console.error("❌ GELEN ARAMA: Geçersiz kullanıcı ID:", currentUserId);
+    if (!Number.isInteger(kullaniciId) || kullaniciId <= 0) {
+      console.error("❌ WEBRTC KULLANICI KİMLİĞİ GEÇERSİZ:", currentUserId);
+      return;
+    }
 
+    try {
+      aramaWebRTC.kullaniciKimliginiAyarla(kullaniciId);
+
+      console.log("🟢 WEBRTC KULLANICI KİMLİĞİ HAZIR:", kullaniciId);
+    } catch (hata) {
+      console.error("❌ WEBRTC KULLANICI KİMLİĞİ AYARLANAMADI:", hata);
+    }
+  }, [currentUserId]);
+  /*
+   * =========================================================
+   * GELEN ARAMA VE WEBRTC OLAY DİNLEYİCİSİ
+   * =========================================================
+   *
+   * STOMP sinyalleri useMessages.ts tarafından yönetilir.
+   * Burada ikinci bir sinyal dinleyicisi kurulmaz.
+   */
+
+  useEffect(() => {
+    // Harici gelen arama ekranı açıksa WebRTC olaylarını o ekran yönetir.
+    // STOMP ve FCM teklif yükleme akışı bu kontrolden etkilenmez.
+    if (
+      gelenAramaArayuzuDisarida ||
+      currentUserId === null ||
+      selectedUserId !== null
+    ) {
+      return;
+    }
+
+    const kullaniciId = Number(currentUserId);
+
+    if (!Number.isInteger(kullaniciId) || kullaniciId <= 0) {
+      console.error("❌ GELEN ARAMA: GEÇERSİZ KULLANICI ID:", currentUserId);
       return;
     }
 
     console.log("======================================");
-
     console.log("📞 GELEN ARAMA DİNLEYİCİSİ BAŞLATILIYOR");
-
     console.log("📞 Kullanıcı ID:", kullaniciId);
-
     console.log("======================================");
 
     const olayDinleyiciTemizleyicileri: Array<() => void> = [];
 
     // Gelen arama teklifi
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("teklif", (mesaj) => {
         console.log("📞 GELEN ARAMA VAR");
-
         console.log("📞 Arayan ID:", mesaj.arayanId);
-
         console.log("📞 Aranan ID:", mesaj.arananId);
-
         console.log("📞 Arama türü:", mesaj.aramaTuru);
+
+        const arayanId = Number(mesaj.arayanId);
+
+        if (!Number.isInteger(arayanId) || arayanId <= 0) {
+          console.error("❌ GELEN ARAMA: GEÇERSİZ ARAYAN ID");
+          return;
+        }
 
         setGelenAramaMesaji(mesaj);
 
+        // Arayan kişinin konuşmasını otomatik aç.
+        setSelectedUserId(arayanId);
+
         setGelenAramaTuru(mesaj.aramaTuru);
 
-        let isim = `Kullanıcı ${mesaj.arayanId}`;
+        let isim = t("messages.userWithId", {
+          id: mesaj.arayanId,
+        });
 
         try {
           const bulunanIsim = getUserDisplayName(mesaj.arayanId);
@@ -1947,17 +2034,15 @@ export default function Messages() {
             isim = bulunanIsim;
           }
         } catch (hata) {
-          console.warn("⚠️ Arayan kullanıcı adı alınamadı:", hata);
+          console.warn("⚠️ ARAYAN KULLANICI ADI ALINAMADI:", hata);
         }
 
         setGelenAramaAdi(isim);
-
         setGelenAramaAcik(true);
       }),
     );
 
     // Karşı tarafın cevabı
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("cevap", async (mesaj) => {
         try {
@@ -1971,28 +2056,21 @@ export default function Messages() {
     );
 
     // Karşı taraf aramayı reddetti
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("reddet", () => {
         console.log("📵 KARŞI TARAF ARAMAYI REDDETTİ");
 
         if (aramaKapanmaZamanlayicisi.current) {
           clearTimeout(aramaKapanmaZamanlayicisi.current);
-
           aramaKapanmaZamanlayicisi.current = null;
         }
 
         setGelenAramaAcik(false);
-
         setGelenAramaMesaji(null);
-
         setAramaAcik(false);
-
         setYerelStreamUrl(null);
-
         setUzakStreamUrl(null);
-
-        setAramaDurumu("Arama reddedildi.");
+        setAramaDurumu(t("messages.callRejected"));
 
         void aramaWebRTC.aramayiBitir(true).catch((hata) => {
           console.error("❌ REDDETME SONRASI WEBRTC TEMİZLEME HATASI:", hata);
@@ -2001,23 +2079,20 @@ export default function Messages() {
     );
 
     // Karşı taraf aramayı bitirdi
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("bitir", () => {
         console.log("📞 KARŞI TARAF ARAMAYI BİTİRDİ");
 
-        aramaEkranini2SaniyeSonraKapat("Arama sona erdi.");
+        aramaEkranini2SaniyeSonraKapat(t("messages.callEnded"));
       }),
     );
 
     // WebRTC bağlantısı kuruldu
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("baglandi", () => {
         console.log("🟢 WEBRTC ARAMA BAĞLANDI");
 
         const yerel = aramaWebRTC.getYerelStream();
-
         const uzak = aramaWebRTC.getUzakStream();
 
         if (yerel) {
@@ -2028,12 +2103,11 @@ export default function Messages() {
           setUzakStreamUrl(uzak.toURL());
         }
 
-        setAramaDurumu("Bağlandı");
+        setAramaDurumu(t("messages.connected"));
       }),
     );
 
     // Karşı tarafın medya akışı geldi
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("uzakStream", (stream) => {
         console.log("🎥 UZAK STREAM GELDİ");
@@ -2047,17 +2121,15 @@ export default function Messages() {
     );
 
     // Bağlantı koptu
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("baglantiKoptu", () => {
         console.log("🔴 WEBRTC ARAMA BAĞLANTISI KOPTU");
 
-        aramaEkranini2SaniyeSonraKapat("Arama bağlantısı sonlandı.");
+        aramaEkranini2SaniyeSonraKapat(t("messages.callConnectionEnded"));
       }),
     );
 
     // WebRTC hatası
-
     olayDinleyiciTemizleyicileri.push(
       aramaWebRTC.olayDinle("hata", (hata) => {
         console.error("❌ ARAMA WEBRTC HATASI:", hata);
@@ -2065,31 +2137,16 @@ export default function Messages() {
     );
 
     /*
-
-
-
      * ÖNEMLİ:
-
-
-
-     * Burada aramaSinyaliDinle() çağrılmıyor.
-
-
-
-     * sinyalGondericiyiAyarla() da çağrılmıyor.
-
-
-
-     * Bu iki işlem useMessages.ts içinde yönetiliyor.
-
-
-
+     * aramaSinyaliDinle() çağrılmıyor.
+     * sinyalGondericiyiAyarla() çağrılmıyor.
+     * Bu işlemler useMessages.ts içinde yönetiliyor.
      */
 
+    // Dinleyicileri temizle
     return () => {
       console.log(
         "🧹 WEBRTC OLAY DİNLEYİCİLERİ TEMİZLENİYOR. Kullanıcı:",
-
         kullaniciId,
       );
 
@@ -2097,13 +2154,266 @@ export default function Messages() {
         try {
           temizle();
         } catch (hata) {
-          console.warn("WebRTC olay dinleyicisi temizlenemedi:", hata);
+          console.warn("⚠️ WEBRTC OLAY DİNLEYİCİSİ TEMİZLENEMEDİ:", hata);
         }
       });
 
       olayDinleyiciTemizleyicileri.length = 0;
     };
-  }, [currentUserId, getUserDisplayName]);
+  }, [
+    gelenAramaArayuzuDisarida,
+    currentUserId,
+    selectedUserId,
+    getUserDisplayName,
+  ]);
+
+  // FCM araması için arayan kullanıcıyı önceden seç.
+  // Böylece WebRTC olay dinleyicileri selectedUserId hazırken kurulur.
+  useEffect(() => {
+    if (gelenAramaArayuzuDisarida) {
+      return;
+    }
+
+    const arayanId = Number(gelenArayanId);
+
+    if (
+      gelenArayanId !== undefined &&
+      gelenArayanId !== null &&
+      Number.isInteger(arayanId) &&
+      arayanId > 0
+    ) {
+      console.log("FCM ARAYAN KULLANICI SEÇİLİYOR:", arayanId);
+      setSelectedUserId(arayanId);
+    }
+  }, [gelenArayanId, gelenAramaArayuzuDisarida, setSelectedUserId]);
+
+  /*
+   * =========================================================
+   * FCM BİLDİRİMİNDEN GELEN BEKLEYEN ARAMAYI YÜKLE
+   * =========================================================
+   *
+   * Bu effect WebRTC olay dinleyicisinden bağımsızdır.
+   * selectedUserId değişince FCM yüklemesi iptal edilmez.
+   * Bildirimden gelen route parametresi değiştiğinde yeniden
+   * kontrol yapar.
+   */
+
+  useEffect(() => {
+    if (currentUserId === null || currentUserId === undefined) {
+      return;
+    }
+
+    const kullaniciId = Number(currentUserId);
+
+    if (!Number.isInteger(kullaniciId) || kullaniciId <= 0) {
+      console.error("❌ FCM ARAMA: GEÇERSİZ KULLANICI ID:", currentUserId);
+      return;
+    }
+
+    const routeArayanId = Number(gelenArayanId);
+
+    if (
+      !gelenAramaArayuzuDisarida &&
+      gelenArayanId !== undefined &&
+      gelenArayanId !== null &&
+      Number.isInteger(routeArayanId) &&
+      routeArayanId > 0 &&
+      selectedUserId !== routeArayanId
+    ) {
+      console.log("FCM ARAMA: ARAYAN KULLANICININ SEÇİLMESİ BEKLENİYOR", {
+        routeArayanId,
+        selectedUserId,
+      });
+      return;
+    }
+
+    let effectAktif = true;
+
+    const fcmAramasiniYukle = async (): Promise<void> => {
+      if (fcmAramaYuklemeDevamEdiyor.current) {
+        console.log("📞 FCM ARAMA YÜKLEMESİ ZATEN DEVAM EDİYOR");
+        return;
+      }
+
+      fcmAramaYuklemeDevamEdiyor.current = true;
+
+      try {
+        console.log("======================================");
+        console.log("📞 FCM BEKLEYEN ARAMA KONTROLÜ BAŞLADI");
+        console.log("📞 KULLANICI ID:", kullaniciId);
+        console.log("📞 BİLDİRİM ARAYAN ID:", gelenArayanId ?? "YOK");
+        console.log("📞 BİLDİRİM CALL ID:", gelenAramaCallId ?? "YOK");
+        console.log("======================================");
+
+        // 1. Bekleyen arama kaydını oku.
+        const bekleyenArama = await bekleyenAramayiGetir();
+
+        if (!effectAktif) return;
+
+        if (!bekleyenArama) {
+          console.log("📞 FCM BEKLEYEN ARAMA BULUNAMADI");
+          return;
+        }
+
+        // 2. Gelen arama verilerini doğrula.
+        const callId = String(bekleyenArama.callId ?? "").trim();
+        const arayanId = Number(bekleyenArama.callerId);
+
+        if (!callId || !Number.isInteger(arayanId) || arayanId <= 0) {
+          console.error("❌ FCM ARAMA: ARAMA BİLGİLERİ GEÇERSİZ", {
+            callId,
+            callerId: bekleyenArama.callerId,
+          });
+          return;
+        }
+
+        // Bildirim rotasındaki arayan ID varsa kayıtla tutarlı olmalı.
+        const routeArayanId =
+          gelenArayanId === undefined || gelenArayanId === null
+            ? null
+            : Number(gelenArayanId);
+
+        if (
+          routeArayanId !== null &&
+          Number.isInteger(routeArayanId) &&
+          routeArayanId > 0 &&
+          routeArayanId !== arayanId
+        ) {
+          console.warn("⚠️ FCM ROUTE ARAYAN ID İLE BEKLEYEN ARAMA EŞLEŞMİYOR", {
+            routeArayanId,
+            arayanId,
+            callId,
+          });
+        }
+
+        // 3. Aynı çağrıyı tekrar yükleme.
+        if (yuklenenFcmAramaCallIdRef.current === callId) {
+          console.log("📞 FCM ARAMA ZATEN YÜKLENDİ:", callId);
+          return;
+        }
+        // 4. Geçerli JWT token kontrolü.
+        // Access token süresi dolmuşsa merkezi token yöneticisi
+        // refresh token üzerinden yeni access token almaya çalışır.
+        console.log("🔐 FCM ARAMA: GEÇERLİ ACCESS TOKEN ALINIYOR...");
+
+        const token = await gecerliAccessTokenGetir();
+
+        if (!effectAktif) return;
+
+        if (!token || !token.trim()) {
+          console.error("❌ FCM ARAMA: GEÇERLİ JWT TOKEN BULUNAMADI");
+          return;
+        }
+
+        console.log("✅ FCM ARAMA: GEÇERLİ JWT TOKEN ALINDI");
+        console.log("📞 FCM ARAMA BİLGİLERİ:", {
+          callId,
+          arayanId,
+          kullaniciId,
+          callType: bekleyenArama.callType,
+          actionId: bekleyenArama.actionId,
+        });
+
+        // 5. Sunucudan SDP teklifini getir.
+        const cevap = await fetch(
+          `${API_ADRESI}/aramalar/${encodeURIComponent(callId)}/teklif`,
+          {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/json",
+            },
+          },
+        );
+
+        if (!effectAktif) return;
+
+        // Arama artık geçerli değilse bekleyen bildirimi temizle.
+        if ([404, 409, 410].includes(cevap.status)) {
+          console.warn(
+            "⚠️ FCM ARAMA: OTURUM GEÇERSİZ VEYA SONA ERMİŞ:",
+            cevap.status,
+          );
+
+          await bekleyenAramayiSil();
+          await gelenAramaBildiriminiKapat(callId);
+          return;
+        }
+
+        if (!cevap.ok) {
+          const hataMetni = await cevap.text().catch(() => "");
+
+          console.error("❌ FCM ARAMA SDP HATASI:", {
+            status: cevap.status,
+            body: hataMetni.slice(0, 500),
+          });
+          return;
+        }
+
+        // 6. SDP içeriğini doğrula.
+        const teklifVerisi = await cevap.json();
+
+        if (!effectAktif) return;
+
+        if (
+          !teklifVerisi ||
+          typeof teklifVerisi.sdp !== "string" ||
+          !teklifVerisi.sdp.trim()
+        ) {
+          console.error("❌ FCM ARAMA: SDP BOŞ VEYA GEÇERSİZ");
+          return;
+        }
+
+        const aramaTuru: "SES" | "VIDEO" =
+          bekleyenArama.callType === "VIDEO" ? "VIDEO" : "SES";
+
+        // 7. WebRTC servisine gelen FCM teklifini yüklet.
+        // Bu metot teklif olayını üretmelidir; parent listener
+        // bu olayı alıp ConversationPanel'e aktarır.
+        await aramaWebRTC.fcmIleGelenAramayiYukle(
+          kullaniciId,
+          arayanId,
+          aramaTuru,
+          callId,
+          teklifVerisi.sdp,
+        );
+
+        // Arama WebRTC'ye aktarıldı. Parametreleri ancak bu noktada temizle.
+        // Kullanıcı zaten bir konuşmadaysa erken temizleme FCM yüklemesini iptal ederdi.
+        navigation.setParams({
+          gelenArayanId: undefined,
+          callId: undefined,
+          aramaModu: false,
+        });
+
+        // Bu metot "teklif" olayını tetiklediğinde seçili kullanıcı
+        // değişebilir ve route parametresi temizlenebilir. Bu nedenle
+        // servis başarıyla döndükten sonra effectAktif kontrolü yapmıyoruz.
+        // Component aynı ekranda kalır; panel eylem bilgisini almalıdır.
+
+        // Yalnızca WebRTC yüklemesi başarılıysa kilitle.
+        yuklenenFcmAramaCallIdRef.current = callId;
+
+        // 8. Bildirim eylemini panelin yönetimine aktar.
+        setFcmAramaEylemi({
+          actionId: bekleyenArama.actionId || "default",
+          callId,
+        });
+
+        console.log("✅ FCM GELEN ARAMA WEBRTC'YE AKTARILDI:", callId);
+      } catch (hata) {
+        console.error("❌ FCM GELEN ARAMA YÜKLEME HATASI:", hata);
+      } finally {
+        fcmAramaYuklemeDevamEdiyor.current = false;
+      }
+    };
+
+    void fcmAramasiniYukle();
+
+    return () => {
+      effectAktif = false;
+    };
+  }, [currentUserId, gelenArayanId, gelenAramaCallId, selectedUserId, gelenAramaArayuzuDisarida, navigation]);
 
   /*
 
@@ -2123,40 +2433,6 @@ export default function Messages() {
 
    */
 
-  const gelenAramayiReddet = () => {
-    console.log("📵 GELEN ARAMA REDDEDİLİYOR");
-
-    if (aramaKapanmaZamanlayicisi.current) {
-      clearTimeout(aramaKapanmaZamanlayicisi.current);
-
-      aramaKapanmaZamanlayicisi.current = null;
-    }
-
-    // Önce reddeden cihazdaki arama ekranını kapat.
-
-    setGelenAramaAcik(false);
-
-    setGelenAramaMesaji(null);
-
-    setAramaAcik(false);
-
-    setYerelStreamUrl(null);
-
-    setUzakStreamUrl(null);
-
-    setAramaDurumu("Arama reddedildi.");
-
-    try {
-      aramaWebRTC.aramayiReddet();
-    } catch (hata) {
-      console.error("❌ GELEN ARAMA REDDETME HATASI:", hata);
-    }
-
-    void aramaWebRTC.aramayiBitir(true).catch((hata) => {
-      console.error("❌ GELEN ARAMA TEMİZLEME HATASI:", hata);
-    });
-  };
-
   /*
 
 
@@ -2174,40 +2450,6 @@ export default function Messages() {
 
 
    */
-
-  const gelenAramayiKabulEt = async () => {
-    if (!gelenAramaMesaji) {
-      console.error("❌ Kabul edilecek gelen arama bulunamadı.");
-
-      return;
-    }
-
-    console.log("======================================");
-
-    console.log("✅ GELEN ARAMA KABUL EDİLİYOR");
-
-    console.log("📞 Arayan ID:", gelenAramaMesaji.arayanId);
-
-    console.log("📞 Arama türü:", gelenAramaMesaji.aramaTuru);
-
-    console.log("======================================");
-
-    try {
-      setGelenAramaAcik(false);
-
-      await aramaWebRTC.teklifiKabulEt(gelenAramaMesaji.teklif);
-
-      setGelenAramaMesaji(null);
-
-      console.log("🟢 GELEN ARAMA KABUL EDİLDİ");
-    } catch (hata) {
-      console.error("❌ GELEN ARAMA KABUL HATASI:", hata);
-
-      setGelenAramaAcik(false);
-
-      setGelenAramaMesaji(null);
-    }
-  };
 
   /*
 
@@ -2310,7 +2552,7 @@ export default function Messages() {
 
     const premiumKontrolEt = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
+        const token = await gecerliAccessTokenGetir();
 
         if (!token) {
           if (aktif) setPremium(false);
@@ -2396,7 +2638,7 @@ export default function Messages() {
       } catch (hata) {
         console.error("PREMIUM KONTROL HATASI:", hata);
         if (aktif) {
-          setPremiumKontrolHatasi("Premium üyelik durumu kontrol edilemedi.");
+          setPremiumKontrolHatasi(t("messages.errors.premiumCheck"));
           setPremium(false);
         }
       }
@@ -2408,7 +2650,7 @@ export default function Messages() {
     };
   }, [currentUserId]);
 
-  if (loading || premium === null) {
+  if (!aramaModu && (loading || premium === null)) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.loadingContainer}>
@@ -2416,8 +2658,8 @@ export default function Messages() {
 
           <Text style={styles.loadingText}>
             {loading
-              ? "Mesajlar yükleniyor..."
-              : "Premium üyelik kontrol ediliyor..."}
+              ? t("messages.loadingMessages")
+              : t("messages.checkingPremium")}
           </Text>
         </View>
       </SafeAreaView>
@@ -2442,17 +2684,18 @@ export default function Messages() {
 
    */
 
-  if (!premium) {
+  if (!premium && !aramaModu) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.premiumContainer}>
           <Text style={styles.lockIcon}>🔒</Text>
 
-          <Text style={styles.premiumTitle}>Premium Üyelik Gerekli</Text>
+          <Text style={styles.premiumTitle}>
+            {t("messages.premiumRequiredTitle")}
+          </Text>
 
           <Text style={styles.premiumDescription}>
-            Mesajları okuyabilmek ve mesaj göndermek için aktif PREMIUM
-            üyeliğiniz bulunmalıdır.
+            {t("messages.premiumRequiredDescription")}
           </Text>
 
           {premiumKontrolHatasi ? (
@@ -2464,7 +2707,9 @@ export default function Messages() {
 
             onPress={() => navigation.navigate("premium")}
           >
-            <Text style={styles.premiumButtonText}>⭐ Premium Ol</Text>
+            <Text style={styles.premiumButtonText}>
+              {t("messages.becomePremium")}
+            </Text>
           </Pressable>
 
           <Pressable
@@ -2472,7 +2717,7 @@ export default function Messages() {
 
             onPress={() => navigation.replace("home")}
           >
-            <Text style={styles.homeButtonText}>← Ana Sayfa</Text>
+            <Text style={styles.homeButtonText}>{t("messages.home")}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -2498,7 +2743,6 @@ export default function Messages() {
    */
 
   const konusmaSecilmedi = selectedUserId === null;
-
   /*
 
 
@@ -2535,18 +2779,15 @@ export default function Messages() {
 
 
         ================================================= */}
-
-        <MessagesHeader
-          selectedUserId={selectedUserId}
-
-          selectedUserName={selectedUserName}
-
-          selectedUserActive={selectedUserActive}
-
-          yeniMesajSayisi={yeniMesajSayisi}
-
-          onBack={() => navigation.replace("home")}
-        />
+        {!aramaModu && (
+          <MessagesHeader
+            selectedUserId={selectedUserId}
+            selectedUserName={selectedUserName}
+            selectedUserActive={selectedUserActive}
+            yeniMesajSayisi={yeniMesajSayisi}
+            onBack={() => navigation.replace("home")}
+          />
+        )}
 
         {/* =================================================
 
@@ -2574,13 +2815,17 @@ export default function Messages() {
 
         ================================================= */}
 
-        {konusmaSecilmedi ? (
+        {konusmaSecilmedi && !aramaModu ? (
           <View style={styles.fullScreenList}>
             <View style={styles.listTitleContainer}>
-              <Text style={styles.listTitle}>Konuşmalar</Text>
+              <Text style={styles.listTitle}>
+                {t("messages.conversations")}
+              </Text>
 
               {users.length > 0 ? (
-                <Text style={styles.listCount}>{users.length} konuşma</Text>
+                <Text style={styles.listCount}>
+                  {t("messages.conversationCount", { count: users.length })}
+                </Text>
               ) : null}
             </View>
 
@@ -2628,15 +2873,17 @@ export default function Messages() {
 
             ================================================= */}
 
-            <Pressable
-              style={styles.conversationsBackButton}
-
-              onPress={() => setSelectedUserId(null)}
-            >
-              <Text style={styles.conversationsBackIcon}>←</Text>
-
-              <Text style={styles.conversationsBackText}>Konuşmalar</Text>
-            </Pressable>
+            {!aramaModu && (
+              <Pressable
+                style={styles.conversationsBackButton}
+                onPress={() => setSelectedUserId(null)}
+              >
+                <Text style={styles.conversationsBackIcon}>←</Text>
+                <Text style={styles.conversationsBackText}>
+                  {t("messages.conversations")}
+                </Text>
+              </Pressable>
+            )}
 
             {/* =================================================
 
@@ -2650,10 +2897,10 @@ export default function Messages() {
 
             <View style={styles.panelContainer}>
               <ConversationPanel
+                aramaModu={aramaModu}
+                gelenAramaArayuzuDisarida={gelenAramaArayuzuDisarida}
                 selectedUserId={selectedUserId}
-
                 selectedUserName={selectedUserName}
-
                 selectedUserActive={selectedUserActive}
 
                 benEngelledim={benEngelledim}
@@ -2661,8 +2908,10 @@ export default function Messages() {
                 engellemeYukleniyor={engellemeYukleniyor}
                 engellemeIslemiYapiliyor={engellemeIslemiYapiliyor}
                 engellemeHatasi={engellemeHatasi}
+
                 onEngelle={() => void engellemeIslemi(true)}
                 onEngeliKaldir={() => void engellemeIslemi(false)}
+
                 onSikayetEt={() => {
                   const sikayetEdilenId = Number(selectedUserId);
 
@@ -2671,8 +2920,8 @@ export default function Messages() {
                     sikayetEdilenId <= 0
                   ) {
                     uyariGoster(
-                      "Şikâyet yapılamadı",
-                      "Şikâyet edilecek kullanıcı bulunamadı.",
+                      t("messages.report.failedTitle"),
+                      t("messages.report.userMissing"),
                     );
                     return;
                   }
@@ -2681,91 +2930,65 @@ export default function Messages() {
                     sikayetEdilenId,
                   });
                 }}
+
                 conversation={conversation}
-
                 conversationLoading={conversationLoading}
-
                 currentUserId={currentUserId}
-
                 yaziyor={yaziyor}
 
                 messageText={messageText}
-
                 sending={sending}
-
                 mediaSending={mediaSending}
-
                 recording={recording}
-
                 recordingSeconds={recordingSeconds}
-
                 mediaMenuOpen={mediaMenuOpen}
-
                 messageMedias={messageMedias}
 
                 formatDate={formatDate}
-
-                onMessageTextChange={handleMessageTextChange}
-
-                onSendMessage={handleSendMessage}
-
-                onDeleteMessage={handleDeleteMessage}
-
-                onMediaButtonClick={handleMediaButtonClick}
-
-                onOpenMediaPicker={openMediaPicker}
-
-                onStartRecording={startAudioRecording}
-
-                onStopRecording={stopAudioRecording}
-
                 getMediaUrl={getMediaUrl}
 
-                /*
+                onMessageTextChange={handleMessageTextChange}
+                onSendMessage={handleSendMessage}
+                onDeleteMessage={handleDeleteMessage}
+                onMediaButtonClick={handleMediaButtonClick}
+                onOpenMediaPicker={openMediaPicker}
+                onStartRecording={startAudioRecording}
+                onStopRecording={stopAudioRecording}
 
-
-
-                 * =================================================
-
-
-
-                 * SESLİ ARAMA
-
-
-
-                 * =================================================
-
-
-
-                 */
-
+                /* SESLİ ARAMA */
                 onSesliArama={handleSesliArama}
 
-                /*
-
-
-
-                 * =================================================
-
-
-
-                 * GÖRÜNTÜLÜ ARAMA
-
-
-
-                 * =================================================
-
-
-
-                 */
-
+                /* GÖRÜNTÜLÜ ARAMA */
                 onGoruntuluArama={handleGoruntuluArama}
 
                 aramaIzniAktif={aramaIzniAktif}
-
                 aramaIzniYukleniyor={aramaIzniYukleniyor}
-
                 onAramaIzniDegistir={aramaIzniDegistir}
+
+                /* FCM İLE GELEN ARAMA */
+                fcmGelenArama={
+                  gelenAramaArayuzuDisarida ? null : gelenAramaMesaji
+                }
+                fcmAramaEylemi={
+                  gelenAramaArayuzuDisarida ? null : fcmAramaEylemi
+                }
+
+                onFcmGelenAramaTuketildi={() => {
+                  setGelenAramaMesaji(null);
+                }}
+
+                onFcmAramaEylemiTuketildi={async (callId) => {
+                  try {
+                    await bekleyenAramayiSil();
+                    await gelenAramaBildiriminiKapat(callId);
+
+                    console.log("✅ FCM BİLDİRİMİ TEMİZLENDİ:", callId);
+                  } catch (hata) {
+                    console.error("❌ FCM BİLDİRİM TEMİZLEME HATASI:", hata);
+                  } finally {
+                    setFcmAramaEylemi(null);
+                  }
+                }}
               />
             </View>
           </View>
@@ -2774,6 +2997,7 @@ export default function Messages() {
 
       <Modal
         visible={uyariPenceresi !== null}
+
         transparent
         animationType="fade"
         statusBarTranslucent

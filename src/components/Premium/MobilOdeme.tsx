@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   ScrollView,
@@ -28,6 +29,7 @@ function MobilOdeme({
   onOdemeBaslat,
   yukleniyor,
 }: MobilOdemeProps) {
+  const { t } = useTranslation();
   const [telefon, setTelefon] = useState("");
 
   const [operator, setOperator] = useState("");
@@ -82,7 +84,7 @@ function MobilOdeme({
     setHata("");
 
     if (!operator) {
-      setHata("Lütfen operatörünüzü seçin.");
+      setHata(t("premium.mobile.errOperator"));
 
       return;
     }
@@ -90,7 +92,7 @@ function MobilOdeme({
     const temizTelefon = telefon.replace(/\s/g, "");
 
     if (temizTelefon.length !== 10) {
-      setHata("Telefon numarası 10 haneli olmalıdır.");
+      setHata(t("premium.mobile.errPhone"));
 
       return;
     }
@@ -115,11 +117,9 @@ function MobilOdeme({
           </View>
 
           <View style={styles.headerTextContainer}>
-            <Text style={styles.title}>Mobil Ödeme</Text>
+            <Text style={styles.title}>{t("premium.mobile.title")}</Text>
 
-            <Text style={styles.subtitle}>
-              Telefon faturanız üzerinden ödeme
-            </Text>
+            <Text style={styles.subtitle}>{t("premium.mobile.subtitle")}</Text>
           </View>
         </View>
 
@@ -128,7 +128,9 @@ function MobilOdeme({
         ================================================= */}
 
         <View style={styles.packageCard}>
-          <Text style={styles.packageLabel}>Seçilen Paket</Text>
+          <Text style={styles.packageLabel}>
+            {t("premium.mobile.selectedPackage")}
+          </Text>
 
           <View style={styles.packageRow}>
             <Text style={styles.packageName} numberOfLines={2}>
@@ -157,7 +159,7 @@ function MobilOdeme({
             OPERATÖR
         ================================================= */}
 
-        <Text style={styles.inputLabel}>Operatör</Text>
+        <Text style={styles.inputLabel}>{t("premium.mobile.operator")}</Text>
 
         <View style={styles.operatorContainer}>
           {[
@@ -220,13 +222,13 @@ function MobilOdeme({
         ================================================= */}
 
         <View style={styles.phoneInputContainer}>
-          <Text style={styles.inputLabel}>Cep Telefonu</Text>
+          <Text style={styles.inputLabel}>{t("premium.mobile.phone")}</Text>
 
           <TextInput
             value={telefon}
             onChangeText={(deger) => setTelefon(telefonFormatla(deger))}
             editable={!yukleniyor}
-            placeholder="5XX XXX XX XX"
+            placeholder={t("premium.mobile.phonePlaceholder")}
             placeholderTextColor="#A88F95"
             keyboardType="number-pad"
             maxLength={13}
@@ -241,10 +243,7 @@ function MobilOdeme({
         <View style={styles.infoBox}>
           <Text style={styles.infoIcon}>ℹ️</Text>
 
-          <Text style={styles.infoText}>
-            Mobil ödeme işlemi, seçtiğiniz operatör üzerinden
-            gerçekleştirilecektir.
-          </Text>
+          <Text style={styles.infoText}>{t("premium.mobile.info")}</Text>
         </View>
 
         {/* =================================================
@@ -260,7 +259,9 @@ function MobilOdeme({
             disabled={yukleniyor}
             activeOpacity={0.8}
           >
-            <Text style={styles.backButtonText}>Geri</Text>
+            <Text style={styles.backButtonText}>
+              {t("premium.mobile.back")}
+            </Text>
           </TouchableOpacity>
 
           {/* ÖDE */}
@@ -276,8 +277,10 @@ function MobilOdeme({
           >
             <Text style={styles.paymentButtonText}>
               {yukleniyor
-                ? "İşlem yapılıyor..."
-                : `ÖDE — ${tutar.toFixed(2).replace(".", ",")} TL`}
+                ? t("premium.mobile.processing")
+                : t("premium.mobile.pay", {
+                    price: tutar.toFixed(2).replace(".", ","),
+                  })}
             </Text>
           </TouchableOpacity>
         </View>

@@ -8,7 +8,20 @@ export type RootStackParamList = {
   };
 
   sifreSifirlama: undefined;
-  messages: undefined;
+
+  messages:
+    | {
+        gelenArayanId?: number;
+        aramaModu?: boolean;
+        callId?: string;
+        gelenAramaArayuzuDisarida?: boolean;
+      }
+    | undefined;
+
+  incomingCall: {
+    kaynakEkran?: string;
+  };
+
   premium: undefined;
   profile: undefined;
   profileEdit: undefined;
@@ -19,7 +32,7 @@ export type RootStackParamList = {
   favorilerimeEkleyenler: undefined;
   profilimeBakanlar: undefined;
 
-  // Yeni bildirim ekranı
+  // Bildirim ekranı
   bildirimler: undefined;
 
   paylasimlar: undefined;

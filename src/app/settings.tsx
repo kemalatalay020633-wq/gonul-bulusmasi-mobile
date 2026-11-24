@@ -1,6 +1,9 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { tokenGetir, tokenSil } from "../services/tokenServisi";
+
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +16,7 @@ import {
   View,
 } from "react-native";
 import { API_BASE_URL } from "../config/api";
+import { diliDegistir, type DesteklenenDil } from "../dil/i18n";
 
 const API_ADRESI = `${API_BASE_URL}/api`;
 
@@ -68,11 +72,47 @@ function AyarSatiri({
     </Pressable>
   );
 }
-
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const [siliniyor, setSiliniyor] = useState(false);
   const [hata, setHata] = useState("");
+
+  const { t, i18n } = useTranslation();
+  const [dilSeciliyor, setDilSeciliyor] = useState(false);
+
+  const dilListesi: {
+    kod: DesteklenenDil;
+    bayrak: string;
+    ad: string;
+  }[] = [
+    { kod: "tr", bayrak: "🇹🇷", ad: "Türkçe" },
+    { kod: "en", bayrak: "🇬🇧", ad: "English" },
+    { kod: "de", bayrak: "🇩🇪", ad: "Deutsch" },
+    { kod: "ar", bayrak: "🇸🇦", ad: "العربية" },
+    { kod: "ru", bayrak: "🇷🇺", ad: "Русский" },
+  ];
+
+  const dilSec = async (dil: DesteklenenDil) => {
+    try {
+      setDilSeciliyor(true);
+
+      const yenidenBaslatGerekli = await diliDegistir(dil);
+
+      if (yenidenBaslatGerekli) {
+        Alert.alert(
+          t("settings.language"),
+          dil === "ar"
+            ? "Arapça düzeninin uygulanması için uygulamayı tamamen kapatıp yeniden açın."
+            : "Dil yönünün uygulanması için uygulamayı tamamen kapatıp yeniden açın.",
+        );
+      }
+    } catch (error) {
+      console.error("DİL DEĞİŞTİRİLEMEDİ:", error);
+      Alert.alert(t("settings.error"), t("settings.languageChangeError"));
+    } finally {
+      setDilSeciliyor(false);
+    }
+  };
 
   const anaSayfayaGit = () => navigation.navigate("home");
   const profileGit = () => navigation.navigate("profile");
@@ -82,12 +122,12 @@ export default function SettingsScreen() {
   const silmeOnayiniAc = () => {
     setHata("");
     Alert.alert(
-      "Hesabını silmek istiyor musun?",
-      "Bu işlem geri alınamaz. Profilin, mesajların, medya dosyaların ve hesabına ait diğer veriler silinebilir.",
+      t("settings.deleteConfirmTitle"),
+      t("settings.deleteConfirmMessage"),
       [
-        { text: "Vazgeç", style: "cancel" },
+        { text: t("settings.cancel"), style: "cancel" },
         {
-          text: "Hesabı kalıcı sil",
+          text: t("settings.confirmDelete"),
           style: "destructive",
           onPress: () => void hesabimiSil(),
         },
@@ -102,11 +142,12 @@ export default function SettingsScreen() {
       setSiliniyor(true);
       setHata("");
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
+
       if (!token) {
-        const mesaj = "Oturum bulunamadı. Lütfen tekrar giriş yapın.";
+        const mesaj = t("settings.sessionMissing");
         setHata(mesaj);
-        Alert.alert("Oturum bulunamadı", mesaj);
+        Alert.alert(t("settings.sessionMissingTitle"), mesaj);
         return;
       }
 
@@ -121,7 +162,8 @@ export default function SettingsScreen() {
       const yanitMetni = await response.text();
 
       if (!response.ok) {
-        let hataMesaji = "Hesap silinemedi.";
+        let hataMesaji = t("settings.deleteFailed");
+
         if (yanitMetni.trim()) {
           try {
             const veri = JSON.parse(yanitMetni);
@@ -131,32 +173,42 @@ export default function SettingsScreen() {
             hataMesaji = yanitMetni;
           }
         }
+
         throw new Error(hataMesaji);
       }
 
-      await AsyncStorage.multiRemove([
-        "token",
-        "userId",
-        "username",
-        "user",
-        "currentUser",
-        "role",
+      // Hesap silme başarılı. Oturum bilgilerini temizle.
+      await Promise.all([
+        tokenSil(),
+        AsyncStorage.multiRemove([
+          "userId",
+          "username",
+          "user",
+          "currentUser",
+          "role",
+        ]),
       ]);
 
-      Alert.alert("Hesap silindi", "Hesabınız başarıyla silindi.", [
-        {
-          text: "Tamam",
-          onPress: () => navigation.replace("index"),
-        },
-      ]);
+      Alert.alert(
+        t("settings.deleteSuccessTitle"),
+        t("settings.deleteSuccess"),
+        [
+          {
+            text: t("settings.ok"),
+            onPress: () => navigation.replace("index"),
+          },
+        ],
+      );
     } catch (error) {
       console.error("HESAP SİLİNEMEDİ:", error);
+
       const hataMesaji =
         error instanceof Error
           ? error.message
-          : "Hesabınız silinemedi. Lütfen tekrar deneyin.";
+          : t("settings.deleteGenericError");
+
       setHata(hataMesaji);
-      Alert.alert("Hesap silinemedi", hataMesaji);
+      Alert.alert(t("settings.error"), hataMesaji);
     } finally {
       setSiliniyor(false);
     }
@@ -173,7 +225,7 @@ export default function SettingsScreen() {
           <View style={styles.ustSatir}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ana sayfaya dön"
+              accessibilityLabel={t("settings.back")}
               style={({ pressed }) => [
                 styles.geriButonu,
                 pressed && styles.geriButonuBasili,
@@ -181,10 +233,12 @@ export default function SettingsScreen() {
               onPress={anaSayfayaGit}
             >
               <Text style={styles.geriIkon}>‹</Text>
-              <Text style={styles.geriYazi}>Ana Sayfa</Text>
+              <Text style={styles.geriYazi}>{t("settings.back")}</Text>
             </Pressable>
             <View style={styles.ustRozet}>
-              <Text style={styles.ustRozetYazi}>HESAP</Text>
+              <Text style={styles.ustRozetYazi}>
+                {t("settings.accountBadge")}
+              </Text>
             </View>
           </View>
 
@@ -193,9 +247,9 @@ export default function SettingsScreen() {
               <Text style={styles.baslikIkon}>⚙</Text>
             </View>
             <View style={styles.baslikMetni}>
-              <Text style={styles.baslik}>Ayarlar</Text>
+              <Text style={styles.baslik}>{t("settings.title")}</Text>
               <Text style={styles.baslikAciklama}>
-                Hesabını ve uygulama tercihlerini yönet.
+                {t("settings.accountDescription")}
               </Text>
             </View>
           </View>
@@ -209,37 +263,73 @@ export default function SettingsScreen() {
                 <Text style={styles.hataIkonYazi}>!</Text>
               </View>
               <View style={styles.hataMetinAlani}>
-                <Text style={styles.hataBaslik}>Bir sorun oluştu</Text>
+                <Text style={styles.hataBaslik}>
+                  {t("settings.errorTitle")}
+                </Text>
                 <Text style={styles.hataMetni}>{hata}</Text>
-                <Text style={styles.hataKapat}>Kapatmak için dokun</Text>
+                <Text style={styles.hataKapat}>{t("settings.closeError")}</Text>
               </View>
             </Pressable>
           )}
+          <View style={styles.dilBolumu}>
+            <Text style={styles.dilBaslik}>{t("settings.language")}</Text>
 
+            <Text style={styles.dilAciklama}>
+              {t("settings.selectLanguage")}
+            </Text>
+
+            <View style={styles.dilListe}>
+              {dilListesi.map((dil) => {
+                const secili = i18n.language === dil.kod;
+
+                return (
+                  <Pressable
+                    key={dil.kod}
+                    disabled={dilSeciliyor}
+                    onPress={() => void dilSec(dil.kod)}
+                    style={[
+                      styles.dilSecenegi,
+                      secili && styles.dilSecenegiAktif,
+                    ]}
+                  >
+                    <Text style={styles.dilBayrak}>{dil.bayrak}</Text>
+
+                    <Text style={[styles.dilAdi, secili && styles.dilAdiAktif]}>
+                      {dil.ad}
+                    </Text>
+
+                    {secili && <Text style={styles.dilOnay}>✓</Text>}
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
           <View style={styles.bolumBasligi}>
-            <Text style={styles.bolumBaslik}>Hesap yönetimi</Text>
+            <Text style={styles.bolumBaslik}>
+              {t("settings.accountSection")}
+            </Text>
             <Text style={styles.bolumAciklama}>
-              Profiline ve iletişim alanlarına hızlı erişim.
+              {t("settings.accountDescription")}
             </Text>
           </View>
 
           <View style={styles.ayarKarti}>
             <AyarSatiri
               ikon="♙"
-              baslik="Profilim"
-              aciklama="Profilini görüntüle ve bilgilerini incele"
+              baslik={t("settings.profile")}
+              aciklama={t("settings.profileDescription")}
               onPress={profileGit}
             />
             <AyarSatiri
               ikon="✎"
-              baslik="Profili düzenle"
-              aciklama="Kişisel bilgilerini ve profil detaylarını güncelle"
+              baslik={t("settings.editProfile")}
+              aciklama={t("settings.editProfileDescription")}
               onPress={profilDuzenleyeGit}
             />
             <AyarSatiri
               ikon="✉"
-              baslik="Mesajlar"
-              aciklama="Sohbetlerini ve mesajlarını görüntüle"
+              baslik={t("settings.messages")}
+              aciklama={t("settings.messagesDescription")}
               onPress={mesajlaraGit}
               son
             />
@@ -250,7 +340,9 @@ export default function SettingsScreen() {
               <Text style={styles.guvenlikIkon}>⌑</Text>
             </View>
             <View style={styles.guvenlikMetinAlani}>
-              <Text style={styles.guvenlikBaslik}>Gizlilik ve güvenlik</Text>
+              <Text style={styles.guvenlikBaslik}>
+                {t("settings.privacyTitle")}
+              </Text>
               <Text style={styles.guvenlikMetni}>
                 Hesap bilgilerini güncel tut. Profilinde yalnızca paylaşmak
                 istediğin bilgileri bulundur ve kişisel bilgilerini koru.
@@ -264,9 +356,11 @@ export default function SettingsScreen() {
                 <Text style={styles.tehlikeIkon}>⌫</Text>
               </View>
               <View style={styles.tehlikeBaslikMetni}>
-                <Text style={styles.tehlikeBaslik}>Hesabı sil</Text>
+                <Text style={styles.tehlikeBaslik}>
+                  {t("settings.deleteTitle")}
+                </Text>
                 <Text style={styles.tehlikeAltBaslik}>
-                  Geri alınamayan işlem
+                  {t("settings.deleteSubtitle")}
                 </Text>
               </View>
             </View>
@@ -288,13 +382,15 @@ export default function SettingsScreen() {
               {siliniyor ? (
                 <>
                   <ActivityIndicator size="small" color={RENK.kirmizi} />
-                  <Text style={styles.silButonuYazi}>Hesap siliniyor...</Text>
+                  <Text style={styles.silButonuYazi}>
+                    {t("settings.deleting")}
+                  </Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.silButonuIkon}>⌫</Text>
                   <Text style={styles.silButonuYazi}>
-                    Hesabımı kalıcı olarak sil
+                    {t("settings.deleteButton")}
                   </Text>
                 </>
               )}
@@ -306,7 +402,7 @@ export default function SettingsScreen() {
               <Text style={styles.altLogoYazi}>G</Text>
             </View>
             <Text style={styles.altMarka}>Gönül Buluşması</Text>
-            <Text style={styles.altAciklama}>Güzel başlangıçlar burada.</Text>
+            <Text style={styles.altAciklama}>{t("settings.slogan")}</Text>
           </View>
         </View>
       </ScrollView>
@@ -684,5 +780,60 @@ const styles = StyleSheet.create({
     color: "#A49BAE",
     fontSize: 11,
     marginTop: 4,
+  },
+  dilBolumu: {
+    marginTop: 22,
+    padding: 17,
+    borderRadius: 20,
+    backgroundColor: RENK.kart,
+    borderWidth: 1,
+    borderColor: RENK.cizgi,
+  },
+  dilBaslik: {
+    color: RENK.metin,
+    fontSize: 17,
+    fontWeight: "900",
+  },
+  dilAciklama: {
+    color: RENK.ikincil,
+    fontSize: 12,
+    marginTop: 5,
+    marginBottom: 13,
+  },
+  dilListe: {
+    gap: 9,
+  },
+  dilSecenegi: {
+    minHeight: 48,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: RENK.cizgi,
+    backgroundColor: "#FFFFFF",
+  },
+  dilSecenegiAktif: {
+    backgroundColor: RENK.acikMor,
+    borderColor: RENK.mor,
+  },
+  dilBayrak: {
+    fontSize: 21,
+    marginRight: 11,
+  },
+  dilAdi: {
+    flex: 1,
+    color: RENK.metin,
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  dilAdiAktif: {
+    color: RENK.ana,
+    fontWeight: "900",
+  },
+  dilOnay: {
+    color: RENK.mor,
+    fontSize: 18,
+    fontWeight: "900",
   },
 });

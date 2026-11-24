@@ -1,3 +1,4 @@
+import { tokenGetir } from "../services/tokenServisi";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -13,6 +14,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 
 // src/app/home.tsx
 
@@ -115,9 +117,51 @@ type Profil = {
  */
 
 type EnumSecenegi = {
-  kod: number;
-
+  kod: string | number;
   aciklama: string;
+};
+
+/**
+ * Enum servisinden gelebilecek farklı alan adlarını tek bir modele dönüştürür.
+ * Ekranlarda daima kod/aciklama kullanılır; backend kayıt formatı değişmez.
+ */
+const enumVerisiniNormalizeEt = (veri: unknown): EnumSecenegi[] => {
+  let liste: unknown = veri;
+
+  if (!Array.isArray(liste) && liste && typeof liste === "object") {
+    const nesne = liste as Record<string, unknown>;
+    liste = nesne.content ?? nesne.data ?? nesne.result ?? [];
+  }
+
+  if (!Array.isArray(liste)) {
+    return [];
+  }
+
+  return liste
+    .map((satir: unknown) => {
+      if (!satir || typeof satir !== "object") {
+        return null;
+      }
+
+      const item = satir as Record<string, unknown>;
+      const kod = item.kod ?? item.code ?? item.id ?? item.value;
+      const aciklama =
+        item.aciklama ?? item.description ?? item.name ?? item.label;
+
+      if (
+        (typeof kod !== "string" && typeof kod !== "number") ||
+        aciklama === null ||
+        aciklama === undefined
+      ) {
+        return null;
+      }
+
+      return {
+        kod,
+        aciklama: String(aciklama),
+      };
+    })
+    .filter((item): item is EnumSecenegi => item !== null);
 };
 
 /*
@@ -178,6 +222,7 @@ type ProfilCevabi = {
 
 export default function Profil() {
   const navigation = useNavigation<any>();
+  const { t } = useTranslation();
 
   const [kullanici, setKullanici] = useState<Kullanici | null>(null);
 
@@ -290,43 +335,32 @@ export default function Profil() {
       ]);
 
       if (meslekResponse.ok) {
-        const data = await meslekResponse.json();
-
-        if (Array.isArray(data)) {
-          setMeslekler(data);
-        }
+        setMeslekler(enumVerisiniNormalizeEt(await meslekResponse.json()));
       }
 
       if (egitimResponse.ok) {
-        const data = await egitimResponse.json();
-
-        if (Array.isArray(data)) {
-          setEgitimler(data);
-        }
+        setEgitimler(enumVerisiniNormalizeEt(await egitimResponse.json()));
       }
 
       if (medeniResponse.ok) {
-        const data = await medeniResponse.json();
-
-        if (Array.isArray(data)) {
-          setMedeniDurumlar(data);
-        }
+        setMedeniDurumlar(enumVerisiniNormalizeEt(await medeniResponse.json()));
       }
 
       if (mezhepResponse.ok) {
-        const data = await mezhepResponse.json();
-
-        if (Array.isArray(data)) {
-          setMezhepler(data);
-        }
+        setMezhepler(enumVerisiniNormalizeEt(await mezhepResponse.json()));
       }
 
       if (ilgiResponse.ok) {
-        const data = await ilgiResponse.json();
+        const ilgiVerisi = await ilgiResponse.json();
+        const normalizeIlgiler = enumVerisiniNormalizeEt(ilgiVerisi);
 
-        if (Array.isArray(data)) {
-          setIlgiAlanlari(data);
-        }
+        console.log("İLGİ ALANLARI ENUM VERİSİ:", ilgiVerisi);
+        console.log("İLGİ ALANLARI NORMALİZE:", normalizeIlgiler);
+
+        setIlgiAlanlari(normalizeIlgiler);
+      } else {
+        console.log("İLGİ ALANLARI ENUM HTTP HATASI:", ilgiResponse.status);
+        setIlgiAlanlari([]);
       }
     } catch (error) {
       console.log("ENUM GETİRME HATASI:", error);
@@ -371,7 +405,11 @@ export default function Profil() {
         );
 
         if (!soruResponse.ok) {
-          throw new Error(`Sorular alinamadi. HTTP ${soruResponse.status}`);
+          throw new Error(
+            t("myProfile.errors.questionsLoadHttp", {
+              status: soruResponse.status,
+            }),
+          );
         }
 
         const soruVerisi = await soruResponse.json();
@@ -393,7 +431,11 @@ export default function Profil() {
         );
 
         if (!cevapResponse.ok) {
-          throw new Error(`Cevaplar alinamadi. HTTP ${cevapResponse.status}`);
+          throw new Error(
+            t("myProfile.errors.answersLoadHttp", {
+              status: cevapResponse.status,
+            }),
+          );
         }
 
         const cevapVerisi = await cevapResponse.json();
@@ -526,7 +568,7 @@ export default function Profil() {
 
   const soruCevaplariniKaydet = async () => {
     if (!profil?.id) {
-      setSoruCevapHatasi("Önce profil bilgilerinizi oluşturmanız gerekiyor.");
+      setSoruCevapHatasi(t("myProfile.errors.profileRequired"));
 
       return;
     }
@@ -536,7 +578,7 @@ export default function Profil() {
 
       setSoruCevapHatasi("");
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       if (!token) {
         navigation.replace("index");
@@ -576,7 +618,9 @@ export default function Profil() {
 
       if (!mevcutResponse.ok) {
         throw new Error(
-          `Mevcut cevaplar alinamadi. HTTP ${mevcutResponse.status}`,
+          t("myProfile.errors.existingAnswersLoadHttp", {
+            status: mevcutResponse.status,
+          }),
         );
       }
 
@@ -634,7 +678,7 @@ export default function Profil() {
             });
 
             if (!response.ok) {
-              throw new Error("Cevap kaydedilemedi. Lütfen tekrar deneyin.");
+              throw new Error(t("myProfile.errors.answerSaveFailed"));
             }
           } else if (String(mevcutCevap.answer || "").trim() !== yeniCevap) {
             const response = await fetch(
@@ -656,7 +700,7 @@ export default function Profil() {
             );
 
             if (!response.ok) {
-              throw new Error("Cevap güncellenemedi. Lütfen tekrar deneyin.");
+              throw new Error(t("myProfile.errors.answerUpdateFailed"));
             }
           }
         } else if (mevcutCevap) {
@@ -675,7 +719,7 @@ export default function Profil() {
           );
 
           if (!response.ok && response.status !== 404) {
-            throw new Error("Cevap silinemedi. Lütfen tekrar deneyin.");
+            throw new Error(t("myProfile.errors.answerDeleteFailed"));
           }
         }
       }
@@ -688,14 +732,17 @@ export default function Profil() {
 
       await soruCevaplariGetir(token, profil.id);
 
-      Alert.alert("Başarılı", "Profil cevaplarınız başarıyla kaydedildi.");
+      Alert.alert(
+        t("myProfile.alerts.successTitle"),
+        t("myProfile.alerts.answersSaved"),
+      );
     } catch (error) {
       console.log("SORU CEVAP KAYDETME HATASI:", error);
 
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil cevapları kaydedilirken bir hata oluştu.";
+          : t("myProfile.errors.answersSaveFailed");
 
       setSoruCevapHatasi(mesaj);
     } finally {
@@ -719,7 +766,7 @@ export default function Profil() {
 
       setHata("");
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
 
       const kayitliUserId = await AsyncStorage.getItem("userId");
 
@@ -746,7 +793,7 @@ export default function Profil() {
        */
 
       if (!kayitliUserId) {
-        setHata("Kullanıcı bilgisi bulunamadı.");
+        setHata(t("myProfile.errors.userNotFound"));
 
         return;
       }
@@ -760,7 +807,7 @@ export default function Profil() {
        */
 
       if (!Number.isFinite(userId) || userId <= 0) {
-        setHata("Geçersiz kullanıcı bilgisi.");
+        setHata(t("myProfile.errors.invalidUser"));
 
         return;
       }
@@ -815,7 +862,9 @@ export default function Profil() {
 
       if (!kullaniciResponse.ok) {
         throw new Error(
-          `Kullanıcı bilgisi alınamadı. HTTP ${kullaniciResponse.status}`,
+          t("myProfile.errors.userLoadHttp", {
+            status: kullaniciResponse.status,
+          }),
         );
       }
 
@@ -827,7 +876,9 @@ export default function Profil() {
 
       if (!profilResponse.ok) {
         throw new Error(
-          `Profil bilgisi alınamadı. HTTP ${profilResponse.status}`,
+          t("myProfile.errors.profileLoadHttp", {
+            status: profilResponse.status,
+          }),
         );
       }
 
@@ -884,13 +935,13 @@ export default function Profil() {
       const mesaj =
         error instanceof Error
           ? error.message
-          : "Profil yüklenirken bir hata oluştu.";
+          : t("myProfile.errors.loadFailed");
 
       setHata(mesaj);
     } finally {
       setYukleniyor(false);
     }
-  }, [navigation, enumlariGetir, soruCevaplariGetir]);
+  }, [navigation, enumlariGetir, soruCevaplariGetir, t]);
 
   /*
 
@@ -905,6 +956,21 @@ export default function Profil() {
   useEffect(() => {
     profilGetir();
   }, [profilGetir]);
+
+  // Backend'de saklanan virgülle ayrılmış enum kodlarını ekranda açıklamaya çevir.
+  const ilgiAlanlariMetni = String(profil?.interests ?? "")
+    .split(",")
+    .map((kod) => kod.trim())
+    .filter(Boolean)
+    .map((kod) => {
+      const bulunan = ilgiAlanlari.find(
+        (item) => String(item.kod).trim() === kod,
+      );
+
+      return bulunan?.aciklama ?? "";
+    })
+    .filter(Boolean)
+    .join(", ");
 
   /*
 
@@ -977,7 +1043,12 @@ export default function Profil() {
    */
 
   if (!kullanici) {
-    return <ProfileError error="Kullanici bulunamadi." onHome={geriDon} />;
+    return (
+      <ProfileError
+        error={t("myProfile.errors.userNotFound")}
+        onHome={geriDon}
+      />
+    );
   }
 
   /*
@@ -1104,7 +1175,7 @@ export default function Profil() {
 
             <View style={styles.baslikGrubu}>
               <Text style={styles.baslikIkon}>♙</Text>
-              <Text style={styles.ustBaslik}>Profilim</Text>
+              <Text style={styles.ustBaslik}>{t("myProfile.title")}</Text>
               <View style={styles.baslikSusleme}>
                 <View style={styles.suslemeCizgi} />
                 <Text style={styles.suslemeKalp}>♡</Text>
@@ -1149,39 +1220,51 @@ export default function Profil() {
               {kullanici.online ? (
                 <View style={styles.onlineEtiket}>
                   <View style={styles.onlineEtiketNokta} />
-                  <Text style={styles.onlineText}>Çevrimiçi</Text>
+                  <Text style={styles.onlineText}>{t("myProfile.online")}</Text>
                 </View>
               ) : (
                 <View style={styles.cevrimdisiEtiket}>
-                  <Text style={styles.cevrimdisiText}>Çevrimdışı</Text>
+                  <Text style={styles.cevrimdisiText}>
+                    {t("myProfile.offline")}
+                  </Text>
                 </View>
               )}
               {profil?.profileVerified ? (
                 <View style={styles.dogrulamaEtiket}>
-                  <Text style={styles.dogrulamaText}>✓ Profil Doğrulandı</Text>
+                  <Text style={styles.dogrulamaText}>
+                    ✓ {t("myProfile.verified")}
+                  </Text>
                 </View>
               ) : null}
             </View>
           </View>
 
           <Pressable style={styles.guncelleButonu} onPress={profilGuncelle}>
-            <Text style={styles.guncelleButonuText}>✎ Profili Düzenle</Text>
+            <Text style={styles.guncelleButonuText}>
+              ✎ {t("myProfile.editProfile")}
+            </Text>
           </Pressable>
         </View>
 
         <View style={styles.bolumBaslikSatir}>
           <Text style={styles.bolumIkon}>✦</Text>
-          <Text style={styles.bolumBaslikMetin}>Bilgilerim</Text>
+          <Text style={styles.bolumBaslikMetin}>
+            {t("myProfile.myInformation")}
+          </Text>
         </View>
 
         <View style={styles.bilgiIkiSutun}>
           <View style={styles.bilgiSutunKart}>
-            <Text style={styles.bilgiSutunBaslik}>Hesap Bilgilerim</Text>
+            <Text style={styles.bilgiSutunBaslik}>
+              {t("myProfile.accountInformation")}
+            </Text>
             <UserInfo user={userInfoModel} />
           </View>
 
           <View style={styles.bilgiSutunKart}>
-            <Text style={styles.bilgiSutunBaslik}>Profil Bilgilerim</Text>
+            <Text style={styles.bilgiSutunBaslik}>
+              {t("myProfile.profileInformation")}
+            </Text>
             {profil ? (
               <ProfileInfo
                 profile={profileInfoModel}
@@ -1193,7 +1276,7 @@ export default function Profil() {
               />
             ) : (
               <Text style={styles.bilgiYok}>
-                Henüz profil bilgilerinizi tamamlamadınız.
+                {t("myProfile.profileIncomplete")}
               </Text>
             )}
           </View>
@@ -1202,17 +1285,19 @@ export default function Profil() {
           <>
             {profil.about ? (
               <View style={styles.hakkimdaKart}>
-                <Text style={styles.hakkimdaBaslik}>❝ Hakkımda</Text>
+                <Text style={styles.hakkimdaBaslik}>
+                  ❝ {t("myProfile.about")}
+                </Text>
                 <Text style={styles.hakkimdaMetin}>{profil.about}</Text>
               </View>
             ) : null}
 
-            {profil.interests ? (
+            {ilgiAlanlariMetni ? (
               <View style={styles.ilgiKart}>
-                <Text style={styles.hakkimdaBaslik}>★ İlgi Alanlarım</Text>
-                <Text style={styles.hakkimdaMetin}>
-                  {String(profil.interests)}
+                <Text style={styles.hakkimdaBaslik}>
+                  ★ {t("myProfile.interests")}
                 </Text>
+                <Text style={styles.hakkimdaMetin}>{ilgiAlanlariMetni}</Text>
               </View>
             ) : null}
           </>
@@ -1222,12 +1307,14 @@ export default function Profil() {
           <View style={styles.soruDisKart}>
             <View style={styles.soruBaslikSatir}>
               <Text style={styles.bolumIkon}>?</Text>
-              <Text style={styles.bolumBaslikMetin}>Sorular & Cevaplar</Text>
+              <Text style={styles.bolumBaslikMetin}>
+                {t("myProfile.questionsAnswers")}
+              </Text>
             </View>
             {soruCevapYukleniyor ? (
               <View style={styles.soruCevapYukleniyor}>
                 <Text style={styles.soruCevapYukleniyorText}>
-                  Sorular ve cevaplar yükleniyor...
+                  {t("myProfile.loadingQuestions")}
                 </Text>
               </View>
             ) : (

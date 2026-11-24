@@ -16,7 +16,10 @@ import * as RNFS from "react-native-fs";
 import Video from "react-native-video";
 import { RTCView } from "react-native-webrtc";
 import type { MediaType } from "../../hooks/useMessages";
-import aramaWebRTC, { type AramaTuru } from "../../services/AramaWebRTC";
+import aramaWebRTC, {
+  type AramaMesaji,
+  type AramaTuru,
+} from "../../services/AramaWebRTC";
 
 import type { MessageDto } from "../../types/message";
 import type { MessageMediaDto } from "../../types/messageMedia";
@@ -32,70 +35,86 @@ type RTCSessionDescriptionInit = {
 type AramaDurumu = "YOK" | "ARAMA_YAPILIYOR" | "GELEN_ARAMA" | "BAGLANDI";
 
 type ConversationPanelProps = {
+  // Uygulama kapalıyken gelen arama bildirimiyle açılış
+  aramaModu: boolean;
+  gelenAramaArayuzuDisarida: boolean;
+
+  // Mesajlar
   conversation: MessageDto[];
 
   selectedUserId: number | null;
-
   currentUserId: number | null;
-
   selectedUserName: string;
-
   selectedUserActive: boolean | null;
 
   yaziyor: boolean;
-
   conversationLoading: boolean;
 
   messageMedias: Record<number, MessageMediaDto[]>;
 
   formatDate: (date: string) => string;
-
   getMediaUrl: (mediaUrl: string) => string;
 
+  // Mesaj gönderme
   messageText: string;
-
   sending: boolean;
-
   mediaSending: boolean;
 
+  // Ses kaydı
   recording: boolean;
-
   recordingSeconds: number;
 
+  // Medya menüsü
   mediaMenuOpen: boolean;
 
+  // Mesaj işlemleri
   onMessageTextChange: (value: string) => void;
-
   onSendMessage: () => void;
-
   onDeleteMessage: (messageId: number) => void;
 
+  // Medya işlemleri
   onMediaButtonClick: () => void;
-
   onOpenMediaPicker: (type: MediaType) => void;
 
+  // Ses kaydı işlemleri
   onStartRecording: () => void;
-
   onStopRecording: () => void;
 
   // Kullanıcı engelleme
   benEngelledim: boolean;
   beniEngelledi: boolean;
+
   engellemeYukleniyor: boolean;
   engellemeIslemiYapiliyor: boolean;
   engellemeHatasi: string | null;
+
   onEngelle: () => void;
   onEngeliKaldir: () => void;
   onSikayetEt: () => void;
-  onSesliArama: () => void;
 
+  // Sesli ve görüntülü arama
+  onSesliArama: () => void;
   onGoruntuluArama: () => void;
 
+  // Arama izni
   aramaIzniAktif: boolean;
-
   aramaIzniYukleniyor: boolean;
-
   onAramaIzniDegistir: () => void;
+
+  // FCM ile gelen arama
+  fcmGelenArama: Extract<AramaMesaji, { tip: "CALL_OFFER" }> | null;
+
+  // FCM bildiriminden gelen eylem
+  fcmAramaEylemi: {
+    actionId: string;
+    callId: string;
+  } | null;
+
+  // FCM araması panel tarafından devralındıktan sonra çağrılır
+  onFcmGelenAramaTuketildi: () => void;
+
+  // FCM eylemi tamamlandığında bildirim temizliği için çağrılır
+  onFcmAramaEylemiTuketildi: (callId: string) => void | Promise<void>;
 };
 
 type VideoPlayerModalProps = {
@@ -157,6 +176,7 @@ function VideoPlayerContent({
 }
 
 function ConversationPanel({
+  aramaModu,
   conversation,
 
   selectedUserId,
@@ -211,15 +231,20 @@ function ConversationPanel({
   onEngelle,
   onEngeliKaldir,
   onSikayetEt,
-  onSesliArama,
 
+  onSesliArama,
   onGoruntuluArama,
 
   aramaIzniAktif,
-
   aramaIzniYukleniyor,
-
   onAramaIzniDegistir,
+
+  // FCM üzerinden gelen arama
+  gelenAramaArayuzuDisarida,
+  fcmGelenArama,
+  fcmAramaEylemi,
+  onFcmGelenAramaTuketildi,
+  onFcmAramaEylemiTuketildi,
 }: ConversationPanelProps) {
   const listeRef = useRef<FlatList<MessageDto>>(null);
 
@@ -260,9 +285,15 @@ function ConversationPanel({
    * ============================================================
    */
 
-  const [aramaGorunur, setAramaGorunur] = useState(false);
+  // Soğuk başlangıçta gelen arama modu açıksa arama penceresini hemen göster.
+  // SDP/FCM teklifi gelene kadar mesaj paneli kullanıcıya gösterilmez.
+  const [aramaGorunur, setAramaGorunur] = useState(
+    aramaModu && !gelenAramaArayuzuDisarida,
+  );
   const [aramaTuru, setAramaTuru] = useState<AramaTuru>("SES");
-  const [aramaDurumu, setAramaDurumu] = useState<AramaDurumu>("YOK");
+  const [aramaDurumu, setAramaDurumu] = useState<AramaDurumu>(
+    aramaModu && !gelenAramaArayuzuDisarida ? "GELEN_ARAMA" : "YOK",
+  );
   const [aramaArayanId, setAramaArayanId] = useState<number | null>(null);
   const [gelenTeklif, setGelenTeklif] =
     useState<RTCSessionDescriptionInit | null>(null);
@@ -276,11 +307,53 @@ function ConversationPanel({
     null,
   );
   const aramaSonlandirmaRef = useRef(false);
+  // Aynı gelen aramanın birden fazla kez kabul edilmesini engeller.
+  const kabulIsleniyorRef = useRef(false);
+  const [kabulIsleniyor, setKabulIsleniyor] = useState(false);
   const uzakStreamKontrolRef = useRef<ReturnType<typeof setInterval> | null>(
     null,
   );
   const aramaListenerTemizleyicilerRef = useRef<Array<() => void>>([]);
+  // Panel ilk açıldığında FCM teklifi varsa WebRTC oturumunu koru.
+  const ilkFcmGelenAramaRef = useRef(fcmGelenArama);
+  // Aynı FCM eyleminin birden fazla kez çalışmasını engeller.
+  const islenenFcmEylemiRef = useRef<string | null>(null);
+  /*
+   * ============================================================
+   * FCM İLE GELEN ARAMAYI PANEL EKRANINA AKTAR
+   * ============================================================
+   */
 
+  useEffect(() => {
+    if (gelenAramaArayuzuDisarida || !fcmGelenArama) {
+      return;
+    }
+
+    console.log(
+      "📞 FCM ARAMASI CONVERSATION PANEL'E AKTARILIYOR:",
+      fcmGelenArama.arayanId,
+    );
+
+    // selectedUserId değişiminde çalışan WebRTC hazırlığı bu oturumu sıfırlamasın.
+    ilkFcmGelenAramaRef.current = fcmGelenArama;
+
+    // Yeni arama için eski sonlandırma kilidini kaldır.
+    aramaSonlandirmaRef.current = false;
+
+    // FCM ile yüklenmiş WebRTC oturumunu değiştirme.
+    setAramaTuru(fcmGelenArama.aramaTuru);
+    setHoparlorAcik(fcmGelenArama.aramaTuru === "VIDEO");
+
+    setAramaArayanId(fcmGelenArama.arayanId);
+    setGelenTeklif(fcmGelenArama.teklif);
+
+    setAramaDurumu("GELEN_ARAMA");
+    setAramaGorunur(true);
+
+    console.log("✅ FCM GELEN ARAMA PANELDE GÖSTERİLİYOR.");
+
+    onFcmGelenAramaTuketildi();
+  }, [gelenAramaArayuzuDisarida, fcmGelenArama, onFcmGelenAramaTuketildi]);
   /*
    * ============================================================
    * WEBRTC ARAMA YÖNETİMİ
@@ -362,6 +435,8 @@ function ConversationPanel({
     } finally {
       setAramaSonuGorunur(false);
       setAramaSonuMesaji("");
+      kabulIsleniyorRef.current = false;
+      setKabulIsleniyor(false);
       setAramaGorunur(false);
       setAramaDurumu("YOK");
       setAramaArayanId(null);
@@ -374,34 +449,48 @@ function ConversationPanel({
     }
   }, []);
 
-  const aramaSonlandirmayiGoster = useCallback((mesaj: string) => {
-    // UI her durumda kapanmalı. Kilit yalnızca WebRTC cleanup işleminin
-    // tekrar çalışmasını engeller; ekranın kapanmasını engellememelidir.
-    const zatenSonlandiriliyor = aramaSonlandirmaRef.current;
-    aramaSonlandirmaRef.current = true;
+  const aramaSonlandirmayiGoster = useCallback(
+    (mesaj: string, webRtcTemizliginiYap = true) => {
+      // UI her durumda kapanmalı. Kilit yalnızca WebRTC cleanup işleminin
+      // tekrar çalışmasını engeller; ekranın kapanmasını engellememelidir.
+      const zatenSonlandiriliyor = aramaSonlandirmaRef.current;
+      aramaSonlandirmaRef.current = true;
 
-    console.log("📴 ARAMA SONLANDI:", mesaj);
+      console.log("📴 ARAMA SONLANDI:", mesaj);
 
-    setAramaSonuGorunur(false);
-    setAramaSonuMesaji(mesaj);
-    setAramaGorunur(false);
-    setAramaDurumu("YOK");
-    setGelenTeklif(null);
-    setAramaArayanId(null);
-    setYerelStreamUrl(null);
-    setUzakStreamUrl(null);
-    setAramaSuresi(0);
-    setHoparlorAcik(false);
+      setAramaSonuGorunur(false);
+      setAramaSonuMesaji(mesaj);
+      setAramaGorunur(false);
+      kabulIsleniyorRef.current = false;
+      setKabulIsleniyor(false);
+      setAramaDurumu("YOK");
+      setGelenTeklif(null);
+      setAramaArayanId(null);
+      setYerelStreamUrl(null);
+      setUzakStreamUrl(null);
+      setAramaSuresi(0);
+      setHoparlorAcik(false);
 
-    if (zatenSonlandiriliyor) {
-      console.log("⛔ WebRTC zaten temizleniyor; yalnızca UI kapatıldı.");
-      return;
-    }
+      // WebRTC temizliği servis tarafından yönetiliyorsa
+      // yalnızca UI kapatılır.
+      if (!webRtcTemizliginiYap) {
+        console.log("📴 WebRTC temizliği servis tarafından yönetiliyor.");
+        return;
+      }
 
-    void aramaWebRTC.aramayiBitir(true).catch((hata) => {
-      console.error("❌ KARŞI TARAF SONLANDIRMA TEMİZLİĞİ HATASI:", hata);
-    });
-  }, []);
+      // Daha önce cleanup başlatılmışsa ikinci kez çalıştırma.
+      if (zatenSonlandiriliyor) {
+        console.log("⛔ WebRTC zaten temizleniyor; yalnızca UI kapatıldı.");
+        return;
+      }
+
+      void aramaWebRTC.aramayiBitir(true).catch((hata) => {
+        console.error("❌ KARŞI TARAF SONLANDIRMA TEMİZLİĞİ HATASI:", hata);
+      });
+    },
+    [],
+  );
+
   const aramaOlaylariniKur = useCallback(() => {
     // ConversationPanel kendi listener'larını yönetir.
     // Singleton AramaWebRTC üzerindeki diğer listener'lara dokunulmaz.
@@ -480,7 +569,7 @@ function ConversationPanel({
           yerelStreamiGoster();
           aramaAkisiniGuncelle();
 
-          setAramaDurumu("BAGLANDI");
+          // //setAramaDurumu("BAGLANDI");
 
           console.log("🟢 ARAMA DURUMU: BAGLANDI");
         } catch (error) {
@@ -533,7 +622,10 @@ function ConversationPanel({
         console.log("📴 KARŞI TARAF ARAMAYI SONLANDIRDI");
         console.log("======================================");
 
-        void aramaSonlandirmayiGoster("Karşı taraf görüşmeyi sonlandırdı.");
+        void aramaSonlandirmayiGoster(
+          "Karşı taraf görüşmeyi sonlandırdı.",
+          false,
+        );
       }),
     );
 
@@ -683,7 +775,11 @@ function ConversationPanel({
   ]);
 
   useEffect(() => {
-    if (currentUserId === null || selectedUserId === null) {
+    if (
+      gelenAramaArayuzuDisarida ||
+      currentUserId === null ||
+      selectedUserId === null
+    ) {
       return;
     }
 
@@ -693,7 +789,13 @@ function ConversationPanel({
     console.log("📞 Seçili kullanıcı:", selectedUserId);
     console.log("======================================");
 
-    aramaWebRTC.ayarla(currentUserId, selectedUserId, "SES");
+    // WebRTC oturumu arama başlatılırken gerçek arama türüyle oluşturulur.
+    // Burada varsayılan SES oturumu oluşturulmaz.
+    if (ilkFcmGelenAramaRef.current) {
+      console.log("📞 FCM İLE GELEN WEBRTC OTURUMU KORUNUYOR.");
+    } else {
+      console.log("📞 WEBRTC OTURUMU ARAMA TÜRÜNE GÖRE BAŞLATILACAK.");
+    }
 
     aramaOlaylariniKur();
 
@@ -710,7 +812,12 @@ function ConversationPanel({
 
       aramaListenerTemizleyicilerRef.current = [];
     };
-  }, [currentUserId, selectedUserId, aramaOlaylariniKur]);
+  }, [
+    gelenAramaArayuzuDisarida,
+    currentUserId,
+    selectedUserId,
+    aramaOlaylariniKur,
+  ]);
   useEffect(() => {
     if (!aramaGorunur) {
       return;
@@ -795,36 +902,55 @@ function ConversationPanel({
     }
   };
 
-  const gelenAramayiKabulEt = async () => {
+  const gelenAramayiKabulEt = async (kaynak: "EKRAN" | "FCM" = "EKRAN") => {
+    // Aynı arama için devam eden kabul işlemi varsa ikinci çağrıyı engelle.
+    if (kabulIsleniyorRef.current) {
+      console.warn(`⛔ GELEN ARAMA ZATEN KABUL EDİLİYOR. Kaynak: ${kaynak}`);
+      return;
+    }
+
     if (
       aramaArayanId === null ||
       gelenTeklif === null ||
       currentUserId === null
     ) {
+      console.warn("⚠️ Arama kabulü için gerekli bilgiler eksik.");
       return;
     }
 
+    // İlk await işleminden önce kilitle.
+    kabulIsleniyorRef.current = true;
+    setKabulIsleniyor(true);
+
+    console.log("📞 GELEN ARAMA KABUL İŞLEMİ BAŞLADI:", {
+      kaynak,
+      arayanId: aramaArayanId,
+    });
+
     try {
-      // Önceki görüşmeden kalan kilidi kaldır.
       aramaSonlandirmaRef.current = false;
 
-      // Gelen aramanın oturum kimliğini değiştirme.
       setHoparlorAcik(aramaTuru === "VIDEO");
       setAramaDurumu("GELEN_ARAMA");
 
       await aramaWebRTC.teklifiKabulEt(gelenTeklif);
 
       yerelStreamiGoster();
+
       setGelenTeklif(null);
+
       aramaAkisiniGuncelle();
+
+      console.log("✅ GELEN ARAMA KABUL İŞLEMİ TAMAMLANDI.");
     } catch (error) {
-      console.error("GELEN ARAMA KABUL HATASI:", error);
+      console.error("❌ GELEN ARAMA KABUL HATASI:", error);
 
       Alert.alert(
         "Arama kabul edilemedi",
         error instanceof Error ? error.message : "Bilinmeyen bir hata oluştu.",
       );
 
+      // Temizleme fonksiyonu kilidi de sıfırlayacak.
       await aramaTemizle();
     }
   };
@@ -864,6 +990,59 @@ function ConversationPanel({
       console.error("❌ GELEN ARAMA REDDETME HATASI:", hata);
     }
   };
+  /*
+   * ============================================================
+   * FCM BİLDİRİM EYLEMLERİNİ İŞLE
+   * ============================================================
+   */
+
+  useEffect(() => {
+    if (!fcmAramaEylemi || !gelenTeklif) {
+      return;
+    }
+
+    if (aramaDurumu !== "GELEN_ARAMA") {
+      return;
+    }
+
+    const eylemAnahtari = `${fcmAramaEylemi.callId}:${fcmAramaEylemi.actionId}`;
+
+    // Aynı eylem ikinci kez çalışmasın.
+    if (islenenFcmEylemiRef.current === eylemAnahtari) {
+      return;
+    }
+
+    islenenFcmEylemiRef.current = eylemAnahtari;
+
+    console.log("📞 FCM ARAMA EYLEMİ İŞLENİYOR:", {
+      actionId: fcmAramaEylemi.actionId,
+      callId: fcmAramaEylemi.callId,
+    });
+
+    // Bildirim temizliğini başlat.
+    void Promise.resolve(
+      onFcmAramaEylemiTuketildi(fcmAramaEylemi.callId),
+    ).catch((hata) => {
+      console.error("❌ FCM BİLDİRİM TEMİZLEME HATASI:", hata);
+    });
+
+    if (fcmAramaEylemi.actionId === "answer") {
+      console.log("📞 BİLDİRİMDEN CEVAPLA SEÇİLDİ");
+
+      void gelenAramayiKabulEt("FCM");
+      return;
+    }
+
+    if (fcmAramaEylemi.actionId === "reject") {
+      console.log("📵 BİLDİRİMDEN REDDET SEÇİLDİ");
+
+      void gelenAramayiReddet();
+      return;
+    }
+
+    console.log("📞 NORMAL BİLDİRİM DOKUNUŞU");
+  }, [fcmAramaEylemi, gelenTeklif, aramaDurumu, onFcmAramaEylemiTuketildi]);
+
   const aramaSuresiniFormatla = (toplamSaniye: number) => {
     const dakika = Math.floor(toplamSaniye / 60);
     const saniye = toplamSaniye % 60;
@@ -1805,7 +1984,7 @@ function ConversationPanel({
    * ============================================================
    */
 
-  if (selectedUserId === null) {
+  if (selectedUserId === null && !aramaGorunur) {
     return (
       <View style={styles.emptyPanel}>
         <View style={styles.emptyContent}>
@@ -1845,7 +2024,7 @@ function ConversationPanel({
 
           <View style={styles.headerInfo}>
             <Text style={styles.headerName} numberOfLines={1}>
-              {selectedUserName || "Kullanıcı"}
+              {selectedUserName || (aramaModu ? "Gelen arama" : "Kullanıcı")}
             </Text>
 
             {selectedUserActive !== null && (
@@ -2136,6 +2315,9 @@ function ConversationPanel({
                   objectFit="cover"
                   mirror={false}
                   zOrder={0}
+                  onDimensionsChange={(event) => {
+                    console.log("🔵 UZAK VIDEO BOYUTU:", event.nativeEvent);
+                  }}
                 />
               ) : (
                 <View style={styles.videoBeklemeAlani}>
@@ -2155,6 +2337,9 @@ function ConversationPanel({
                   objectFit="cover"
                   mirror
                   zOrder={1}
+                  onDimensionsChange={(event) => {
+                    console.log("🟢 YEREL VIDEO BOYUTU:", event.nativeEvent);
+                  }}
                 />
               )}
             </View>
@@ -2179,27 +2364,52 @@ function ConversationPanel({
               </Text>
             </View>
           )}
-
           {aramaDurumu === "GELEN_ARAMA" ? (
-            <View style={styles.gelenAramaButonlari}>
-              <Pressable
-                style={[styles.aramaKontrolButonu, styles.aramaReddetButonu]}
-                onPress={gelenAramayiReddet}
-              >
-                <Text style={styles.aramaKontrolIkon}>✕</Text>
-                <Text style={styles.aramaKontrolMetni}>Reddet</Text>
-              </Pressable>
+            gelenTeklif === null ? (
+              <View style={styles.gelenAramaButonlari}>
+                <Text style={styles.aramaKontrolMetni}>
+                  Gelen arama bağlantısı hazırlanıyor...
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.gelenAramaButonlari}>
+                {/* GELEN ARAMAYI REDDET */}
+                <Pressable
+                  disabled={kabulIsleniyor}
+                  style={[
+                    styles.aramaKontrolButonu,
+                    styles.aramaReddetButonu,
+                    kabulIsleniyor && { opacity: 0.5 },
+                  ]}
+                  onPress={gelenAramayiReddet}
+                >
+                  <Text style={styles.aramaKontrolIkon}>✕</Text>
+                  <Text style={styles.aramaKontrolMetni}>Reddet</Text>
+                </Pressable>
 
-              <Pressable
-                style={[styles.aramaKontrolButonu, styles.aramaKabulButonu]}
-                onPress={() => void gelenAramayiKabulEt()}
-              >
-                <Text style={styles.aramaKontrolIkon}>✓</Text>
-                <Text style={styles.aramaKontrolMetni}>Kabul Et</Text>
-              </Pressable>
-            </View>
+                {/* GELEN ARAMAYI KABUL ET */}
+                <Pressable
+                  disabled={kabulIsleniyor}
+                  style={[
+                    styles.aramaKontrolButonu,
+                    styles.aramaKabulButonu,
+                    kabulIsleniyor && { opacity: 0.5 },
+                  ]}
+                  onPress={() => void gelenAramayiKabulEt("EKRAN")}
+                >
+                  <Text style={styles.aramaKontrolIkon}>
+                    {kabulIsleniyor ? "…" : "✓"}
+                  </Text>
+
+                  <Text style={styles.aramaKontrolMetni}>
+                    {kabulIsleniyor ? "Bağlanıyor..." : "Kabul Et"}
+                  </Text>
+                </Pressable>
+              </View>
+            )
           ) : (
             <View style={styles.aramaKontrolleri}>
+              {/* HOPARLÖR */}
               <Pressable
                 style={[
                   styles.aramaKontrolButonu,
@@ -2213,6 +2423,7 @@ function ConversationPanel({
 
                     if (basarili) {
                       setHoparlorAcik(yeniDurum);
+
                       console.log(
                         yeniDurum
                           ? "🔊 Hoparlör açıldı."
@@ -2231,11 +2442,13 @@ function ConversationPanel({
                 <Text style={styles.aramaKontrolIkon}>
                   {hoparlorAcik ? "🔊" : "🔈"}
                 </Text>
+
                 <Text style={styles.aramaKontrolMetni}>
                   {hoparlorAcik ? "Hoparlör" : "Ahize"}
                 </Text>
               </Pressable>
 
+              {/* VİDEO KONTROLLERİ */}
               {aramaTuru === "VIDEO" && (
                 <>
                   <Pressable
@@ -2256,6 +2469,7 @@ function ConversationPanel({
                 </>
               )}
 
+              {/* ARAMAYI KAPAT */}
               <Pressable
                 style={[styles.aramaKontrolButonu, styles.aramaBitirButonu]}
                 onPress={() => void aramaTemizle()}
@@ -2266,11 +2480,13 @@ function ConversationPanel({
             </View>
           )}
 
+          {/* ARAMA SONU BİLDİRİMİ */}
           {aramaSonuGorunur && (
             <View style={styles.aramaSonuBildirim}>
               <Text style={styles.aramaSonuBildirimBaslik}>
                 Arama sona erdi
               </Text>
+
               <Text style={styles.aramaSonuBildirimMetin}>
                 {aramaSonuMesaji}
               </Text>

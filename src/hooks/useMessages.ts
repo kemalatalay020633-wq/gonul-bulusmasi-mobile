@@ -6,6 +6,7 @@ import {
   types,
 } from "@react-native-documents/picker";
 import { Client, IMessage } from "@stomp/stompjs";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   NativeModules,
@@ -14,17 +15,16 @@ import {
 } from "react-native";
 import Geolocation from "react-native-geolocation-service";
 import { launchCamera, launchImageLibrary } from "react-native-image-picker";
-import type { MessageMediaDto } from "../types/messageMedia";
-
-import { useNavigation } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Sound, {
   AudioEncoderAndroidType,
   AudioSourceAndroidType,
   OutputFormatAndroidType,
 } from "react-native-nitro-sound";
 import { API_BASE_URL, WEBSOCKET_URL } from "../config/api";
+import { navigationRef } from "../navigation/navigationService";
 import aramaWebRTC from "../services/AramaWebRTC";
+import { gecerliAccessTokenGetir } from "../services/api";
+import type { MessageMediaDto } from "../types/messageMedia";
 const API_ADRESI = API_BASE_URL + "/api";
 
 const { SesKayitModule } = NativeModules as {
@@ -89,7 +89,7 @@ function useMessages() {
    * STATE
    * =========================================================
    */
-  const navigation = useNavigation<any>();
+
   const [messages, setMessages] = useState<MessageDto[]>([]);
 
   const [conversation, setConversation] = useState<MessageDto[]>([]);
@@ -168,7 +168,23 @@ function useMessages() {
   const stompClientRef = useRef<Client | null>(null);
 
   const stompBagliRef = useRef(false);
+  type BekleyenAramaOnayi = {
+    resolve: () => void;
+    reject: (error: Error) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  };
 
+  const bekleyenAramaOnaylariRef = useRef(
+    new Map<string, BekleyenAramaOnayi>(),
+  );
+
+  const bekleyenAramaOnaylariniReddet = useCallback((error: Error) => {
+    for (const [oturumId, bekleyen] of bekleyenAramaOnaylariRef.current) {
+      clearTimeout(bekleyen.timeout);
+      bekleyenAramaOnaylariRef.current.delete(oturumId);
+      bekleyen.reject(error);
+    }
+  }, []);
   /*
    * =========================================================
    * ARAMA SİNYAL DİNLEYİCİLERİ
@@ -210,8 +226,13 @@ function useMessages() {
    * =========================================================
    */
 
-  const getToken = useCallback(async () => {
-    return await AsyncStorage.getItem("token");
+  const getToken = useCallback(async (): Promise<string | null> => {
+    try {
+      return await gecerliAccessTokenGetir();
+    } catch (hata) {
+      console.error("GÜNCEL ACCESS TOKEN ALINAMADI:", hata);
+      return null;
+    }
   }, []);
 
   /*
@@ -276,12 +297,7 @@ function useMessages() {
         headers,
       });
 
-      if (response.status === 401) {
-        await AsyncStorage.multiRemove(["token", "userId", "username", "role"]);
-
-        throw new Error("Oturum süreniz sona erdi.");
-      }
-
+      // Yanıt gövdesini yalnızca bir kez oku.
       const text = await response.text();
 
       let data: any = null;
@@ -292,6 +308,23 @@ function useMessages() {
         } catch {
           data = text;
         }
+      }
+
+      if (response.status === 401) {
+        console.error("API 401 DETAY:", {
+          endpoint: url,
+          tokenVarMi: Boolean(token),
+          tokenUzunlugu: token?.length ?? 0,
+          status: response.status,
+          sunucuMesaji:
+            data?.message ||
+            data?.mesaj ||
+            (typeof data === "string" ? data.slice(0, 300) : "Mesaj yok"),
+        });
+
+        throw new Error(
+          "Oturum doğrulanamadı. Yeniden giriş yapmanız gerekebilir.",
+        );
       }
 
       if (!response.ok) {
@@ -576,6 +609,7 @@ function useMessages() {
 
         if (kullaniciResponse.ok) {
           const kullanici = await kullaniciResponse.json();
+
           const cinsiyet = String(
             kullanici?.gender ?? kullanici?.cinsiyet ?? "",
           )
@@ -637,10 +671,17 @@ function useMessages() {
           "🔒 Premium Üyelik Gerekli",
           "Mesaj, dosya gönderme ve sesli/görüntülü arama özelliklerini kullanabilmek için Premium üye olmanız gerekiyor.",
           [
-            { text: "Vazgeç", style: "cancel" },
+            {
+              text: "Vazgeç",
+              style: "cancel",
+            },
             {
               text: "⭐ Premium Ol",
-              onPress: () => navigation.navigate("premium"),
+              onPress: () => {
+                if (navigationRef.isReady()) {
+                  navigationRef.navigate("premium");
+                }
+              },
             },
           ],
         );
@@ -654,7 +695,8 @@ function useMessages() {
       Alert.alert("Hata", "Premium üyelik durumu kontrol edilemedi.");
       return false;
     }
-  }, [getToken, navigation]);
+  }, [getToken]);
+
   const stompFrameGonder = useCallback(
     async (destination: string, body: any): Promise<boolean> => {
       console.log("📡 STOMP MESAJ GÖNDERİLMEK ÜZERE:", destination);
@@ -726,47 +768,95 @@ function useMessages() {
    */
   const aramaSinyaliGonder = useCallback(
     async (sinyal: any): Promise<void> => {
-      /*
-       * Sadece yeni çağrıyı başlatan CALL_OFFER Premium kontrolünden geçer.
-       */
       if (sinyal?.tip === "CALL_OFFER") {
         console.log("📞 CALL_OFFER PREMIUM KONTROLÜ BAŞLIYOR.");
 
         const premium = await premiumKontrolEt();
 
-        console.log("📞 CALL_OFFER PREMIUM SONUCU:", premium);
-
         if (!premium) {
-          console.log("📵 CALL_OFFER PREMIUM OLMADIĞI İÇİN ENGELLENDİ.");
-
           throw new Error("Arama başlatmak için Premium üyelik gereklidir.");
         }
-      }
 
-      console.log("📞 ARAMA SİNYALİ STOMP'A GÖNDERİLİYOR:", {
-        tip: sinyal?.tip,
-        hedefKullaniciId: sinyal?.hedefKullaniciId,
-      });
+        const oturumId = String(sinyal?.aramaOturumId ?? "").trim();
+
+        if (!oturumId) {
+          throw new Error(
+            "CALL_OFFER gönderilemedi: Arama oturum kimliği bulunamadı.",
+          );
+        }
+
+        if (bekleyenAramaOnaylariRef.current.has(oturumId)) {
+          throw new Error("Bu arama oturumu için zaten ACK bekleniyor.");
+        }
+
+        let bekleyen!: BekleyenAramaOnayi;
+
+        const ackPromise = new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            if (bekleyenAramaOnaylariRef.current.get(oturumId) === bekleyen) {
+              bekleyenAramaOnaylariRef.current.delete(oturumId);
+            }
+
+            reject(
+              new Error(
+                "CALL_OFFER_ACK zaman aşımına uğradı. Sunucu arama oturumunu onaylamadı.",
+              ),
+            );
+          }, 15000);
+
+          bekleyen = {
+            resolve,
+            reject,
+            timeout,
+          };
+
+          bekleyenAramaOnaylariRef.current.set(oturumId, bekleyen);
+        });
+
+        console.log("⏳ CALL_OFFER gönderiliyor, ACK bekleniyor:", oturumId);
+
+        try {
+          const gonderildi = await stompFrameGonder(
+            "/app/arama/sinyal",
+            sinyal,
+          );
+
+          if (!gonderildi) {
+            throw new Error("CALL_OFFER STOMP üzerinden gönderilemedi.");
+          }
+
+          await ackPromise;
+
+          console.log("🟢 CALL_OFFER_ACK ALINDI:", oturumId);
+        } catch (hata) {
+          const mevcut = bekleyenAramaOnaylariRef.current.get(oturumId);
+
+          if (mevcut === bekleyen) {
+            clearTimeout(bekleyen.timeout);
+            bekleyenAramaOnaylariRef.current.delete(oturumId);
+          }
+
+          throw hata instanceof Error
+            ? hata
+            : new Error("CALL_OFFER gönderimi veya sunucu onayı başarısız.");
+        }
+
+        return;
+      }
 
       const gonderildi = await stompFrameGonder("/app/arama/sinyal", sinyal);
 
       if (!gonderildi) {
-        console.error(
-          "❌ ARAMA SİNYALİ GÖNDERİLEMEDİ: STOMP BAĞLANTISI HAZIR DEĞİL.",
-        );
-
         throw new Error(
           "Arama sinyali gönderilemedi. WebSocket/STOMP bağlantısı hazır değil.",
         );
       }
 
-      console.log("📞 ARAMA SİNYALİ BAŞARIYLA STOMP'A GÖNDERİLDİ:", {
-        tip: sinyal?.tip,
-        hedefKullaniciId: sinyal?.hedefKullaniciId,
-      });
+      console.log("📞 ARAMA SİNYALİ GÖNDERİLDİ:", sinyal?.tip);
     },
     [premiumKontrolEt, stompFrameGonder],
   );
+
   /*
    * =========================================================
    * ARAMA İZNİ VER
@@ -879,7 +969,7 @@ function useMessages() {
 
         console.log("📨 STOMP MESAJI GELDİ:", {
           destination,
-          body: bodyPart,
+          bodyVarMi: Boolean(bodyPart),
         });
 
         if (!bodyPart) {
@@ -901,10 +991,44 @@ function useMessages() {
          * ARAMA SİNYALİ
          * =========================================================
          */
+        if (veri?.tip === "CALL_OFFER_ACK") {
+          const oturumId = String(veri?.aramaOturumId ?? "").trim();
+
+          console.log("📨 CALL_OFFER_ACK ALINDI:", oturumId);
+
+          const bekleyen = bekleyenAramaOnaylariRef.current.get(oturumId);
+
+          if (!bekleyen) {
+            console.warn("⚠️ ACK için bekleyen arama bulunamadı:", oturumId);
+            return;
+          }
+
+          clearTimeout(bekleyen.timeout);
+          bekleyenAramaOnaylariRef.current.delete(oturumId);
+
+          bekleyen.resolve();
+
+          return;
+        }
+        if (
+          destination?.includes("/queue/arama-hatalari") ||
+          destination?.includes("/queue/hatalar")
+        ) {
+          console.error("❌ ARAMA SUNUCU HATASI:", veri);
+
+          bekleyenAramaOnaylariniReddet(
+            new Error(
+              veri?.mesaj || veri?.message || "Sunucu arama isteğini reddetti.",
+            ),
+          );
+
+          return;
+        }
         if (destination?.includes("/topic/arama/")) {
-          console.log("📨📨📨 STOMP ARAMA TOPIC MESAJI GELDİ");
-          console.log("📨 DESTINATION:", destination);
-          console.log("📨 BODY:", bodyPart);
+          console.log("📨 STOMP ARAMA SİNYALİ GELDİ:", {
+            destination,
+            dinleyiciSayisi: aramaSinyalDinleyicileriRef.current.size,
+          });
           console.log(
             "📨 ARAMA DİNLEYİCİ SAYISI:",
             aramaSinyalDinleyicileriRef.current.size,
@@ -933,7 +1057,12 @@ function useMessages() {
         if (destination?.includes("/topic/yeni-mesaj/")) {
           const yeniMesaj = veri as MessageDto;
 
-          console.log("📩 YENİ MESAJ GELDİ:", yeniMesaj);
+          console.log("📩 YENİ MESAJ GELDİ:", {
+            mesajId: yeniMesaj.id,
+            gonderenId: yeniMesaj.senderId,
+            aliciId: yeniMesaj.receiverId,
+            gonderimZamani: yeniMesaj.sentAt,
+          });
 
           void getCurrentUserId().then((currentId) => {
             if (currentId === null) {
@@ -1092,6 +1221,7 @@ function useMessages() {
       mesajEkleVeyaGuncelle,
       mesajMedyalariniGetir,
       stompFrameGonder,
+      bekleyenAramaOnaylariniReddet,
     ],
   );
 
@@ -1149,11 +1279,14 @@ function useMessages() {
 
     aramaWebRTC.sinyalGondericiyiAyarla((sinyal) => {
       if (!aktif) {
-        return;
+        return Promise.reject(
+          new Error("Arama sinyal taşıyıcısı artık aktif değil."),
+        );
       }
 
-      void aramaSinyaliGonder(sinyal).catch((hata) => {
+      return aramaSinyaliGonder(sinyal).catch((hata) => {
         console.error("❌ WEBRTC SİNYALİ GÖNDERİLEMEDİ:", hata);
+        throw hata;
       });
     });
 
@@ -1252,8 +1385,10 @@ function useMessages() {
 
   const websocketBaglan = useCallback(
     async (iptalEdildi: () => boolean) => {
+      // İlk kontrol: oturum ve kullanıcı bilgisi var mı?
       const token = await getToken();
       const currentUserId = await getCurrentUserId();
+
       if (iptalEdildi()) {
         console.log("🟡 STOMP BAĞLANTISI İPTAL EDİLDİ: EFEKT TEMİZLENDİ.");
         return;
@@ -1281,6 +1416,10 @@ function useMessages() {
 
       console.log("🔌 STOMP BAĞLANTISI BAŞLATILIYOR:", WEBSOCKET_ADRESI);
 
+      // Bu nesne her bağlantı denemesinden önce güncellenecek.
+      // Böylece reconnect eski JWT'yi kullanmayacak.
+      const connectHeaders: Record<string, string> = {};
+
       const client = new Client({
         webSocketFactory: () => {
           console.log("🔌 NATIVE WEBSOCKET OLUŞTURULUYOR:", WEBSOCKET_ADRESI);
@@ -1288,9 +1427,32 @@ function useMessages() {
           return new WebSocket(WEBSOCKET_ADRESI, ["v12.stomp"]);
         },
 
-        connectHeaders: {
-          Authorization: `Bearer ${token}`,
+        connectHeaders,
+
+        // İlk bağlantı ve her otomatik reconnect öncesinde
+        // güncel access token al.
+        beforeConnect: async () => {
+          if (iptalEdildi()) {
+            throw new Error("STOMP bağlantısı iptal edildi.");
+          }
+
+          const guncelToken = await getToken();
+
+          if (iptalEdildi()) {
+            throw new Error("STOMP bağlantısı sırasında efekt temizlendi.");
+          }
+
+          if (!guncelToken) {
+            throw new Error(
+              "STOMP bağlantısı için geçerli access token bulunamadı.",
+            );
+          }
+
+          connectHeaders.Authorization = `Bearer ${guncelToken}`;
+
+          console.log("🔐 STOMP İÇİN GÜNCEL ACCESS TOKEN HAZIR.");
         },
+
         forceBinaryWSFrames: true,
         appendMissingNULLonIncoming: true,
         reconnectDelay: 3000,
@@ -1298,18 +1460,19 @@ function useMessages() {
         heartbeatIncoming: 0,
         heartbeatOutgoing: 0,
 
-        debug: (str) => {
-          console.log("🟣 STOMP:", str);
-        },
+        // CONNECT başlıkları Authorization içerebilir.
+        // Bu nedenle ham STOMP debug çıktısı kapalı tutulur.
+        debug: () => {},
 
-        onConnect: (frame) => {
+        onConnect: () => {
+          if (iptalEdildi()) {
+            console.log("🟡 STOMP CONNECT GELDİ ANCAK EFEKT TEMİZLENMİŞ.");
+            return;
+          }
+
           console.log("🟢🟢🟢 STOMP CONNECTED 🟢🟢🟢");
-
-          console.log("STOMP FRAME:", frame);
-
-          /*
-           * Önce bağlantıyı hazır kabul et.
-           */
+          stompSubscribe("/user/queue/arama-onaylari");
+          stompSubscribe("/user/queue/arama-hatalari");
           stompBagliRef.current = true;
           stompClientRef.current = client;
 
@@ -1318,22 +1481,19 @@ function useMessages() {
             active: client.active,
           });
 
-          /*
-           * =====================================================
-           * SUBSCRIPTIONS
-           * =====================================================
-           */
-
+          // Reconnect sonrasında da abonelikler yeniden kurulur.
           stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
-
           stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
-
           stompSubscribe(`/topic/yaziyor/${currentUserId}`);
-
           stompSubscribe(`/topic/arama/${currentUserId}`);
 
           console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
+
+          // STOMP yeniden bağlandı: yalnızca bekleyen ICE kuyruğunu devam ettir.
+          aramaWebRTC.stompBaglantisiYenidenKuruldu();
+
         },
+
         onStompError: (frame) => {
           console.error(
             "❌ STOMP SUNUCU HATASI:",
@@ -1342,38 +1502,50 @@ function useMessages() {
           );
 
           stompBagliRef.current = false;
+          bekleyenAramaOnaylariniReddet(
+            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
+          );
         },
 
         onWebSocketError: (event) => {
           console.error("❌ WEBSOCKET HATASI:", event);
-
           stompBagliRef.current = false;
+          bekleyenAramaOnaylariniReddet(
+            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
+          );
         },
 
         onWebSocketClose: (event) => {
-          console.log("🔴 WEBSOCKET KAPANDI:", event);
+          console.log("🔴 WEBSOCKET KAPANDI:", {
+            code: event.code,
+            reason: event.reason,
+          });
 
           stompBagliRef.current = false;
+          bekleyenAramaOnaylariniReddet(
+            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
+          );
         },
 
         onDisconnect: () => {
           console.log("🔴 STOMP DISCONNECT");
-
           stompBagliRef.current = false;
+          bekleyenAramaOnaylariniReddet(
+            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
+          );
         },
       });
 
-      /*
-       * Client'ı activate etmeden önce ref'e koy.
-       */
+      // Client'ı activate etmeden önce ref'e koy.
       stompClientRef.current = client;
 
       console.log("🚀🚀🚀 STOMP CLIENT ACTIVATE ÇAĞRILIYOR 🚀🚀🚀");
 
       client.activate();
     },
-    [getToken, getCurrentUserId, stompSubscribe],
+    [getToken, getCurrentUserId, stompSubscribe, bekleyenAramaOnaylariniReddet],
   );
+
   /*
    * =========================================================
    * KULLANICI BİLGİLERİ
@@ -1393,7 +1565,9 @@ function useMessages() {
           kullaniciIdleri.map(async (id) => {
             try {
               const user = await apiGetir(`/users/${id}`);
-              console.log("KULLANICI API YANITI:", JSON.stringify(user));
+              console.log("KULLANICI BİLGİSİ ALINDI:", {
+                kullaniciId: user?.id,
+              });
               return user;
             } catch {
               return null;
@@ -1795,8 +1969,8 @@ function useMessages() {
   const handleSendMessage = useCallback(async () => {
     console.log("=================================");
     console.log("GÖNDER BUTONUNA BASILDI");
-    console.log("MESSAGE TEXT:", messageText);
-    console.log("SELECTED USER:", selectedUserIdRef.current);
+    console.log("MESAJ KARAKTER SAYISI:", messageText.length);
+    console.log("ALICI ID:", selectedUserIdRef.current);
     console.log("=================================");
 
     const selectedId = selectedUserIdRef.current;
@@ -1836,7 +2010,7 @@ function useMessages() {
 
       console.log("MESAJ GÖNDERİLİYOR:", {
         receiverId: selectedId,
-        content: icerik,
+        karakterSayisi: icerik.length,
       });
 
       const gonderildi = await stompFrameGonder("/app/mesaj", {
@@ -1852,14 +2026,12 @@ function useMessages() {
 
       console.log("STOMP MESAJ GÖNDERİLDİ:", {
         receiverId: selectedId,
-        content: icerik,
       });
 
       setMessageText("");
 
       console.log("MESAJ BAŞARIYLA GÖNDERİLDİ:", {
         receiverId: selectedId,
-        content: icerik,
       });
     } catch (err) {
       console.error("MESAJ GÖNDERME HATASI:", err);

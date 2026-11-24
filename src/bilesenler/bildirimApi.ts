@@ -1,3 +1,4 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 // src/app/home.tsx
 import { API_BASE_URL } from "../config/api";
@@ -251,7 +252,7 @@ export async function profilimeBakanlariGetir(
  */
 
 export async function bildirimTokenGetir(): Promise<string | null> {
-  return AsyncStorage.getItem("token");
+  return tokenGetir();
 }
 
 /*

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import {
   Alert,
@@ -29,6 +30,7 @@ function HavaleOdeme({
   onOdemeBaslat,
   yukleniyor,
 }: HavaleOdemeProps) {
+  const { t } = useTranslation();
   const [kopyalandi, setKopyalandi] = useState(false);
 
   /*
@@ -66,7 +68,10 @@ function HavaleOdeme({
     } catch (error) {
       console.error("IBAN kopyalanamadı.", error);
 
-      Alert.alert("Hata", "IBAN kopyalanamadı.");
+      Alert.alert(
+        t("premium.bank.copyErrorTitle"),
+        t("premium.bank.copyError"),
+      );
     }
   };
 
@@ -86,9 +91,9 @@ function HavaleOdeme({
           </View>
 
           <View style={styles.headerTextContainer}>
-            <Text style={styles.title}>Havale / EFT</Text>
+            <Text style={styles.title}>{t("premium.bank.title")}</Text>
 
-            <Text style={styles.subtitle}>Banka hesabımıza ödeme yapın</Text>
+            <Text style={styles.subtitle}>{t("premium.bank.subtitle")}</Text>
           </View>
         </View>
 
@@ -97,7 +102,9 @@ function HavaleOdeme({
         ================================================= */}
 
         <View style={styles.packageCard}>
-          <Text style={styles.packageLabel}>Seçilen Paket</Text>
+          <Text style={styles.packageLabel}>
+            {t("premium.bank.selectedPackage")}
+          </Text>
 
           <View style={styles.packageRow}>
             <Text style={styles.packageName} numberOfLines={2}>
@@ -116,25 +123,29 @@ function HavaleOdeme({
 
         <View style={styles.bankCard}>
           <View style={styles.bankCardHeader}>
-            <Text style={styles.bankCardTitle}>Banka Hesap Bilgileri</Text>
+            <Text style={styles.bankCardTitle}>
+              {t("premium.bank.accountInfo")}
+            </Text>
           </View>
 
           <View style={styles.bankCardContent}>
             {/* HESAP SAHİBİ */}
 
-            <Text style={styles.fieldLabel}>Hesap Sahibi</Text>
+            <Text style={styles.fieldLabel}>
+              {t("premium.bank.accountHolder")}
+            </Text>
 
             <Text style={styles.fieldValue}>{hesapSahibi}</Text>
 
             {/* BANKA */}
 
-            <Text style={styles.fieldLabel}>Banka</Text>
+            <Text style={styles.fieldLabel}>{t("premium.bank.bank")}</Text>
 
             <Text style={styles.fieldValue}>{bankaAdi}</Text>
 
             {/* IBAN */}
 
-            <Text style={styles.fieldLabel}>IBAN</Text>
+            <Text style={styles.fieldLabel}>{t("premium.bank.iban")}</Text>
 
             <View style={styles.ibanContainer}>
               <Text style={styles.ibanText} selectable>
@@ -148,7 +159,9 @@ function HavaleOdeme({
               >
                 <Text style={styles.copyIcon}>📋</Text>
 
-                <Text style={styles.copyButtonText}>Kopyala</Text>
+                <Text style={styles.copyButtonText}>
+                  {t("premium.bank.copy")}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -162,7 +175,7 @@ function HavaleOdeme({
           <View style={styles.successBox}>
             <Text style={styles.successIcon}>✓</Text>
 
-            <Text style={styles.successText}>IBAN kopyalandı.</Text>
+            <Text style={styles.successText}>{t("premium.bank.copied")}</Text>
           </View>
         )}
 
@@ -173,10 +186,7 @@ function HavaleOdeme({
         <View style={styles.warningBox}>
           <Text style={styles.warningIcon}>⚠️</Text>
 
-          <Text style={styles.warningText}>
-            Havale/EFT yaparken açıklama alanına ödeme sipariş numaranızı
-            yazmanız gerekecektir.
-          </Text>
+          <Text style={styles.warningText}>{t("premium.bank.warning")}</Text>
         </View>
 
         {/* =================================================
@@ -189,12 +199,12 @@ function HavaleOdeme({
             BİLDİRİM
         ================================================= */}
 
-        <Text style={styles.afterPaymentTitle}>Ödeme sonrası</Text>
+        <Text style={styles.afterPaymentTitle}>
+          {t("premium.bank.afterTitle")}
+        </Text>
 
         <Text style={styles.afterPaymentText}>
-          Havale/EFT işlemini yaptıktan sonra aşağıdaki butona basarak ödeme
-          kaydınızı oluşturabilirsiniz. Ödeme banka hesabımıza ulaştığında
-          Premium üyeliğiniz aktif edilecektir.
+          {t("premium.bank.afterText")}
         </Text>
 
         {/* =================================================
@@ -210,7 +220,7 @@ function HavaleOdeme({
             disabled={yukleniyor}
             activeOpacity={0.8}
           >
-            <Text style={styles.backButtonText}>Geri</Text>
+            <Text style={styles.backButtonText}>{t("premium.bank.back")}</Text>
           </TouchableOpacity>
 
           {/* ÖDEME BİLDİRİMİ */}
@@ -226,11 +236,13 @@ function HavaleOdeme({
           >
             {yukleniyor ? (
               <View style={styles.loadingContainer}>
-                <Text style={styles.loadingText}>İşlem oluşturuluyor...</Text>
+                <Text style={styles.loadingText}>
+                  {t("premium.bank.processing")}
+                </Text>
               </View>
             ) : (
               <Text style={styles.paymentButtonText}>
-                ÖDEME BİLDİRİMİ OLUŞTUR
+                {t("premium.bank.notice")}
               </Text>
             )}
           </TouchableOpacity>

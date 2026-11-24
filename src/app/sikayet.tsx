@@ -1,6 +1,8 @@
+import { tokenGetir } from "../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -29,42 +31,43 @@ const KIRMIZI = "#BE123C";
 const SIKAYET_NEDENLERI = [
   {
     kod: "MEDENI_DURUMUNU_GIZLEME",
-    metin: "Medeni durumunu gizleme",
+    ceviriAnahtari: "reasons.maritalStatus",
     ikon: "💍",
   },
   {
     kod: "SAHTE_PROFIL",
-    metin: "Sahte profil veya başkasının fotoğrafı",
+    ceviriAnahtari: "reasons.fakeProfile",
     ikon: "👤",
   },
   {
     kod: "TACIZ_VE_ISRARLI_MESAJ",
-    metin: "Taciz ve ısrarlı mesajlar",
+    ceviriAnahtari: "reasons.harassment",
     ikon: "💬",
   },
   {
     kod: "HAKARET_VE_TEHDIT",
-    metin: "Hakaret ve tehdit",
+    ceviriAnahtari: "reasons.insultThreat",
     ikon: "⚠️",
   },
   {
     kod: "UYGUNSUZ_CINSEL_ICERIK",
-    metin: "Uygunsuz cinsel içerik",
+    ceviriAnahtari: "reasons.inappropriateContent",
     ikon: "🚫",
   },
   {
     kod: "DOLANDIRICILIK_VE_PARA_ISTEME",
-    metin: "Dolandırıcılık ve para isteme",
+    ceviriAnahtari: "reasons.scamMoney",
     ikon: "🛡️",
   },
   {
     kod: "DIGER",
-    metin: "Diğer",
+    ceviriAnahtari: "reasons.other",
     ikon: "⋯",
   },
 ];
 
 export default function SikayetEkrani() {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
@@ -80,12 +83,18 @@ export default function SikayetEkrani() {
     if (gonderiliyor) return;
 
     if (!Number.isSafeInteger(sikayetEdilenId) || sikayetEdilenId <= 0) {
-      Alert.alert("İşlem yapılamadı", "Şikâyet edilecek kullanıcı bulunamadı.");
+      Alert.alert(
+        t("complaint.alerts.unavailableTitle"),
+        t("complaint.alerts.userNotFound"),
+      );
       return;
     }
 
     if (!neden) {
-      Alert.alert("Şikâyet nedeni gerekli", "Lütfen bir şikâyet nedeni seç.");
+      Alert.alert(
+        t("complaint.alerts.reasonRequiredTitle"),
+        t("complaint.alerts.reasonRequired"),
+      );
       return;
     }
 
@@ -94,7 +103,7 @@ export default function SikayetEkrani() {
     try {
       setGonderiliyor(true);
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await tokenGetir();
       const mevcutKullaniciId = Number(await AsyncStorage.getItem("userId"));
 
       if (
@@ -102,12 +111,18 @@ export default function SikayetEkrani() {
         !Number.isSafeInteger(mevcutKullaniciId) ||
         mevcutKullaniciId <= 0
       ) {
-        Alert.alert("Oturum gerekli", "Devam etmek için tekrar giriş yap.");
+        Alert.alert(
+          t("complaint.alerts.sessionTitle"),
+          t("complaint.alerts.sessionRequired"),
+        );
         return;
       }
 
       if (mevcutKullaniciId === sikayetEdilenId) {
-        Alert.alert("İşlem yapılamadı", "Kendi profilini şikâyet edemezsin.");
+        Alert.alert(
+          t("complaint.alerts.unavailableTitle"),
+          t("complaint.alerts.cannotReportSelf"),
+        );
         return;
       }
 
@@ -133,7 +148,7 @@ export default function SikayetEkrani() {
       const yanitMetni = await yanit.text();
 
       if (!yanit.ok) {
-        let hataMesaji = "Şikâyet gönderilemedi. Lütfen tekrar dene.";
+        let hataMesaji = t("complaint.alerts.sendFailed");
 
         try {
           const veri = JSON.parse(yanitMetni);
@@ -142,7 +157,7 @@ export default function SikayetEkrani() {
           // Sunucunun ham yanıtı kullanıcıya gösterilmez.
         }
 
-        Alert.alert("Gönderilemedi", hataMesaji);
+        Alert.alert(t("complaint.alerts.failedTitle"), hataMesaji);
         return;
       }
 
@@ -150,19 +165,19 @@ export default function SikayetEkrani() {
       setAciklama("");
 
       Alert.alert(
-        "Bildirimin alındı",
-        "Gönül Buluşması topluluğunun güvenli kalmasına yardımcı olduğun için teşekkür ederiz.",
+        t("complaint.alerts.successTitle"),
+        t("complaint.alerts.successMessage"),
         [
           {
-            text: "Tamam",
+            text: t("complaint.alerts.ok"),
             onPress: () => navigation.goBack(),
           },
         ],
       );
     } catch {
       Alert.alert(
-        "Bağlantı kurulamadı",
-        "Şikâyetin gönderilemedi. İnternet bağlantını kontrol edip tekrar dene.",
+        t("complaint.alerts.connectionTitle"),
+        t("complaint.alerts.connectionMessage"),
       );
     } finally {
       setGonderiliyor(false);
@@ -190,21 +205,19 @@ export default function SikayetEkrani() {
               ]}
               onPress={() => navigation.goBack()}
               accessibilityRole="button"
-              accessibilityLabel="Önceki ekrana dön"
+              accessibilityLabel={t("complaint.back")}
             >
               <Text style={styles.geriIkon}>‹</Text>
-              <Text style={styles.geriMetni}>Geri dön</Text>
+              <Text style={styles.geriMetni}>{t("complaint.back")}</Text>
             </Pressable>
 
             <View style={styles.guvenlikRozeti}>
               <Text style={styles.guvenlikIkonu}>🛡️</Text>
             </View>
 
-            <Text style={styles.baslik}>Şikâyet bildirimi</Text>
+            <Text style={styles.baslik}>{t("complaint.title")}</Text>
 
-            <Text style={styles.altBaslik}>
-              Güvenli bir topluluk için buradayız.
-            </Text>
+            <Text style={styles.altBaslik}>{t("complaint.subtitle")}</Text>
           </View>
 
           <View style={styles.bilgiKarti}>
@@ -213,12 +226,9 @@ export default function SikayetEkrani() {
             </View>
 
             <View style={styles.bilgiMetinAlani}>
-              <Text style={styles.bilgiBaslik}>
-                Bildirimin bizim için önemli
-              </Text>
+              <Text style={styles.bilgiBaslik}>{t("complaint.infoTitle")}</Text>
               <Text style={styles.bilgiAciklama}>
-                Uygun nedeni seç ve yaşadığın durumu kısaca açıkla. Bildirimin
-                değerlendirilmek üzere iletilecek.
+                {t("complaint.infoDescription")}
               </Text>
             </View>
           </View>
@@ -230,9 +240,11 @@ export default function SikayetEkrani() {
               </View>
 
               <View style={styles.bolumBasligiAlani}>
-                <Text style={styles.bolumBasligi}>Şikâyet nedeni</Text>
+                <Text style={styles.bolumBasligi}>
+                  {t("complaint.reasonTitle")}
+                </Text>
                 <Text style={styles.bolumAltBasligi}>
-                  Sana en uygun seçeneği işaretle.
+                  {t("complaint.reasonHint")}
                 </Text>
               </View>
             </View>
@@ -269,7 +281,7 @@ export default function SikayetEkrani() {
                         secili && styles.nedenMetniSecili,
                       ]}
                     >
-                      {secenek.metin}
+                      {t(`complaint.${secenek.ceviriAnahtari}`)}
                     </Text>
 
                     <View
@@ -290,14 +302,18 @@ export default function SikayetEkrani() {
               </View>
 
               <View style={styles.bolumBasligiAlani}>
-                <Text style={styles.bolumBasligi}>Ayrıntıları paylaş</Text>
+                <Text style={styles.bolumBasligi}>
+                  {t("complaint.detailsTitle")}
+                </Text>
                 <Text style={styles.bolumAltBasligi}>
-                  İstersen açıklama ekleyebilirsin.
+                  {t("complaint.detailsHint")}
                 </Text>
               </View>
 
               <View style={styles.istegeBagliRozet}>
-                <Text style={styles.istegeBagliMetin}>İsteğe bağlı</Text>
+                <Text style={styles.istegeBagliMetin}>
+                  {t("complaint.optional")}
+                </Text>
               </View>
             </View>
 
@@ -305,18 +321,18 @@ export default function SikayetEkrani() {
               style={styles.aciklama}
               value={aciklama}
               onChangeText={setAciklama}
-              placeholder="Ne olduğunu kısaca anlat..."
+              placeholder={t("complaint.descriptionPlaceholder")}
               placeholderTextColor="#A39AAF"
               multiline
               maxLength={2000}
               editable={!gonderiliyor}
               textAlignVertical="top"
-              accessibilityLabel="Şikâyet açıklaması"
+              accessibilityLabel={t("complaint.descriptionAccessibility")}
             />
 
             <View style={styles.aciklamaAltSatir}>
               <Text style={styles.aciklamaIpucu}>
-                Kişisel bilgilerini paylaşmamaya dikkat et.
+                {t("complaint.privacyHint")}
               </Text>
 
               <Text
@@ -338,29 +354,31 @@ export default function SikayetEkrani() {
               disabled={gonderiliyor}
               onPress={sikayetiGonder}
               accessibilityRole="button"
-              accessibilityLabel="Şikâyeti gönder"
+              accessibilityLabel={t("complaint.submit")}
             >
               {gonderiliyor ? (
                 <>
                   <ActivityIndicator color="#FFFFFF" />
-                  <Text style={styles.gonderMetni}>Gönderiliyor...</Text>
+                  <Text style={styles.gonderMetni}>
+                    {t("complaint.submitting")}
+                  </Text>
                 </>
               ) : (
                 <>
-                  <Text style={styles.gonderMetni}>Şikâyeti gönder</Text>
+                  <Text style={styles.gonderMetni}>
+                    {t("complaint.submit")}
+                  </Text>
                   <Text style={styles.gonderOku}>→</Text>
                 </>
               )}
             </Pressable>
 
             <Text style={styles.altGuvence}>
-              🔐 Bildirimin güvenli şekilde iletilir.
+              🔐 {t("complaint.secureNotice")}
             </Text>
           </View>
 
-          <Text style={styles.altBilgi}>
-            Gönül Buluşması · Saygı ve güven önceliğimizdir.
-          </Text>
+          <Text style={styles.altBilgi}>{t("complaint.footer")}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -1,3 +1,4 @@
+import { tokenGetir } from "../../services/tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useEffect, useState } from "react";
 import {
@@ -43,7 +44,7 @@ export default function KimlikDogrulamaliAvatar({
         setFotoUri(null);
         setYukleniyor(true);
 
-        const token = await AsyncStorage.getItem("token");
+        const token = await tokenGetir();
 
         if (!token || !kullaniciId) {
           return;

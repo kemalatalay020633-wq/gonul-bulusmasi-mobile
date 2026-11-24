@@ -1,5 +1,6 @@
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
@@ -12,11 +13,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+
 import { API_BASE_URL } from "../config/api";
 
 export default function EmailDogrulamaScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const { t } = useTranslation();
 
   const email: string = route.params?.email ?? "";
 
@@ -31,22 +34,20 @@ export default function EmailDogrulamaScreen() {
     if (!response.ok) {
       switch (response.status) {
         case 400:
-          throw new Error("Girilen bilgiler geçersiz. Bilgilerini kontrol et.");
+          throw new Error(t("emailVerification.errors.invalid"));
+
         case 401:
         case 403:
-          throw new Error(
-            "İşlem doğrulanamadı. Bilgilerini kontrol edip tekrar dene.",
-          );
+          throw new Error(t("emailVerification.errors.unauthorized"));
+
         case 404:
-          throw new Error("İstenen işlem gerçekleştirilemedi.");
+          throw new Error(t("emailVerification.errors.notFound"));
+
         case 429:
-          throw new Error(
-            "Çok fazla istek gönderdin. Lütfen bir süre sonra tekrar dene.",
-          );
+          throw new Error(t("emailVerification.errors.tooMany"));
+
         default:
-          throw new Error(
-            "İşlem sırasında bir hata oluştu. Lütfen tekrar dene.",
-          );
+          throw new Error(t("emailVerification.errors.general"));
       }
     }
 
@@ -57,7 +58,7 @@ export default function EmailDogrulamaScreen() {
     try {
       return JSON.parse(metin);
     } catch {
-      throw new Error("Sunucudan geçerli bir yanıt alınamadı.");
+      throw new Error(t("emailVerification.errors.response"));
     }
   };
 
@@ -65,12 +66,12 @@ export default function EmailDogrulamaScreen() {
     setHata("");
 
     if (!email.trim()) {
-      setHata("E-posta adresi bulunamadı. Kayıt ekranından tekrar ilerle.");
+      setHata(t("emailVerification.errors.noEmail"));
       return;
     }
 
     if (!/^[0-9]{6}$/.test(kod)) {
-      setHata("Lütfen e-posta adresine gelen 6 haneli kodu gir.");
+      setHata(t("emailVerification.errors.invalidCode"));
       return;
     }
 
@@ -92,11 +93,11 @@ export default function EmailDogrulamaScreen() {
       await yanitiOku(response);
 
       Alert.alert(
-        "E-posta doğrulandı",
-        "Hesabın başarıyla doğrulandı. Giriş yapabilirsin.",
+        t("emailVerification.successTitle"),
+        t("emailVerification.successMessage"),
         [
           {
-            text: "Giriş Yap",
+            text: t("emailVerification.login"),
             onPress: () => navigation.replace("index"),
           },
         ],
@@ -105,7 +106,7 @@ export default function EmailDogrulamaScreen() {
       setHata(
         error instanceof Error
           ? error.message
-          : "E-posta doğrulanırken bir hata oluştu.",
+          : t("emailVerification.errors.verifyFailed"),
       );
     } finally {
       setYukleniyor(false);
@@ -116,7 +117,7 @@ export default function EmailDogrulamaScreen() {
     setHata("");
 
     if (!email.trim()) {
-      setHata("E-posta adresi bulunamadı. Kayıt ekranına dön.");
+      setHata(t("emailVerification.errors.noEmailResend"));
       return;
     }
 
@@ -140,14 +141,14 @@ export default function EmailDogrulamaScreen() {
       await yanitiOku(response);
 
       Alert.alert(
-        "İstek alındı",
-        "E-posta adresi kayıtlıysa yeni doğrulama kodu gönderilmiştir.",
+        t("emailVerification.requestTitle"),
+        t("emailVerification.requestMessage"),
       );
     } catch (error) {
       setHata(
         error instanceof Error
           ? error.message
-          : "Doğrulama kodu tekrar gönderilemedi.",
+          : t("emailVerification.errors.resendFailed"),
       );
     } finally {
       setTekrarGonderiliyor(false);
@@ -168,16 +169,20 @@ export default function EmailDogrulamaScreen() {
             <Text style={styles.simge}>✉</Text>
           </View>
 
-          <Text style={styles.baslik}>E-posta Doğrulama</Text>
+          <Text style={styles.baslik}>{t("emailVerification.title")}</Text>
 
           <Text style={styles.aciklama}>
-            Gönül Buluşması hesabını etkinleştirmek için e-posta adresine
-            gönderilen 6 haneli doğrulama kodunu gir.
+            {t("emailVerification.description")}
           </Text>
 
           <View style={styles.emailKutusu}>
-            <Text style={styles.emailEtiketi}>E-posta adresin</Text>
-            <Text style={styles.email}>{email || "E-posta bulunamadı"}</Text>
+            <Text style={styles.emailEtiketi}>
+              {t("emailVerification.emailLabel")}
+            </Text>
+
+            <Text style={styles.email}>
+              {email || t("emailVerification.emailMissing")}
+            </Text>
           </View>
 
           {hata ? (
@@ -186,7 +191,9 @@ export default function EmailDogrulamaScreen() {
             </View>
           ) : null}
 
-          <Text style={styles.inputEtiketi}>Doğrulama kodu</Text>
+          <Text style={styles.inputEtiketi}>
+            {t("emailVerification.codeLabel")}
+          </Text>
 
           <TextInput
             value={kod}
@@ -194,20 +201,18 @@ export default function EmailDogrulamaScreen() {
               setKod(deger.replace(/[^0-9]/g, "").slice(0, 6));
               setHata("");
             }}
-            placeholder="000000"
+            placeholder={t("emailVerification.codePlaceholder")}
             placeholderTextColor="#B9A5AC"
             keyboardType="number-pad"
             maxLength={6}
             textContentType="oneTimeCode"
             autoComplete="sms-otp"
-            accessibilityLabel="6 haneli e-posta doğrulama kodu"
+            accessibilityLabel={t("emailVerification.codeAccessibility")}
             editable={!yukleniyor && !tekrarGonderiliyor}
             style={styles.kodInput}
           />
 
-          <Text style={styles.ipucu}>
-            Kod e-posta gelen kutunda veya gereksiz posta klasöründe olabilir.
-          </Text>
+          <Text style={styles.ipucu}>{t("emailVerification.hint")}</Text>
 
           <Pressable
             style={[
@@ -220,7 +225,9 @@ export default function EmailDogrulamaScreen() {
             {yukleniyor ? (
               <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.anaButonMetni}>E-postayı Doğrula</Text>
+              <Text style={styles.anaButonMetni}>
+                {t("emailVerification.verify")}
+              </Text>
             )}
           </Pressable>
 
@@ -235,7 +242,9 @@ export default function EmailDogrulamaScreen() {
             {tekrarGonderiliyor ? (
               <ActivityIndicator color="#8F2942" />
             ) : (
-              <Text style={styles.tekrarButonMetni}>Yeni Kod Gönder</Text>
+              <Text style={styles.tekrarButonMetni}>
+                {t("emailVerification.resend")}
+              </Text>
             )}
           </Pressable>
 
@@ -244,11 +253,13 @@ export default function EmailDogrulamaScreen() {
             onPress={() => navigation.replace("register")}
             disabled={yukleniyor || tekrarGonderiliyor}
           >
-            <Text style={styles.geriButonMetni}>Kayıt ekranına dön</Text>
+            <Text style={styles.geriButonMetni}>
+              {t("emailVerification.back")}
+            </Text>
           </Pressable>
 
           <Text style={styles.guvenlikNotu}>
-            Güvenliğin için doğrulama kodunu kimseyle paylaşma.
+            {t("emailVerification.security")}
           </Text>
         </View>
       </ScrollView>

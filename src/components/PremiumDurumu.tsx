@@ -1,3 +1,4 @@
+import { tokenGetir } from "../services/tokenServisi";
 import React, { useEffect, useState } from "react";
 
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
@@ -21,7 +22,7 @@ function PremiumDurumu({ children }: PremiumDurumuProps) {
 
     const kontrolEt = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
+        const token = await tokenGetir();
 
         if (!token) {
           if (aktif) {

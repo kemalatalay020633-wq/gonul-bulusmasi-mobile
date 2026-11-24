@@ -1,5 +1,10 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+
+import {
+  diliBelirle,
+  profilSorusunuCevir,
+} from "../../utils/profilSoruCevirisi";
 
 type Question = {
   id: number;
@@ -24,6 +29,24 @@ export default function QuestionItem({
   onRadioChange,
   onCheckboxChange,
 }: QuestionItemProps) {
+  const { t, i18n } = useTranslation("editProfile");
+
+  const dil = diliBelirle(i18n.resolvedLanguage || i18n.language || "tr");
+
+  /**
+   * Metni yalnızca ekranda gösterirken çevirir.
+   * Backend'e gönderilecek orijinal değer değiştirilmez.
+   */
+  const cevir = (metin: string | null | undefined): string => {
+    if (!metin) return "";
+
+    return profilSorusunuCevir(metin, dil);
+  };
+
+  /**
+   * Backend'den gelen seçenekleri ayırır.
+   * Orijinal seçenek değerleri korunur.
+   */
   const options = question.options
     ? question.options
         .split("|")
@@ -31,16 +54,17 @@ export default function QuestionItem({
         .filter(Boolean)
     : [];
 
-  const soruTipi = question.type?.toUpperCase();
+  const soruTipi = question.type?.trim().toUpperCase();
 
   return (
     <View style={styles.container}>
+      {/* Soru metni */}
       <Text style={styles.question}>
-        {question.question}
-
+        {cevir(question.question)}
         {question.required && <Text style={styles.required}> *</Text>}
       </Text>
 
+      {/* Çoklu seçim */}
       {soruTipi === "CHECKBOX" && (
         <View style={styles.optionsContainer}>
           {options.map((option) => {
@@ -59,13 +83,14 @@ export default function QuestionItem({
                   {secili && <Text style={styles.checkmark}>✓</Text>}
                 </View>
 
-                <Text style={styles.optionText}>{option}</Text>
+                <Text style={styles.optionText}>{cevir(option)}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
       )}
 
+      {/* Tekli seçim */}
       {soruTipi === "RADIO" && (
         <View style={styles.optionsContainer}>
           {options.map((option) => {
@@ -82,11 +107,18 @@ export default function QuestionItem({
                   {secili && <View style={styles.radioInner} />}
                 </View>
 
-                <Text style={styles.optionText}>{option}</Text>
+                <Text style={styles.optionText}>{cevir(option)}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
+      )}
+
+      {/* Desteklenmeyen soru tipi */}
+      {soruTipi !== "CHECKBOX" && soruTipi !== "RADIO" && (
+        <Text style={styles.unsupportedText}>
+          {t("questionItem.unsupportedType")}
+        </Text>
       )}
     </View>
   );
@@ -135,6 +167,12 @@ const styles = StyleSheet.create({
     color: "#694650",
     marginLeft: 10,
     lineHeight: 21,
+  },
+
+  unsupportedText: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: "#80666D",
   },
 
   checkbox: {

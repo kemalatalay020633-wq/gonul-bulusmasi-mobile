@@ -1,5 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import City from "../../enum/City";
 
 import {
@@ -119,6 +120,7 @@ type ProfilCevabi = {
 };
 
 export default function ProfilGuncelle() {
+  const { t } = useTranslation("editProfile");
   const navigation = useNavigation<any>();
 
   const [kullanici, setKullanici] = useState<Kullanici | null>(null);
@@ -389,9 +391,7 @@ export default function ProfilGuncelle() {
     else console.log("İLGİ ALANI ENUM HATASI:", ilgiAlani.reason);
 
     if (istekler.some((sonuc) => sonuc.status === "rejected")) {
-      setHata(
-        "Bazı profil seçenekleri sunucudan alınamadı. Bağlantıyı kontrol edip tekrar deneyin.",
-      );
+      setHata(t("editProfile:enumLoadFailed"));
     }
   }, []);
 
@@ -402,8 +402,8 @@ export default function ProfilGuncelle() {
   ) => {
     if (secenekler.length === 0) {
       Alert.alert(
-        "Seçenek Bulunamadı",
-        "Bu seçenekler henüz sunucudan yüklenmedi. Bağlantıyı kontrol edip tekrar deneyin.",
+        t("editProfile:optionMissingTitle"),
+        t("editProfile:optionMissing"),
       );
       return;
     }
@@ -514,9 +514,7 @@ export default function ProfilGuncelle() {
     } catch (error) {
       console.log("PROFIL SORU/CEVAP GETIRME HATASI:", error);
 
-      setSoruCevapHatasi(
-        "Profil soruları ve cevapları yüklenemedi. Lütfen tekrar deneyin.",
-      );
+      setSoruCevapHatasi(t("editProfile:questionsLoadFailed"));
 
       setSorular([]);
       setCevaplar({});
@@ -686,8 +684,8 @@ export default function ProfilGuncelle() {
       setHata(
         error instanceof Error &&
           error.message === "Kullanıcı bilgileri yüklenemedi."
-          ? "Kullanıcı bilgileri yüklenemedi. Lütfen tekrar deneyin."
-          : "Profil bilgileri yüklenemedi. Lütfen bağlantınızı kontrol edip tekrar deneyin.",
+          ? t("editProfile:userLoadFailed")
+          : t("editProfile:profileLoadFailed"),
       );
     } finally {
       setLoading(false);
@@ -757,13 +755,13 @@ export default function ProfilGuncelle() {
 
         if (sonuc.errorCode === "permission") {
           Alert.alert(
-            "Galeri İzni Gerekli",
-            "Profil fotoğrafı seçebilmek için galeri izni vermelisiniz.",
+            t("editProfile:galleryPermissionTitle"),
+            t("editProfile:galleryPermission"),
           );
         } else {
           Alert.alert(
-            "Fotoğraf Seçilemedi",
-            "Fotoğraf seçilirken bir sorun oluştu. Lütfen tekrar deneyin.",
+            t("editProfile:photoSelectFailed"),
+            t("editProfile:photoSelectError"),
           );
         }
 
@@ -778,8 +776,8 @@ export default function ProfilGuncelle() {
 
       if (!asset.uri) {
         Alert.alert(
-          "Fotoğraf Seçilemedi",
-          "Seçilen fotoğrafın bilgileri alınamadı. Lütfen tekrar deneyin.",
+          t("editProfile:photoSelectFailed"),
+          t("editProfile:photoInfoFailed"),
         );
         return;
       }
@@ -787,8 +785,8 @@ export default function ProfilGuncelle() {
       // 10 MB DOSYA BOYUTU KONTROLÜ
       if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
         Alert.alert(
-          "Dosya Çok Büyük",
-          "Fotoğraf boyutu en fazla 10 MB olabilir.",
+          t("editProfile:fileTooLarge"),
+          t("editProfile:fileSizeLimit"),
         );
         return;
       }
@@ -798,8 +796,8 @@ export default function ProfilGuncelle() {
 
       if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
         Alert.alert(
-          "Geçersiz Fotoğraf",
-          "Yalnızca JPG, PNG veya WEBP formatındaki fotoğrafları seçebilirsiniz.",
+          t("editProfile:invalidPhoto"),
+          t("editProfile:photoFormats"),
         );
         return;
       }
@@ -811,8 +809,8 @@ export default function ProfilGuncelle() {
       console.log("FOTOĞRAF SEÇME HATASI:", error);
 
       Alert.alert(
-        "Fotoğraf Seçilemedi",
-        "Fotoğraf seçilirken bir sorun oluştu. Lütfen tekrar deneyin.",
+        t("editProfile:photoSelectFailed"),
+        t("editProfile:photoSelectError"),
       );
     }
   };
@@ -864,24 +862,18 @@ export default function ProfilGuncelle() {
         );
 
         if (response.status === 400) {
-          throw new Error("Girdiğiniz bilgileri kontrol edip tekrar deneyin.");
+          throw new Error(t("editProfile:checkInput"));
         }
 
         if (response.status === 401 || response.status === 403) {
-          throw new Error(
-            "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın.",
-          );
+          throw new Error(t("editProfile:sessionInvalid"));
         }
 
         if (response.status >= 500) {
-          throw new Error(
-            "Sunucuda geçici bir sorun oluştu. Lütfen daha sonra tekrar deneyin.",
-          );
+          throw new Error(t("editProfile:serverTemporary"));
         }
 
-        throw new Error(
-          "Kullanıcı bilgileri güncellenemedi. Lütfen tekrar deneyin.",
-        );
+        throw new Error(t("editProfile:userUpdateFailed"));
       }
     } catch (error) {
       console.log("KULLANICI BİLGİLERİ GÜNCELLEME HATASI:", error);
@@ -899,9 +891,7 @@ export default function ProfilGuncelle() {
         throw error;
       }
 
-      throw new Error(
-        "Sunucuya bağlanılamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.",
-      );
+      throw new Error(t("editProfile:connectionFailed"));
     }
   };
 
@@ -971,24 +961,18 @@ export default function ProfilGuncelle() {
         console.log("FOTOĞRAF YÜKLEME API HATASI:", response.status, text);
 
         if (response.status === 400 || response.status === 413) {
-          throw new Error(
-            "Fotoğraf yüklenemedi. Dosya boyutunu ve formatını kontrol edin.",
-          );
+          throw new Error(t("editProfile:photoUploadFailed"));
         }
 
         if (response.status === 401 || response.status === 403) {
-          throw new Error(
-            "Oturumunuz doğrulanamadı. Lütfen tekrar giriş yapın.",
-          );
+          throw new Error(t("editProfile:sessionInvalid"));
         }
 
         if (response.status >= 500) {
-          throw new Error(
-            "Fotoğraf şu anda yüklenemiyor. Lütfen daha sonra tekrar deneyin.",
-          );
+          throw new Error(t("editProfile:photoUnavailable"));
         }
 
-        throw new Error("Fotoğraf yüklenemedi. Lütfen tekrar deneyin.");
+        throw new Error(t("editProfile:photoRetry"));
       }
 
       if (!text.trim()) {
@@ -999,7 +983,7 @@ export default function ProfilGuncelle() {
         const sonuc = JSON.parse(text);
         return sonuc.profilePhoto || profilePhoto;
       } catch {
-        console.log("Fotoğraf yanıtı JSON formatında değil.");
+        console.log(t("editProfile:photoInvalidResponse"));
         return profilePhoto;
       }
     } catch (error) {
@@ -1007,15 +991,13 @@ export default function ProfilGuncelle() {
 
       if (
         error instanceof Error &&
-        (error.message.startsWith("Fotoğraf") ||
+        (error.message.startsWith(t("editProfile:photoSaved")) ||
           error.message.startsWith("Oturumunuz"))
       ) {
         throw error;
       }
 
-      throw new Error(
-        "Fotoğraf yüklenirken bağlantı sorunu oluştu. Lütfen tekrar deneyin.",
-      );
+      throw new Error(t("editProfile:photoConnectionFailed"));
     }
   };
   /*
@@ -1241,7 +1223,7 @@ export default function ProfilGuncelle() {
     } catch (error) {
       console.log("PROFIL CEVAPLARI KAYDETME HATASI:", error);
 
-      const mesaj = "Profil cevapları kaydedilemedi. Lütfen tekrar deneyin.";
+      const mesaj = t("editProfile:answersSaveFailed");
 
       setSoruCevapHatasi(mesaj);
 
@@ -1278,20 +1260,20 @@ export default function ProfilGuncelle() {
       }
 
       if (!profil?.id) {
-        Alert.alert("Profil Gerekli", "Önce profil bilgilerinizi kaydediniz.");
+        Alert.alert("Profil Gerekli", t("editProfile:saveProfileFirst"));
 
         return;
       }
 
       await profilCevaplariniKaydet(token, profil.id);
 
-      Alert.alert("Başarılı", "Profil cevaplarınız kaydedildi.");
+      Alert.alert(t("editProfile:success"), t("editProfile:answersSaved"));
     } catch (error) {
       console.log("PROFIL CEVAPLARINI KAYDETME BUTONU HATASI:", error);
 
       Alert.alert(
-        "Kaydetme Başarısız",
-        "Profil cevapları kaydedilemedi. Lütfen tekrar deneyin.",
+        t("editProfile:saveFailed"),
+        t("editProfile:answersSaveFailed"),
       );
     }
   };
@@ -1354,7 +1336,7 @@ export default function ProfilGuncelle() {
      */
 
     if (height && (Number(height) < 100 || Number(height) > 250)) {
-      Alert.alert("Geçersiz Boy", "Boy 100 ile 250 cm arasında olmalıdır.");
+      Alert.alert(t("editProfile:invalidHeight"), t("editProfile:heightRange"));
 
       return;
     } /*
@@ -1368,7 +1350,7 @@ export default function ProfilGuncelle() {
      */
 
     if (weight && (Number(weight) < 30 || Number(weight) > 300)) {
-      Alert.alert("Geçersiz Kilo", "Kilo 30 ile 300 kg arasında olmalıdır.");
+      Alert.alert(t("editProfile:invalidWeight"), t("editProfile:weightRange"));
 
       return;
     }
@@ -1610,26 +1592,29 @@ export default function ProfilGuncelle() {
 
        */
 
-      setBasari("Profil başarıyla güncellendi.");
+      setBasari(t("editProfile:profileUpdated"));
 
-      Alert.alert("Başarılı", "Profil bilgileriniz güncellendi.", [
-        {
-          text: "Tamam",
+      Alert.alert(
+        t("editProfile:success"),
+        t("editProfile:profileUpdatedMessage"),
+        [
+          {
+            text: "Tamam",
 
-          onPress: () => {
-            navigation.replace("profile");
+            onPress: () => {
+              navigation.replace("profile");
+            },
           },
-        },
-      ]);
+        ],
+      );
     } catch (error) {
       console.log("PROFİL GÜNCELLEME HATASI:", error);
 
-      const mesaj =
-        "Profil güncellenirken bir sorun oluştu. Lütfen tekrar deneyin.";
+      const mesaj = t("editProfile:profileUpdateFailed");
 
       setHata(mesaj);
 
-      Alert.alert("Profil Güncellenemedi", mesaj);
+      Alert.alert(t("editProfile:profileUpdateTitle"), mesaj);
     } finally {
       setSaving(false);
     }
@@ -1725,8 +1710,8 @@ export default function ProfilGuncelle() {
                {" "}
         <View style={styles.yukleniyorContainer}>
                     <ActivityIndicator size="large" color="#d63384" />         {" "}
-          <Text style={styles.yukleniyorText}>Profil yükleniyor...</Text>     
-           {" "}
+          <Text style={styles.yukleniyorText}>{t("editProfile:loading")}</Text> 
+               {" "}
         </View>
              {" "}
       </SafeAreaView>
@@ -1782,10 +1767,12 @@ export default function ProfilGuncelle() {
                        {" "}
             <Pressable style={styles.geri} onPress={geriDon}>
                             <Text style={styles.geriIcon}>←</Text>             {" "}
-              <Text style={styles.geriText}>Profil</Text>           {" "}
+              <Text style={styles.geriText}>{t("editProfile:profile")}</Text>   
+                     {" "}
             </Pressable>
-                        <Text style={styles.ustBaslik}>Profili Düzenle</Text>   
-                   {" "}
+                       {" "}
+            <Text style={styles.ustBaslik}>{t("editProfile:edit")}</Text>       
+               {" "}
             <View
               style={{
                 width: 60,
@@ -1806,11 +1793,15 @@ export default function ProfilGuncelle() {
                    {" "}
           {hata ? (
             <View style={styles.hataKutusu}>
-                            <Text style={styles.hataBaslik}>Hata</Text>         
-                  <Text style={styles.hataText}>{hata}</Text>             {" "}
+                           {" "}
+              <Text style={styles.hataBaslik}>{t("editProfile:error")}</Text>   
+                        <Text style={styles.hataText}>{hata}</Text>             {" "}
               <Pressable style={styles.hataKapat} onPress={() => setHata("")}>
-                                <Text style={styles.hataKapatText}>Kapat</Text> 
-                           {" "}
+                               {" "}
+                <Text style={styles.hataKapatText}>
+                  {t("editProfile:close")}
+                </Text>
+                             {" "}
               </Pressable>
                          {" "}
             </View>
@@ -1844,7 +1835,10 @@ export default function ProfilGuncelle() {
               ============================================ */}
                    {" "}
           <View style={styles.fotoBolumu}>
-                        <Text style={styles.bolumBaslik}>Profil Fotoğrafı</Text>
+                       {" "}
+            <Text style={styles.bolumBaslik}>
+              {t("editProfile:photoTitle")}
+            </Text>
                        {" "}
             <View style={styles.fotoOnizlemeContainer}>
                            {" "}
@@ -1883,8 +1877,10 @@ export default function ProfilGuncelle() {
                        {" "}
             <Pressable style={styles.fotoSecButonu} onPress={fotoSec}>
                            {" "}
-              <Text style={styles.fotoSecText}>📷 Profil Fotoğrafı Seç</Text>   
-                     {" "}
+              <Text style={styles.fotoSecText}>
+                {t("editProfile:choosePhoto")}
+              </Text>
+                         {" "}
             </Pressable>
                        {" "}
             <Text style={styles.fotoBilgi}>
@@ -1905,8 +1901,13 @@ export default function ProfilGuncelle() {
               ============================================ */}
                    {" "}
           <View style={styles.bolum}>
-                        <Text style={styles.bolumBaslik}>Kişisel Bilgiler</Text>
-                        <Text style={styles.inputLabel}>Ad</Text>           {" "}
+                       {" "}
+            <Text style={styles.bolumBaslik}>
+              {t("editProfile:personalInfo")}
+            </Text>
+                       {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:firstName")}</Text> 
+                     {" "}
             <TextInput
               style={styles.input}
 
@@ -1914,11 +1915,13 @@ export default function ProfilGuncelle() {
 
               onChangeText={setFirstName}
 
-              placeholder="Adiniz"
+              placeholder={t("editProfile:firstNamePlaceholder")}
 
               maxLength={100}
             />
-                        <Text style={styles.inputLabel}>Soyad</Text>           {" "}
+                       {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:lastName")}</Text> 
+                     {" "}
             <TextInput
               style={styles.input}
 
@@ -1926,12 +1929,13 @@ export default function ProfilGuncelle() {
 
               onChangeText={setLastName}
 
-              placeholder="Soyadiniz"
+              placeholder={t("editProfile:lastNamePlaceholder")}
 
               maxLength={100}
             />
-                        <Text style={styles.inputLabel}>Telefon</Text>         
-             {" "}
+                       {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:phone")}</Text>     
+                 {" "}
             <TextInput
               style={styles.input}
 
@@ -1939,19 +1943,19 @@ export default function ProfilGuncelle() {
 
               onChangeText={setPhoneNumber}
 
-              placeholder="Telefon numaraniz"
+              placeholder={t("editProfile:phonePlaceholder")}
 
               keyboardType="phone-pad"
             />
                      
             <View>
-              <Text style={styles.inputLabel}>İl</Text>
+              <Text style={styles.inputLabel}>{t("editProfile:city")}</Text>
 
               <Pressable
                 style={styles.secimSecili}
                 onPress={() =>
                   enumSecimPenceresiniAc(
-                    "İl Seçiniz",
+                    t("editProfile:selectCity"),
                     iller.map((il, index) => ({
                       kod: index,
                       aciklama: il,
@@ -1961,7 +1965,7 @@ export default function ProfilGuncelle() {
                 }
               >
                 <Text style={styles.secimSeciliText}>
-                  {city || "İl seçiniz"}
+                  {city || t("editProfile:cityPlaceholder")}
                 </Text>
                 <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
@@ -1979,12 +1983,15 @@ export default function ProfilGuncelle() {
                    {" "}
           <View style={styles.bolum}>
                        {" "}
-            <Text style={styles.bolumBaslik}>Profil Bilgilerim</Text>
+            <Text style={styles.bolumBaslik}>
+              {t("editProfile:profileInfo")}
+            </Text>
             <Text style={styles.seciliBilgi}>
-              Seçenekler sunucudan yüklenir ve profilinize kaydedilir.
+              {t("editProfile:optionsHint")}
             </Text>
                         {/* HAKKIMDA */}           {" "}
-            <Text style={styles.inputLabel}>Hakkimda</Text>           {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:about")}</Text>     
+                 {" "}
             <TextInput
               style={[styles.input, styles.textArea]}
 
@@ -1992,7 +1999,7 @@ export default function ProfilGuncelle() {
 
               onChangeText={setAbout}
 
-              placeholder="Kendinizden bahsedin"
+              placeholder={t("editProfile:aboutPlaceholder")}
 
               multiline
 
@@ -2003,7 +2010,8 @@ export default function ProfilGuncelle() {
               textAlignVertical="top"
             />
                         {/* MESLEK */}           {" "}
-            <Text style={styles.inputLabel}>Meslek</Text>           {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:profession")}</Text>
+                       {" "}
             <View style={styles.secimContainer}>
                            {" "}
               <Pressable
@@ -2011,7 +2019,7 @@ export default function ProfilGuncelle() {
 
                 onPress={() =>
                   enumSecimPenceresiniAc(
-                    "Meslek Seçiniz",
+                    t("editProfile:professionSelect"),
                     meslekler,
                     setProfession,
                   )
@@ -2021,7 +2029,7 @@ export default function ProfilGuncelle() {
                 <Text style={styles.secimSeciliText}>
                                    {" "}
                   {meslekler.find((item) => String(item.kod) === profession)
-                    ?.aciklama || "Meslek seçiniz"}
+                    ?.aciklama || t("editProfile:professionPlaceholder")}
                                  {" "}
                 </Text>
                                 <Text style={styles.secimOk}>⌄</Text>           
@@ -2030,7 +2038,8 @@ export default function ProfilGuncelle() {
                          {" "}
             </View>
                         {/* EGITIM */}           {" "}
-            <Text style={styles.inputLabel}>Eğitim</Text>           {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:education")}</Text> 
+                     {" "}
             <View style={styles.secimContainer}>
                            {" "}
               <Pressable
@@ -2038,7 +2047,7 @@ export default function ProfilGuncelle() {
 
                 onPress={() =>
                   enumSecimPenceresiniAc(
-                    "Eğitim Seçiniz",
+                    t("editProfile:educationSelect"),
                     egitimler,
                     setEducation,
                   )
@@ -2048,7 +2057,7 @@ export default function ProfilGuncelle() {
                 <Text style={styles.secimSeciliText}>
                                    {" "}
                   {egitimler.find((item) => String(item.kod) === education)
-                    ?.aciklama || "Eğitim seçiniz"}
+                    ?.aciklama || t("editProfile:educationPlaceholder")}
                                  {" "}
                 </Text>
                                 <Text style={styles.secimOk}>⌄</Text>           
@@ -2060,8 +2069,9 @@ export default function ProfilGuncelle() {
             <View style={styles.ikiKolon}>
                            {" "}
               <View style={styles.kolon}>
-                                <Text style={styles.inputLabel}>Boy</Text>     
-                         {" "}
+                               {" "}
+                <Text style={styles.inputLabel}>{t("editProfile:height")}</Text>
+                               {" "}
                 <TextInput
                   style={styles.input}
 
@@ -2069,7 +2079,7 @@ export default function ProfilGuncelle() {
 
                   onChangeText={setHeight}
 
-                  placeholder="cm"
+                  placeholder={t("editProfile:cm")}
 
                   keyboardType="numeric"
                 />
@@ -2077,8 +2087,9 @@ export default function ProfilGuncelle() {
               </View>
                            {" "}
               <View style={styles.kolon}>
-                                <Text style={styles.inputLabel}>Kilo</Text>     
-                         {" "}
+                               {" "}
+                <Text style={styles.inputLabel}>{t("editProfile:weight")}</Text>
+                               {" "}
                 <TextInput
                   style={styles.input}
 
@@ -2086,7 +2097,7 @@ export default function ProfilGuncelle() {
 
                   onChangeText={setWeight}
 
-                  placeholder="kg"
+                  placeholder={t("editProfile:kg")}
 
                   keyboardType="numeric"
                 />
@@ -2095,13 +2106,15 @@ export default function ProfilGuncelle() {
                          {" "}
             </View>
                         {/* MEDENI DURUM */}           {" "}
-            <Text style={styles.inputLabel}>Medeni Durum</Text>
+            <Text style={styles.inputLabel}>
+              {t("editProfile:maritalStatus")}
+            </Text>
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
                 onPress={() =>
                   enumSecimPenceresiniAc(
-                    "Medeni Durum Seçiniz",
+                    t("editProfile:maritalSelect"),
                     medeniDurumlar,
                     setMaritalStatus,
                   )
@@ -2110,20 +2123,20 @@ export default function ProfilGuncelle() {
                 <Text style={styles.secimSeciliText}>
                   {medeniDurumlar.find(
                     (item) => String(item.kod) === maritalStatus,
-                  )?.aciklama || "Medeni durum seçiniz"}
+                  )?.aciklama || t("editProfile:maritalPlaceholder")}
                 </Text>
 
                 <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
                         {/* MEZHEP */}           {" "}
-            <Text style={styles.inputLabel}>Mezhep</Text>
+            <Text style={styles.inputLabel}>{t("editProfile:religion")}</Text>
             <View style={styles.secimContainer}>
               <Pressable
                 style={styles.secimSecili}
                 onPress={() =>
                   enumSecimPenceresiniAc(
-                    "Mezhep Seçiniz",
+                    t("editProfile:religionSelect"),
                     mezhepler,
                     setReligion,
                   )
@@ -2131,14 +2144,15 @@ export default function ProfilGuncelle() {
               >
                 <Text style={styles.secimSeciliText}>
                   {mezhepler.find((item) => String(item.kod) === religion)
-                    ?.aciklama || "Mezhep seçiniz"}
+                    ?.aciklama || t("editProfile:religionPlaceholder")}
                 </Text>
 
                 <Text style={styles.secimOk}>⌄</Text>
               </Pressable>
             </View>
                         {/* ILGI ALANLARI */}           {" "}
-            <Text style={styles.inputLabel}>Ilgi Alanlari</Text>           {" "}
+            <Text style={styles.inputLabel}>{t("editProfile:interests")}</Text> 
+                     {" "}
             <View style={styles.ilgiAlanlariContainer}>
                            {" "}
               {ilgiAlanlari.length === 0 ? (
@@ -2201,8 +2215,10 @@ export default function ProfilGuncelle() {
           {profil?.id && (
             <View style={styles.bolum}>
                            {" "}
-              <Text style={styles.bolumBaslik}>Profil Sorulari</Text>           
-               {" "}
+              <Text style={styles.bolumBaslik}>
+                {t("editProfile:questions")}
+              </Text>
+                           {" "}
               {soruCevapHatasi ? (
                 <View style={styles.soruHataKutusu}>
                                    {" "}
@@ -2265,11 +2281,14 @@ export default function ProfilGuncelle() {
               <>
                                {" "}
                 <ActivityIndicator color="#FFFCFA" size="small" />             
-                  <Text style={styles.kaydetText}>Kaydediliyor...</Text>       
-                     {" "}
+                 {" "}
+                <Text style={styles.kaydetText}>{t("editProfile:saving")}</Text>
+                             {" "}
               </>
             ) : (
-              <Text style={styles.kaydetText}>✓ Değişiklikleri Kaydet</Text>
+              <Text style={styles.kaydetText}>
+                {t("editProfile:saveChanges")}
+              </Text>
             )}
                      {" "}
           </Pressable>
@@ -2289,7 +2308,7 @@ export default function ProfilGuncelle() {
             onPress={geriDon}
             disabled={saving}
           >
-            <Text style={styles.vazgecText}>Vazgeç</Text>
+            <Text style={styles.vazgecText}>{t("editProfile:cancel")}</Text>
           </Pressable>
           <View style={styles.altBosluk} />
         </ScrollView>

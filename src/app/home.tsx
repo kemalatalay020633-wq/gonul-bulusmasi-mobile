@@ -1,4 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { gecerliAccessTokenGetir } from "../services/api";
+import {
+  oturumNesliGecerliMi,
+  oturumNesliniGetir,
+  oturumuSonlandir,
+} from "../services/authSession";
 
 import { Client } from "@stomp/stompjs";
 import {
@@ -23,6 +29,7 @@ import { API_BASE_URL } from "../config/api";
 import { useNavigation } from "@react-navigation/native";
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useTranslation } from "react-i18next";
 
 const API_ADRESI = API_BASE_URL + "/api";
 
@@ -124,6 +131,7 @@ type KendiProfil = {
 
 const medeniDurumGoster = (
   deger: string | number | null | undefined,
+  t: (key: string) => string,
 ): string => {
   if (deger === null || deger === undefined || String(deger).trim() === "") {
     return "";
@@ -132,10 +140,10 @@ const medeniDurumGoster = (
   const metin = String(deger).trim();
 
   const sayisalKarsiliklar: Record<string, string> = {
-    "0": "Bekar",
-    "1": "Evli",
-    "2": "Boşanmış",
-    "3": "Dul",
+    "0": t("maritalStatus.single"),
+    "1": t("maritalStatus.married"),
+    "2": t("maritalStatus.divorced"),
+    "3": t("maritalStatus.widowed"),
   };
 
   if (Object.prototype.hasOwnProperty.call(sayisalKarsiliklar, metin)) {
@@ -145,12 +153,12 @@ const medeniDurumGoster = (
   const normal = metin.toLocaleUpperCase("tr-TR");
 
   const metinselKarsiliklar: Record<string, string> = {
-    BEKAR: "Bekar",
-    EVLI: "Evli",
-    EVLİ: "Evli",
-    BOSANMIS: "Boşanmış",
-    BOŞANMIŞ: "Boşanmış",
-    DUL: "Dul",
+    BEKAR: t("maritalStatus.single"),
+    EVLI: t("maritalStatus.married"),
+    EVLİ: t("maritalStatus.married"),
+    BOSANMIS: t("maritalStatus.divorced"),
+    BOŞANMIŞ: t("maritalStatus.divorced"),
+    DUL: t("maritalStatus.widowed"),
   };
 
   if (Object.prototype.hasOwnProperty.call(metinselKarsiliklar, normal)) {
@@ -195,6 +203,7 @@ const bosFiltreler: Filtreler = {
 
 export default function Home() {
   const navigation = useNavigation<any>();
+  const { t } = useTranslation("home");
   const [users, setUsers] = useState<DiscoverUser[]>([]);
 
   const [loading, setLoading] = useState(true);
@@ -214,31 +223,43 @@ export default function Home() {
   const [filtreModalAcik, setFiltreModalAcik] = useState(false);
 
   const [yenileme, setYenileme] = useState(false);
-  const [aktifSekme, setAktifSekme] = useState("Önerilen");
+  const [aktifSekme, setAktifSekme] = useState("recommended");
 
   // Okunmamış bildirim sayısı: zil ikonundaki rozet için kullanılır.
   const [bildirimSayisi, setBildirimSayisi] = useState(0);
   const bildirimIdleriRef = useRef<Set<number>>(new Set());
+  const onlineStompClientRef = useRef<Client | null>(null);
 
-  const bildirimSayisiniYukle = async (token: string, kullaniciId: string) => {
+  const bildirimSayisiniYukle = async (
+    token: string,
+    kullaniciId: string,
+  ): Promise<void> => {
+    const url = `${API_ADRESI}/bildirimler/${kullaniciId}/sayisi`;
+
     try {
-      const cevap = await fetch(
-        `${API_ADRESI}/bildirimler/${kullaniciId}/sayisi`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
+      console.log("BİLDİRİM SAYISI URL:", url);
+
+      const cevap = await fetch(url, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/json",
         },
-      );
+      });
+
+      console.log("BİLDİRİM SAYISI HTTP:", cevap.status);
+
+      const govde = await cevap.text();
+
+      console.log("BİLDİRİM SAYISI CEVAP:", govde);
 
       if (!cevap.ok) {
-        throw new Error(`Bildirim sayısı alınamadı: HTTP ${cevap.status}`);
+        throw new Error(
+          `Bildirim sayısı alınamadı: HTTP ${cevap.status} - ${govde}`,
+        );
       }
 
-      const veri = await cevap.json();
-      const sayi = Number(veri);
+      const sayi = Number(govde);
 
       if (Number.isFinite(sayi)) {
         setBildirimSayisi(Math.max(0, sayi));
@@ -249,40 +270,97 @@ export default function Home() {
   };
 
   useEffect(() => {
-    void kullaniciBilgileriniYukle();
-
     void kullanicilariYukle();
   }, []);
 
   useEffect(() => {
-    let client: Client | null = null;
     let iptalEdildi = false;
     let bildirimKontrolZamanlayici: ReturnType<typeof setInterval> | null =
       null;
+    let bildirimIstegiDevamEdiyor = false;
+
+    const oturumNesli = oturumNesliniGetir();
+
+    const oturumGecerliMi = () =>
+      !iptalEdildi && oturumNesliGecerliMi(oturumNesli);
 
     const cevrimIciBaglantisiKur = async () => {
       try {
-        const token = await AsyncStorage.getItem("token");
         const kullaniciId = await AsyncStorage.getItem("userId");
 
-        if (iptalEdildi || !token || !kullaniciId) {
-          console.log("ONLINE: token veya kullanıcı kimliği bulunamadı.");
+        if (!oturumGecerliMi() || !kullaniciId) {
+          console.log("ONLINE: Geçerli kullanıcı oturumu bulunamadı.");
           return;
         }
 
-        // Uygulama açıldığında mevcut okunmamış bildirim sayısını getir.
-        void bildirimSayisiniYukle(token, kullaniciId);
+        const token = await gecerliAccessTokenGetir();
 
-        // WebSocket bildirimi kaçırılırsa sayacı sunucudan tekrar eşitle.
+        if (!oturumGecerliMi() || !token) {
+          console.log("ONLINE: Geçerli access token bulunamadı.");
+          return;
+        }
+
+        const bildirimKontrolEt = async () => {
+          if (!oturumGecerliMi() || bildirimIstegiDevamEdiyor) {
+            return;
+          }
+
+          bildirimIstegiDevamEdiyor = true;
+
+          try {
+            const guncelKullaniciId = await AsyncStorage.getItem("userId");
+
+            if (!oturumGecerliMi() || guncelKullaniciId !== kullaniciId) {
+              return;
+            }
+
+            const guncelToken = await gecerliAccessTokenGetir();
+
+            if (!oturumGecerliMi() || !guncelToken) {
+              return;
+            }
+
+            await bildirimSayisiniYukle(guncelToken, kullaniciId);
+          } catch (hata) {
+            console.error("BİLDİRİM KONTROL HATASI:", hata);
+          } finally {
+            bildirimIstegiDevamEdiyor = false;
+          }
+        };
+
+        void bildirimKontrolEt();
+
         bildirimKontrolZamanlayici = setInterval(() => {
-          void bildirimSayisiniYukle(token, kullaniciId);
-        }, 10000);
+          void bildirimKontrolEt();
+        }, 30000);
 
-        client = new Client({
+        const connectHeaders: Record<string, string> = {};
+
+        const yeniClient = new Client({
           webSocketFactory: () => new WebSocket(WEBSOCKET_URL, ["v12.stomp"]),
 
-          connectHeaders: {
-            Authorization: `Bearer ${token}`,
+          connectHeaders,
+
+          beforeConnect: async () => {
+            if (!oturumGecerliMi()) {
+              throw new Error("ONLINE STOMP oturumu geçersiz.");
+            }
+
+            const guncelKullaniciId = await AsyncStorage.getItem("userId");
+
+            if (!oturumGecerliMi() || guncelKullaniciId !== kullaniciId) {
+              throw new Error("ONLINE STOMP kullanıcı oturumu değişti.");
+            }
+
+            const guncelToken = await gecerliAccessTokenGetir();
+
+            if (!oturumGecerliMi() || !guncelToken) {
+              throw new Error("ONLINE STOMP access token bulunamadı.");
+            }
+
+            connectHeaders.Authorization = `Bearer ${guncelToken}`;
+
+            console.log("ONLINE STOMP güncel token hazır.");
           },
 
           reconnectDelay: 3000,
@@ -291,10 +369,21 @@ export default function Home() {
           forceBinaryWSFrames: true,
           appendMissingNULLonIncoming: true,
 
+          debug: () => {},
+
           onConnect: () => {
+            if (!oturumGecerliMi()) {
+              console.log("ONLINE STOMP: Eski oturum bağlantısı reddedildi.");
+              return;
+            }
+
             console.log("ONLINE WebSocket bağlantısı kuruldu.");
 
-            client?.subscribe("/topic/online", (mesaj) => {
+            yeniClient.subscribe("/topic/online", (mesaj) => {
+              if (!oturumGecerliMi()) {
+                return;
+              }
+
               try {
                 const durum = JSON.parse(mesaj.body);
 
@@ -302,7 +391,6 @@ export default function Home() {
                   typeof durum?.userId !== "number" ||
                   typeof durum?.online !== "boolean"
                 ) {
-                  console.log("ONLINE: beklenmeyen mesaj biçimi.", durum);
                   return;
                 }
 
@@ -321,36 +409,35 @@ export default function Home() {
                 );
 
                 setMevcutKullanici((onceki) => {
-                  if (!onceki) return null;
-
-                  if (onceki.id !== durum.userId) return onceki;
+                  if (!onceki || onceki.id !== durum.userId) {
+                    return onceki;
+                  }
 
                   return {
                     ...onceki,
                     online: durum.online,
                   };
                 });
-
-                console.log("ONLINE durumu güncellendi:", durum);
               } catch (hata) {
                 console.error("ONLINE mesajı okunamadı:", hata);
               }
             });
 
-            // Web sürümüyle aynı kişisel bildirim kanalını dinle.
-            client?.subscribe(`/topic/bildirim/${kullaniciId}`, (mesaj) => {
+            yeniClient.subscribe(`/topic/bildirim/${kullaniciId}`, (mesaj) => {
+              if (!oturumGecerliMi()) {
+                return;
+              }
+
               try {
                 const veri = JSON.parse(mesaj.body);
 
                 console.log("MOBİL YENİ BİLDİRİM:", veri);
 
-                // Backend bazı durumlarda yalnızca güncel sayıyı gönderebilir.
                 if (typeof veri === "number") {
                   setBildirimSayisi(Math.max(0, veri));
                   return;
                 }
 
-                // Normal bildirim nesnesi geldiyse okunmamış sayısını artır.
                 if (veri && typeof veri === "object") {
                   if (veri.okundu === true || veri.read === true) {
                     return;
@@ -358,7 +445,6 @@ export default function Home() {
 
                   const bildirimId = Number(veri.id);
 
-                  // Aynı bildirim yeniden gönderilirse rozeti iki kez artırma.
                   if (Number.isFinite(bildirimId) && bildirimId > 0) {
                     if (bildirimIdleriRef.current.has(bildirimId)) {
                       return;
@@ -381,17 +467,34 @@ export default function Home() {
           },
 
           onStompError: (frame) => {
-            console.error("ONLINE STOMP hatası:", frame.headers["message"]);
+            console.error("ONLINE STOMP HATASI:", frame.headers["message"]);
           },
 
           onWebSocketError: (hata) => {
-            console.error("ONLINE WebSocket hatası:", hata);
+            console.error("ONLINE WebSocket HATASI:", hata);
+          },
+
+          onWebSocketClose: (event) => {
+            console.log("ONLINE WebSocket kapandı:", {
+              code: event.code,
+              reason: event.reason,
+            });
           },
         });
 
-        client.activate();
+        if (!oturumGecerliMi()) {
+          return;
+        }
+
+        onlineStompClientRef.current = yeniClient;
+
+        void yeniClient.activate();
+
+        console.log("ONLINE STOMP bağlantısı başlatıldı.");
       } catch (hata) {
-        console.error("ONLINE bağlantısı kurulamadı:", hata);
+        if (oturumGecerliMi()) {
+          console.error("ONLINE bağlantısı kurulamadı:", hata);
+        }
       }
     };
 
@@ -400,27 +503,25 @@ export default function Home() {
     return () => {
       iptalEdildi = true;
 
-      if (bildirimKontrolZamanlayici) {
+      console.log("ONLINE STOMP EFFECT CLEANUP.");
+
+      if (bildirimKontrolZamanlayici !== null) {
         clearInterval(bildirimKontrolZamanlayici);
+        bildirimKontrolZamanlayici = null;
       }
 
-      if (client) {
-        void client.deactivate();
+      const kapatilacakClient = onlineStompClientRef.current;
+      onlineStompClientRef.current = null;
+
+      if (kapatilacakClient !== null) {
+        void kapatilacakClient.deactivate().catch((hata) => {
+          console.error("ONLINE STOMP kapatma hatası:", hata);
+        });
       }
+
+      console.log("ONLINE STOMP EFFECT TEMİZLENDİ.");
     };
   }, []);
-
-  const kullaniciBilgileriniYukle = async () => {
-    try {
-      const kayitliUsername = await AsyncStorage.getItem("username");
-
-      if (kayitliUsername) {
-        setUsername(kayitliUsername);
-      }
-    } catch (hata) {
-      console.error("KULLANICI BİLGİLERİ OKUMA HATASI:", hata);
-    }
-  };
 
   const yasHesapla = (dogumTarihi?: string | null): number | null => {
     if (!dogumTarihi) {
@@ -456,7 +557,7 @@ export default function Home() {
 
       setError("");
 
-      const token = await AsyncStorage.getItem("token");
+      const token = await gecerliAccessTokenGetir();
       const userIdString = await AsyncStorage.getItem("userId");
 
       if (!token) {
@@ -468,7 +569,7 @@ export default function Home() {
       const mevcutUserId = Number(userIdString);
 
       if (!mevcutUserId || Number.isNaN(mevcutUserId)) {
-        await AsyncStorage.multiRemove(["token", "userId", "username", "role"]);
+        await oturumuSonlandir();
 
         navigation.replace("index");
 
@@ -561,7 +662,7 @@ export default function Home() {
       if (hata instanceof Error) {
         setError(hata.message);
       } else {
-        setError("Kullanıcılar alınamadı.");
+        setError(t("errors.usersLoadFailed"));
       }
     } finally {
       setLoading(false);
@@ -753,9 +854,9 @@ export default function Home() {
   const sekmeyeGoreKullanicilar = useMemo(() => {
     let sonuc = [...siralanmisKullanicilar];
 
-    if (aktifSekme === "Çevrimiçi") {
+    if (aktifSekme === "online") {
       sonuc = sonuc.filter(({ user }) => user.online);
-    } else if (aktifSekme === "Yeni Üye") {
+    } else if (aktifSekme === "newMembers") {
       sonuc = sonuc.filter(({ user }) => {
         if (!user.createdAt) return false;
         const kayitTarihi = new Date(user.createdAt).getTime();
@@ -764,7 +865,7 @@ export default function Home() {
           Date.now() - kayitTarihi <= 30 * 24 * 60 * 60 * 1000
         );
       });
-    } else if (aktifSekme === "Yakınımda") {
+    } else if (aktifSekme === "nearby") {
       const sehir = currentUserCity.trim().toLocaleLowerCase("tr-TR");
       sonuc = sehir
         ? sonuc.filter(
@@ -801,43 +902,29 @@ export default function Home() {
   }, [filtreler]);
 
   const cikisYap = () => {
-    Alert.alert(
-      "Çıkış Yap",
+    Alert.alert(t("logout.title"), t("logout.confirm"), [
+      {
+        text: t("common.cancel"),
+        style: "cancel",
+      },
+      {
+        text: t("logout.button"),
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await oturumuSonlandir();
 
-      "Hesabınızdan çıkış yapmak istediğinize emin misiniz?",
-
-      [
-        {
-          text: "Vazgeç",
-
-          style: "cancel",
+            navigation.replace("index");
+          } catch (hata) {
+            console.error("ÇIKIŞ HATASI:", hata);
+            Alert.alert(
+              t("logout.title"),
+              "Oturum kapatılırken bir hata oluştu.",
+            );
+          }
         },
-
-        {
-          text: "Çıkış Yap",
-
-          style: "destructive",
-
-          onPress: async () => {
-            try {
-              await AsyncStorage.multiRemove([
-                "token",
-
-                "userId",
-
-                "username",
-
-                "role",
-              ]);
-
-              navigation.replace("index");
-            } catch (hata) {
-              console.error("ÇIKIŞ HATASI:", hata);
-            }
-          },
-        },
-      ],
-    );
+      },
+    ]);
   };
 
   const bildirimleriAc = () => {
@@ -874,7 +961,7 @@ export default function Home() {
     const { user, profile } = item;
     const yas = yasHesapla(user.birthDate);
     const fotografVar = fotografVarMi(profile);
-    const medeniDurum = medeniDurumGoster(profile?.maritalStatus);
+    const medeniDurum = medeniDurumGoster(profile?.maritalStatus, t);
     const boy = profile?.height != null ? `${profile.height} cm` : "";
 
     return (
@@ -909,7 +996,7 @@ export default function Home() {
             Date.now() - new Date(user.createdAt).getTime() <=
               30 * 24 * 60 * 60 * 1000 && (
               <View style={styles.yeniEtiket}>
-                <Text style={styles.yeniEtiketMetin}>YENİ</Text>
+                <Text style={styles.yeniEtiketMetin}>{t("newBadge")}</Text>
               </View>
             )}
 
@@ -931,7 +1018,7 @@ export default function Home() {
                 user.online ? styles.onlineMetinAktif : styles.onlineMetinPasif,
               ]}
             >
-              {user.online ? "Çevrimiçi" : "Çevrimdışı"}
+              {user.online ? t("online") : t("offline")}
             </Text>
           </View>
 
@@ -958,7 +1045,7 @@ export default function Home() {
           activeOpacity={0.85}
           onPress={() => profilAc(user.id)}
         >
-          <Text style={styles.profilGorMetin}>Profili Gör</Text>
+          <Text style={styles.profilGorMetin}>{t("viewProfile")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -971,7 +1058,7 @@ export default function Home() {
 
         <Text style={styles.loadingBaslik}>Gönül Buluşması</Text>
 
-        <Text style={styles.loadingMetin}>Kullanıcılar yükleniyor...</Text>
+        <Text style={styles.loadingMetin}>{t("loadingUsers")}</Text>
       </SafeAreaView>
     );
   }
@@ -1003,7 +1090,7 @@ export default function Home() {
                   </Text>
                 </TouchableOpacity>
 
-                <Text style={styles.ustBarBaslik}>Ara</Text>
+                <Text style={styles.ustBarBaslik}>{t("searchTitle")}</Text>
 
                 <TouchableOpacity
                   style={styles.profilAvatarButonu}
@@ -1023,8 +1110,17 @@ export default function Home() {
                     <Text style={styles.profilAvatarMetin}>👤</Text>
                   )}
                 </TouchableOpacity>
-              </View>
 
+                <TouchableOpacity
+                  style={styles.cikisButonu}
+                  onPress={cikisYap}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.cikisButonuMetin}>
+                    {t("logout.button")}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -1032,28 +1128,28 @@ export default function Home() {
                 contentContainerStyle={styles.sekmeler}
               >
                 {[
-                  "Önerilen",
-                  "Çevrimiçi",
-                  "Yeni Üye",
-                  "Yakınımda",
-                  "Puanlananlar",
+                  { id: "recommended", label: t("tabs.recommended") },
+                  { id: "online", label: t("tabs.online") },
+                  { id: "newMembers", label: t("tabs.newMembers") },
+                  { id: "nearby", label: t("tabs.nearby") },
+                  { id: "topRated", label: t("tabs.topRated") },
                 ].map((sekme) => (
                   <TouchableOpacity
-                    key={sekme}
+                    key={sekme.id}
                     style={[
                       styles.sekmeButonu,
-                      aktifSekme === sekme && styles.sekmeButonuAktif,
+                      aktifSekme === sekme.id && styles.sekmeButonuAktif,
                     ]}
-                    onPress={() => setAktifSekme(sekme)}
+                    onPress={() => setAktifSekme(sekme.id)}
                     activeOpacity={0.8}
                   >
                     <Text
                       style={[
                         styles.sekmeMetni,
-                        aktifSekme === sekme && styles.sekmeMetniAktif,
+                        aktifSekme === sekme.id && styles.sekmeMetniAktif,
                       ]}
                     >
-                      {sekme}
+                      {sekme.label}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1064,30 +1160,26 @@ export default function Home() {
               {error ? (
                 <View style={styles.hataKutusu}>
                   <Text style={styles.hataBaslik}>
-                    Kullanıcılar yüklenemedi
+                    {t("errors.usersLoadFailed")}
                   </Text>
                   <Text style={styles.hataMetin}>{error}</Text>
                   <TouchableOpacity
                     style={styles.tekrarDeneButonu}
                     onPress={yenile}
                   >
-                    <Text style={styles.tekrarDeneMetin}>Tekrar Dene</Text>
+                    <Text style={styles.tekrarDeneMetin}>{t("retry")}</Text>
                   </TouchableOpacity>
                 </View>
               ) : null}
-
-              {aktifSekme === "Puanlananlar" ? (
-                <Text style={styles.sekmeBilgi}>
-                  Puanlama alanı mevcut API modelinde bulunmadığı için bu
-                  sekmede puana göre sıralama henüz yapılmıyor.
-                </Text>
+              {aktifSekme === "topRated" ? (
+                <Text style={styles.sekmeBilgi}>{t("topRatedInfo")}</Text>
               ) : null}
 
               <View style={styles.sonucBasligi}>
                 <Text style={styles.bolumBaslik}>
-                  {aktifSekme === "Önerilen"
-                    ? "Sana Uygun Kullanıcılar"
-                    : aktifSekme}
+                  {aktifSekme === "recommended"
+                    ? t("recommendedUsers")
+                    : t(`tabs.${aktifSekme}`)}
                 </Text>
                 <View style={styles.kullaniciSayisi}>
                   <Text style={styles.kullaniciSayisiMetin}>
@@ -1099,11 +1191,9 @@ export default function Home() {
               {sekmeyeGoreKullanicilar.length === 0 && (
                 <View style={styles.bosSonuc}>
                   <Text style={styles.bosSonucIkon}>⌕</Text>
-                  <Text style={styles.bosSonucBaslik}>
-                    Uygun kullanıcı bulunamadı
-                  </Text>
+                  <Text style={styles.bosSonucBaslik}>{t("empty.title")}</Text>
                   <Text style={styles.bosSonucMetin}>
-                    Farklı bir sekme veya filtre deneyebilirsiniz.
+                    {t("empty.description")}
                   </Text>
                 </View>
               )}
@@ -1186,10 +1276,10 @@ export default function Home() {
           <View style={styles.filtreModal}>
             <View style={styles.modalBaslikSatiri}>
               <View>
-                <Text style={styles.modalBaslik}>Filtreler</Text>
+                <Text style={styles.modalBaslik}>{t("filters.title")}</Text>
 
                 <Text style={styles.modalAltBaslik}>
-                  Sana uygun profilleri bul
+                  {t("filters.subtitle")}
                 </Text>
               </View>
 
@@ -1207,13 +1297,13 @@ export default function Home() {
 
               contentContainerStyle={styles.filtreScroll}
             >
-              <Text style={styles.filtreGrupBaslik}>Yaş</Text>
+              <Text style={styles.filtreGrupBaslik}>{t("filters.age")}</Text>
 
               <View style={styles.ikiInput}>
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
 
-                  placeholder="Minimum yaş"
+                  placeholder={t("filters.minAge")}
 
                   placeholderTextColor="#B98BCB"
 
@@ -1227,7 +1317,7 @@ export default function Home() {
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
 
-                  placeholder="Maksimum yaş"
+                  placeholder={t("filters.maxAge")}
 
                   placeholderTextColor="#B98BCB"
 
@@ -1239,13 +1329,13 @@ export default function Home() {
                 />
               </View>
 
-              <Text style={styles.filtreGrupBaslik}>Boy</Text>
+              <Text style={styles.filtreGrupBaslik}>{t("filters.height")}</Text>
 
               <View style={styles.ikiInput}>
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
 
-                  placeholder="Minimum boy"
+                  placeholder={t("filters.minHeight")}
 
                   placeholderTextColor="#B98BCB"
 
@@ -1259,7 +1349,7 @@ export default function Home() {
                 <TextInput
                   style={[styles.input, styles.ikiInputEleman]}
 
-                  placeholder="Maksimum boy"
+                  placeholder={t("filters.maxHeight")}
 
                   placeholderTextColor="#B98BCB"
 
@@ -1271,12 +1361,14 @@ export default function Home() {
                 />
               </View>
 
-              <Text style={styles.filtreGrupBaslik}>Konum</Text>
+              <Text style={styles.filtreGrupBaslik}>
+                {t("filters.location")}
+              </Text>
 
               <TextInput
                 style={styles.input}
 
-                placeholder="Şehir"
+                placeholder={t("filters.city")}
 
                 placeholderTextColor="#B98BCB"
 
@@ -1285,12 +1377,14 @@ export default function Home() {
                 onChangeText={(deger) => filtreGuncelle("city", deger)}
               />
 
-              <Text style={styles.filtreGrupBaslik}>Profil Bilgileri</Text>
+              <Text style={styles.filtreGrupBaslik}>
+                {t("filters.profileInfo")}
+              </Text>
 
               <TextInput
                 style={styles.input}
 
-                placeholder="Medeni durum"
+                placeholder={t("filters.maritalStatus")}
 
                 placeholderTextColor="#B98BCB"
 
@@ -1302,7 +1396,7 @@ export default function Home() {
               <TextInput
                 style={styles.input}
 
-                placeholder="Meslek"
+                placeholder={t("filters.profession")}
 
                 placeholderTextColor="#B98BCB"
 
@@ -1314,7 +1408,7 @@ export default function Home() {
               <TextInput
                 style={styles.input}
 
-                placeholder="Eğitim"
+                placeholder={t("filters.education")}
 
                 placeholderTextColor="#B98BCB"
 
@@ -1326,7 +1420,7 @@ export default function Home() {
               <TextInput
                 style={styles.input}
 
-                placeholder="İlgi alanı"
+                placeholder={t("filters.interest")}
 
                 placeholderTextColor="#B98BCB"
 
@@ -1335,7 +1429,7 @@ export default function Home() {
                 onChangeText={(deger) => filtreGuncelle("interest", deger)}
               />
 
-              <Text style={styles.filtreGrupBaslik}>Ek Filtreler</Text>
+              <Text style={styles.filtreGrupBaslik}>{t("filters.extra")}</Text>
 
               <TouchableOpacity
                 style={styles.checkboxSatiri}
@@ -1359,7 +1453,7 @@ export default function Home() {
                 </View>
 
                 <Text style={styles.checkboxMetin}>
-                  Sadece aktif kullanıcılar
+                  {t("filters.onlyActive")}
                 </Text>
               </TouchableOpacity>
 
@@ -1384,7 +1478,9 @@ export default function Home() {
                   )}
                 </View>
 
-                <Text style={styles.checkboxMetin}>Sadece yakınımdakiler</Text>
+                <Text style={styles.checkboxMetin}>
+                  {t("filters.onlySameCity")}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1414,7 +1510,9 @@ export default function Home() {
                   )}
                 </View>
 
-                <Text style={styles.checkboxMetin}>Sadece fotoğraflı</Text>
+                <Text style={styles.checkboxMetin}>
+                  {t("filters.onlyWithPhoto")}
+                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1444,7 +1542,9 @@ export default function Home() {
                   )}
                 </View>
 
-                <Text style={styles.checkboxMetin}>Sadece fotoğrafsız</Text>
+                <Text style={styles.checkboxMetin}>
+                  {t("filters.onlyWithoutPhoto")}
+                </Text>
               </TouchableOpacity>
 
               <View style={styles.filtreButonlari}>
@@ -1453,7 +1553,9 @@ export default function Home() {
 
                   onPress={filtreleriTemizle}
                 >
-                  <Text style={styles.filtreTemizleMetin}>Temizle</Text>
+                  <Text style={styles.filtreTemizleMetin}>
+                    {t("filters.clear")}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -1461,7 +1563,9 @@ export default function Home() {
 
                   onPress={() => setFiltreModalAcik(false)}
                 >
-                  <Text style={styles.filtreUygulaMetin}>Uygula</Text>
+                  <Text style={styles.filtreUygulaMetin}>
+                    {t("filters.apply")}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -2537,26 +2641,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  cikisButonu: {
-    width: "100%",
-
-    minHeight: 52,
-
-    borderRadius: 18,
-
-    borderWidth: 1,
-
-    borderColor: "#F4C45B",
-
-    backgroundColor: "#300044",
-
-    alignItems: "center",
-
-    justifyContent: "center",
-
-    flexDirection: "row",
-  },
-
   cikisIkon: {
     fontSize: 18,
 
@@ -2802,6 +2886,22 @@ const styles = StyleSheet.create({
 
     fontSize: 14,
 
+    fontWeight: "800",
+  },
+  cikisButonu: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: "#5A183F",
+    borderWidth: 1,
+    borderColor: "#F4C45B",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  cikisButonuMetin: {
+    color: "#F4C45B",
+    fontSize: 13,
     fontWeight: "800",
   },
 });

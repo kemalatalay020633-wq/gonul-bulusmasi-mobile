@@ -1,13 +1,15 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function ProfileLoading() {
+  const { t } = useTranslation("myProfile");
+
   return (
     <View style={styles.container}>
       <View style={styles.card}>
         <ActivityIndicator size="large" color="#8F2942" />
 
-        <Text style={styles.text}>Profil yükleniyor...</Text>
+        <Text style={styles.text}>{t("loading.profile")}</Text>
       </View>
     </View>
   );

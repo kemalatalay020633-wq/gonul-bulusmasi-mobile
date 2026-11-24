@@ -1,3 +1,4 @@
+import { tokenGetir } from "./tokenServisi";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { WEBSOCKET_URL } from "../config/api";
 const WEBSOCKET_ADRESI = WEBSOCKET_URL;
@@ -248,7 +249,7 @@ class StompTest {
     console.log("🧪 STOMP.js DEVRE DIŞI");
     console.log("🧪 Native WebSocket + manuel STOMP 1.2 kullanılacak.");
     console.log("======================================");
-    const token = await AsyncStorage.getItem("token");
+    const token = await tokenGetir();
     if (!token) {
       console.error("❌ STOMP TEST: JWT TOKEN YOK");
       return {

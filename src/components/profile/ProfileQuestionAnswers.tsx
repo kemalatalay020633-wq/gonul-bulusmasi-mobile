@@ -1,4 +1,4 @@
-import React from "react";
+import { useTranslation } from "react-i18next";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 type ProfilSorusu = {
@@ -27,42 +27,41 @@ export default function ProfileQuestionAnswers({
   answers,
   loading = false,
 }: ProfileQuestionAnswersProps) {
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Sorular ve Cevaplar</Text>
-
-        <View style={styles.loadingBox}>
-          <ActivityIndicator size="small" color="#8F2942" />
-
-          <Text style={styles.loadingText}>
-            Sorular ve cevaplar yükleniyor...
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  const { t } = useTranslation("profileDetails");
 
   const doluCevaplar = answers.filter(
     (cevap) => typeof cevap.answer === "string" && cevap.answer.trim() !== "",
   );
 
-  if (doluCevaplar.length === 0) {
+  if (loading) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Sorular ve Cevaplar</Text>
+        <Text style={styles.title}>{t("questionAnswers.title")}</Text>
 
-        <View style={styles.emptyBox}>
-          <Text style={styles.emptyText}>
-            Henüz profil sorularına cevap verilmemiş.
-          </Text>
+        <View style={styles.loadingBox}>
+          <ActivityIndicator size="small" color="#8F2942" />
+
+          <Text style={styles.loadingText}>{t("questionAnswers.loading")}</Text>
         </View>
       </View>
     );
   }
+
+  if (doluCevaplar.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>{t("questionAnswers.title")}</Text>
+
+        <View style={styles.emptyBox}>
+          <Text style={styles.emptyText}>{t("questionAnswers.empty")}</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sorular ve Cevaplar</Text>
+      <Text style={styles.title}>{t("questionAnswers.title")}</Text>
 
       <View style={styles.list}>
         {doluCevaplar.map((cevap) => {
@@ -73,7 +72,7 @@ export default function ProfileQuestionAnswers({
           return (
             <View key={cevap.id} style={styles.answerCard}>
               <Text style={styles.question}>
-                {soru?.question || "Profil sorusu"}
+                {soru?.question || t("questionAnswers.questionFallback")}
               </Text>
 
               <Text style={styles.answer}>{cevap.answer}</Text>
@@ -121,6 +120,7 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: 12,
   },
+
   emptyBox: {
     width: "100%",
     padding: 18,
@@ -137,6 +137,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 21,
   },
+
   answerCard: {
     width: "100%",
     padding: 18,
