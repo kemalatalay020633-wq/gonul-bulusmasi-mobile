@@ -39,7 +39,12 @@ export default function AppNavigator({
     <NavigationContainer
       ref={navigationRef}
       onReady={() => {
+        console.log("NAVIGATION HAZIR:", {
+          aramaModu,
+          mevcutEkran: navigationRef.getCurrentRoute()?.name,
+        });
         if (aramaModu) {
+          console.log("ÖZEL GELEN ARAMA EKRANI AÇILIYOR");
           // Önce Messages yüklenir ve STOMP bağlantısını kurar.
           // Ardından yeni gelen arama ekranı açılır.
           navigationRef.navigate("incomingCall", {

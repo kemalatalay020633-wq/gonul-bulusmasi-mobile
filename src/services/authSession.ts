@@ -3,7 +3,8 @@ import axios from "axios";
 
 import { API_BASE_URL } from "../config/api";
 import { loginEkraninaYonlendir } from "../navigation/navigationService";
-
+import aramaWebRTC from "./AramaWebRTC";
+import merkeziStompServisi from "./MerkeziStompServisi";
 import {
   refreshTokenGetir,
   tokenDepolamaIslemi,
@@ -90,6 +91,39 @@ export const oturumuSonlandir = async (): Promise<void> => {
   const cikisNesli = oturumNesli;
 
   console.log("OTURUM SONLANDIRMA BAŞLATILDI.");
+
+  // ============================================
+  // WEBRTC ARAMA TEMİZLİĞİ
+  // ============================================
+
+  try {
+    // Aktif görüşme varsa önce CALL_END gönderilir.
+    // E2EE handshake, medya ve PeerConnection temizlenir.
+    //
+    // Harici sinyal göndericisi aktif olduğu için
+    // AramaWebRTC merkezi STOMP bağlantısını kapatmaz.
+
+    await aramaWebRTC.temizle();
+
+    console.log("🔴 LOGOUT: WEBRTC ARAMA KAYNAKLARI TEMİZLENDİ.");
+  } catch (error) {
+    console.error("❌ LOGOUT WEBRTC TEMİZLEME HATASI:", error);
+  }
+
+  // ============================================
+  // MERKEZİ STOMP BAĞLANTISINI KAPAT
+  // ============================================
+
+  try {
+    // WebRTC temizliği tamamlandıktan sonra
+    // merkezi STOMP bağlantısı kapatılır.
+
+    await merkeziStompServisi.durdur();
+
+    console.log("🔴 LOGOUT: MERKEZİ STOMP BAĞLANTISI KAPATILDI.");
+  } catch (error) {
+    console.error("❌ LOGOUT MERKEZİ STOMP KAPATMA HATASI:", error);
+  }
 
   try {
     // ============================================

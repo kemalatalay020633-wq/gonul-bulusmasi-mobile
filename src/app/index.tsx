@@ -1,5 +1,7 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Alert,
   Image,
@@ -10,14 +12,14 @@ import {
   TextInput,
   View,
 } from "react-native";
-
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useTranslation } from "react-i18next";
 import { API_BASE_URL } from "../config/api";
 import { diliDegistir, type DesteklenenDil } from "../dil/i18n";
+import { gecerliAccessTokenGetir } from "../services/api";
+import aramaWebRTC from "../services/AramaWebRTC";
 import { bekleyenAramayiGetir } from "../services/bekleyenAramaServisi";
 import E2EEDeviceService from "../services/E2EEDeviceService";
 import { fcmCihazKaydet } from "../services/fcmServisi";
+import merkeziStompServisi from "../services/MerkeziStompServisi";
 
 import {
   refreshTokenKaydet,
@@ -264,7 +266,25 @@ export default function AnaSayfa() {
             // yeni oturum aktif hâle getirilir.
             oturumAcildi();
           });
+          // ============================================
+          // MERKEZİ STOMP VE GLOBAL WEBRTC BAŞLAT
+          // ============================================
 
+          merkeziStompServisi.tokenSaglayicisiniAyarla(gecerliAccessTokenGetir);
+
+          void aramaWebRTC
+            .gelenAramalariDinlemeyeBaslat(Number(veri.userId))
+            .then(() => merkeziStompServisi.baslat())
+            .then((basarili) => {
+              console.log(
+                basarili
+                  ? "🟢 LOGIN: MERKEZİ STOMP BAŞLATILDI"
+                  : "❌ LOGIN: MERKEZİ STOMP BAŞLATILAMADI",
+              );
+            })
+            .catch((error) => {
+              console.error("❌ LOGIN WEBRTC BAŞLATMA HATASI:", error);
+            });
           console.log("ACCESS TOKEN KAYDEDİLDİ.");
           console.log("REFRESH TOKEN KEYCHAIN'E KAYDEDİLDİ.");
           console.log("KULLANICI BİLGİLERİ KAYDEDİLDİ.");

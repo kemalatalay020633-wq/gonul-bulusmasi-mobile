@@ -1,3 +1,12 @@
+import { NativeModules } from "react-native";
+
+const WebRTCNativeCamera = NativeModules.WebRTCModule as {
+  mediaStreamTrackSetCaptureEnabled?: (
+    trackId: string,
+    enabled: boolean,
+  ) => void;
+};
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Client, IMessage, StompSubscription } from "@stomp/stompjs";
 import type { RTCRtpEncodingParameters } from "react-native-webrtc";
@@ -286,7 +295,8 @@ class AramaWebRTC {
 
   // Aynı gelen aramanın iki farklı UI dinleyicisinden
   // eş zamanlı kabul edilmesini engeller.
-  private gelenAramaKabulPromise: Promise<RTCSessionDescriptionInit> | null = null;
+  private gelenAramaKabulPromise: Promise<RTCSessionDescriptionInit> | null =
+    null;
 
   private ringbackHoparlorOnceAcik = false;
 
@@ -719,8 +729,7 @@ class AramaWebRTC {
     }
 
     const aktifPeerConnection =
-      this.peerConnection &&
-      this.peerConnection.signalingState !== "closed";
+      this.peerConnection && this.peerConnection.signalingState !== "closed";
 
     if (
       this.aramaSonlandiriliyor ||
@@ -728,7 +737,7 @@ class AramaWebRTC {
       aktifPeerConnection
     ) {
       throw new Error(
-        "Başka bir arama oturumu hâlâ aktif veya temizleniyor. Yeni gelen arama yüklenmedi."
+        "Başka bir arama oturumu hâlâ aktif veya temizleniyor. Yeni gelen arama yüklenmedi.",
       );
     }
 
@@ -2264,7 +2273,12 @@ class AramaWebRTC {
           "  Android call audio oturumu başlatılamadı; WebRTC medya akışı yine de alınacak.",
         );
       }
-
+      console.log("🟢 GET USER MEDIA BAŞLIYOR", {
+        nesil,
+        mevcutNesil: this.aramaNesli,
+        aramaTuru: this.aramaTuru,
+        zaman: Date.now(),
+      });
       const stream = await mediaDevices.getUserMedia({
         audio: true,
         video:
@@ -2277,10 +2291,33 @@ class AramaWebRTC {
               }
             : false,
       });
-
+      console.log("🟢 GET USER MEDIA TAMAMLANDI", {
+        nesil,
+        mevcutNesil: this.aramaNesli,
+        streamId: stream.id,
+        tracks: stream.getTracks().map((track) => ({
+          id: track.id,
+          kind: track.kind,
+          readyState: track.readyState,
+        })),
+        zaman: Date.now(),
+      });
       // Medya izni beklenirken arama değişmiş olabilir.
       if (nesil !== this.aramaNesli || this.aramaSonlandiriliyor) {
+        console.error(
+          "🔴 KAMERA AKIŞI NESİL UYUŞMAZLIĞI NEDENİYLE DURDURULUYOR",
+          {
+            medyaNesli: nesil,
+            mevcutNesil: this.aramaNesli,
+            aramaSonlandiriliyor: this.aramaSonlandiriliyor,
+            streamId: stream.id,
+          },
+        );
+
+        console.trace("🔴 İLK KAMERA STOP ÇAĞRI ZİNCİRİ");
+
         stream.getTracks().forEach((track) => track.stop());
+
         throw new Error(
           "Medya akışı eski arama nesline ait; kullanıma alınmadı.",
         );
@@ -3224,8 +3261,8 @@ class AramaWebRTC {
     const transceivers = peerConnection.getTransceivers();
 
     for (const pending of this.e2eeBekleyenGondericiler) {
-      const mediaSection = remoteSections.find(
-        (section) => section.startsWith(`m=${pending.track.kind} `),
+      const mediaSection = remoteSections.find((section) =>
+        section.startsWith(`m=${pending.track.kind} `),
       );
 
       const remoteMid = mediaSection
@@ -3263,9 +3300,9 @@ class AramaWebRTC {
         console.warn("E2EE SENDER MID DÜZELTMESİ:", {
           kind: pending.track.kind,
           trackId: pending.track.id,
-          oldMid: transceivers.find(
-            (item: any) => item.sender === oldSender,
-          )?.mid ?? null,
+          oldMid:
+            transceivers.find((item: any) => item.sender === oldSender)?.mid ??
+            null,
           newMid: target.mid,
         });
 
@@ -3273,10 +3310,7 @@ class AramaWebRTC {
         pending.detached = target.sender.track == null;
       }
 
-      if (
-        target.direction === "recvonly" ||
-        target.direction === "inactive"
-      ) {
+      if (target.direction === "recvonly" || target.direction === "inactive") {
         target.direction = "sendrecv";
       }
 
@@ -4084,9 +4118,32 @@ class AramaWebRTC {
 
     // Eski medya akışını kapat.
     if (eskiYerelStream) {
+      console.error("🔴 ARAMA TEMİZLİĞİ KAMERAYI DURDURUYOR", {
+        cleanupNesli,
+        mevcutNesil: this.aramaNesli,
+        streamId: eskiYerelStream.id,
+        tracks: eskiYerelStream.getTracks().map((track) => ({
+          id: track.id,
+          kind: track.kind,
+          readyState: track.readyState,
+        })),
+      });
+
+      console.trace("🔴 ARAMA TEMİZLİĞİ STOP ÇAĞRI ZİNCİRİ");
+
       eskiYerelStream.getTracks().forEach((track) => {
         try {
+          // Önce WebRTC track'ini sonlandır.
           track.stop();
+
+          // Ardından native medya kaynağını serbest bırak.
+          // Video track için bu işlem fiziksel kamerayı da kapatır.
+          track.release();
+
+          console.log("✅ NATIVE TRACK RELEASE TAMAMLANDI:", {
+            trackId: track.id,
+            kind: track.kind,
+          });
         } catch (hata) {
           console.warn("Eski yerel track kapatma hatası:", hata);
         }
@@ -4261,28 +4318,27 @@ class AramaWebRTC {
       return;
     }
 
+    const captureControl =
+      WebRTCNativeCamera.mediaStreamTrackSetCaptureEnabled;
+
+    if (typeof captureControl !== "function") {
+      console.error(
+        "Native kamera kontrol metodu bulunamadı. Android uygulamasını yeniden derleyin.",
+      );
+      return;
+    }
+
     this.yerelStream.getVideoTracks().forEach((track) => {
       track.enabled = acik;
+      captureControl(track.id, acik);
     });
 
-    console.log(acik ? " Kamera açıldı." : " Kamera kapatıldı.");
-  } /*\*
-
-
-
-   \* =========================================================
-
-
-
-   \* KAMERA DEĞİŞTİR
-
-
-
-   \* =========================================================
-
-
-
-   */
+    console.log(
+      acik
+        ? "Kamera açıldı (track + fiziksel capture)."
+        : "Kamera kapatıldı (track + fiziksel capture).",
+    );
+  }
 
   kamerayiCevir() {
     if (!this.yerelStream) {

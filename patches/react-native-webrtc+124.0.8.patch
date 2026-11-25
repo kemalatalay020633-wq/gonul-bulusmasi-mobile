@@ -3,20 +3,65 @@ index 033a226..537bc27 100644
 --- a/node_modules/react-native-webrtc/android/build.gradle
 +++ b/node_modules/react-native-webrtc/android/build.gradle
 @@ -31,6 +31,6 @@ android {
- 
+
  dependencies {
      implementation "com.facebook.react:react-android:+"
 -    api 'org.jitsi:webrtc:124.+'
 +    api 'org.jitsi:webrtc:124.0.0-e2ee'
      implementation "androidx.core:core:1.7.0"
  }
+diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/GetUserMediaImpl.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/GetUserMediaImpl.java
+index e15cdb8..4915210 100644
+--- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/GetUserMediaImpl.java
++++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/GetUserMediaImpl.java
+@@ -241,15 +241,25 @@ class GetUserMediaImpl {
+         });
+     }
+
+-    void mediaStreamTrackSetEnabled(String trackId, final boolean enabled) {
++    // Track.enabled yalnızca WebRTC video izini susturur/açar.
++    // Fiziksel kamera yakalaması ayrı metotla yönetilir.
++    void mediaStreamTrackSetCaptureEnabled(String trackId, final boolean enabled) {
+         TrackPrivate track = tracks.get(trackId);
+-        if (track != null && track.videoCaptureController != null) {
+-            if (enabled) {
+-                track.videoCaptureController.startCapture();
+-            } else {
+-                track.videoCaptureController.stopCapture();
+-            }
++        if (track == null || track.videoCaptureController == null) {
++            return;
++        }
++
++        if (track.captureEnabled == enabled) {
++            return;
+         }
++
++        if (enabled) {
++            track.videoCaptureController.startCapture();
++        } else {
++            track.videoCaptureController.stopCapture();
++        }
++
++        track.captureEnabled = enabled;
+     }
+
+     void disposeTrack(String id) {
+@@ -535,6 +545,7 @@ class GetUserMediaImpl {
+          * Whether this object has been disposed or not.
+          */
+         private boolean disposed;
++        private boolean captureEnabled = true;
+
+         /**
+          * Initializes a new {@code TrackPrivate} instance.
 diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
 index 510435b..ace9811 100644
 --- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
 +++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/PeerConnectionObserver.java
 @@ -412,6 +412,9 @@ class PeerConnectionObserver implements PeerConnection.Observer {
          Log.d(TAG, "onAddTrack");
- 
+
          ThreadUtils.runOnExecutor(() -> {
 +            // Uzak alıcının E2EE frame decryptor bağlantısı.
 +            webRTCModule.attachE2EEReceiverIfReady(this.id, receiver);
@@ -42,21 +87,21 @@ index 510435b..ace9811 100644
 +            );
 +        });
 +    }
- 
+
      /*
       * Triggered when a previously added remote track is removed by the remote
 diff --git a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
-index d5a9fb4..49680fb 100644
+index d5a9fb4..2dd40ef 100644
 --- a/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
 +++ b/node_modules/react-native-webrtc/android/src/main/java/com/oney/WebRTCModule/WebRTCModule.java
 @@ -1,12 +1,12 @@
  package com.oney.WebRTCModule;
- 
+
 +import android.util.Base64;
  import android.util.Log;
  import android.util.Pair;
  import android.util.SparseArray;
- 
+
  import androidx.annotation.NonNull;
  import androidx.annotation.Nullable;
 -
@@ -64,7 +109,7 @@ index d5a9fb4..49680fb 100644
  import com.facebook.react.bridge.Callback;
  import com.facebook.react.bridge.Promise;
 @@ -52,6 +52,11 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
- 
+
      // Need to expose the peer connection codec factories here to get capabilities
      private final SparseArray<PeerConnectionObserver> mPeerConnectionObservers;
 +    private final SparseArray<E2EESession> mE2EESessions = new SparseArray<>();
@@ -73,12 +118,12 @@ index d5a9fb4..49680fb 100644
 +    private final SparseArray<Boolean> mE2EEPeerConfirmed = new SparseArray<>();
 +    private final SparseArray<Boolean> mE2EERequired = new SparseArray<>();
      final Map<String, MediaStream> localStreams;
- 
+
      // Store generated certificates by ID to avoid exposing private keys to JS
 @@ -74,6 +79,25 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
          Logging.Severity loggingSeverity = options.loggingSeverity;
          String fieldTrials = options.fieldTrials;
- 
+
 +        // E2EE AAD TEST: GenericDescriptorAuth iki cihazda da kapalı.
 +        if (fieldTrials == null) {
 +            fieldTrials = "";
@@ -104,7 +149,7 @@ index d5a9fb4..49680fb 100644
 @@ -132,6 +156,351 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
          return (pco == null) ? null : pco.getPeerConnection();
      }
- 
+
 +    // These helpers must run on the WebRTC executor.
 +  void attachE2EEReceiverIfReady(int pcId, RtpReceiver receiver) {
 +    E2EESession session = mE2EESessions.get(pcId);
@@ -486,7 +531,7 @@ index d5a9fb4..49680fb 100644
 @@ -546,6 +924,14 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                              return null;
                          }
- 
+
 +                        if (mE2EERequired.get(id, false)
 +                                && (mE2EESessions.get(id) == null
 +                                || !mE2EEInitialized.get(id, false)
@@ -503,13 +548,13 @@ index d5a9fb4..49680fb 100644
                          }
                          RtpSender sender = pco.getPeerConnection().addTrack(track, streamIds);
 +                        attachE2EESenderIfReady(id, sender);
- 
+
                          // Need to get the corresponding transceiver as well
                          RtpTransceiver transceiver = pco.getTransceiver(sender.id());
 @@ -679,8 +1066,25 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
                      return;
                  }
- 
+
 -                MediaStreamTrack track = getLocalTrack(trackId);
 -                sender.setTrack(track, false);
 +                MediaStreamTrack track = trackId == null ? null : getLocalTrack(trackId);
@@ -534,7 +579,31 @@ index d5a9fb4..49680fb 100644
                  promise.resolve(true);
              } catch (Exception e) {
                  Log.d(TAG, "senderReplaceTrack(): " + e.getMessage());
-@@ -1340,9 +1744,13 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+@@ -892,8 +1296,22 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+             if (track.enabled() == enabled) {
+                 return;
+             }
++            // Yalnızca WebRTC track durumunu değiştir.
++            // Fiziksel kamera kontrolü mediaStreamTrackSetCaptureEnabled
++            // üzerinden ayrıca yapılır.
+             track.setEnabled(enabled);
+-            getUserMediaImpl.mediaStreamTrackSetEnabled(id, enabled);
++        });
++    }
++
++    @ReactMethod
++    public void mediaStreamTrackSetCaptureEnabled(String id, boolean enabled) {
++        ThreadUtils.runOnExecutor(() -> {
++            try {
++                getUserMediaImpl.mediaStreamTrackSetCaptureEnabled(id, enabled);
++                Log.d(TAG, "KAMERA CAPTURE DURUMU: track=" + id + ", enabled=" + enabled);
++            } catch (Exception e) {
++                Log.e(TAG, "Kamera capture durumu değiştirilemedi: " + id, e);
++            }
+         });
+     }
+
+@@ -1340,9 +1758,13 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
              PeerConnectionObserver pco = mPeerConnectionObservers.get(id);
              if (pco == null || pco.getPeerConnection() == null) {
                  Log.d(TAG, "peerConnectionClose() peerConnection is null");
@@ -547,8 +616,8 @@ index d5a9fb4..49680fb 100644
 +            mE2EERequired.remove(id);
          });
      }
- 
-@@ -1352,9 +1760,15 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
+
+@@ -1352,9 +1774,15 @@ public class WebRTCModule extends ReactContextBaseJavaModule {
              PeerConnectionObserver pco = mPeerConnectionObservers.get(id);
              if (pco == null || pco.getPeerConnection() == null) {
                  Log.d(TAG, "peerConnectionDispose() peerConnection is null");
@@ -563,14 +632,14 @@ index d5a9fb4..49680fb 100644
 +            mE2EERequired.remove(id);
          });
      }
- 
+
 diff --git a/node_modules/react-native-webrtc/src/RTCRtpSender.ts b/node_modules/react-native-webrtc/src/RTCRtpSender.ts
 index 4366b32..a74b00c 100644
 --- a/node_modules/react-native-webrtc/src/RTCRtpSender.ts
 +++ b/node_modules/react-native-webrtc/src/RTCRtpSender.ts
 @@ -29,11 +29,11 @@ export default class RTCRtpSender {
      }
- 
+
      async replaceTrack(track: MediaStreamTrack | null): Promise<void> {
 -        try {
 -            await WebRTCModule.senderReplaceTrack(this._peerConnectionId, this._id, track ? track.id : null);
@@ -582,6 +651,6 @@ index 4366b32..a74b00c 100644
 +            this._id,
 +            track ? track.id : null
 +        );
- 
+
          this._track = track;
      }

@@ -427,9 +427,7 @@ export default function Messages() {
 
     getMediaUrl,
 
-    aramaSinyaliDinle,
 
-    aramaSinyaliGonder,
 
     aramaIzniVer,
 

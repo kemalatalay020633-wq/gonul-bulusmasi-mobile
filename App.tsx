@@ -8,17 +8,18 @@ import {
 import { useEffect, useState } from "react";
 import { PermissionsAndroid, Platform } from "react-native";
 import { i18nHazir } from "./src/dil/i18n";
+import aramaWebRTC from "./src/services/AramaWebRTC";
+import merkeziStompServisi from "./src/services/MerkeziStompServisi";
 
 import notifee, { EventType } from "@notifee/react-native";
 
 import AppNavigator from "./src/navigation/AppNavigator";
 
-import {
-  gelenAramaBildiriminiKapat,
-} from "./src/services/aramaBildirimServisi";
+import { gelenAramaBildiriminiKapat } from "./src/services/aramaBildirimServisi";
 
 import { gecerliAccessTokenGetir } from "./src/services/api";
 import { fcmCihazKaydet } from "./src/services/fcmServisi";
+import { premiumKontrolEt } from "./src/services/premiumKontrolServisi";
 
 import {
   bekleyenAramayiKaydet,
@@ -185,7 +186,119 @@ function App({
       aktif = false;
     };
   }, []);
+  /*
+   * =========================================================
+   * GLOBAL WEBRTC VE MERKEZİ STOMP
+   * =========================================================
+   *
+   * Bu bağlantı Messages ekranından bağımsız çalışır.
+   * Arama sinyalleri uygulamanın bütün ekranlarında dinlenir.
+   */
 
+  useEffect(() => {
+    let aktif = true;
+
+    // Merkezi STOMP üzerinden gelen arama sinyallerini dinle.
+    const dinleyiciTemizle = merkeziStompServisi.dinle((message) => {
+      if (!aktif) {
+        return;
+      }
+
+      const destination = message.headers.destination;
+
+      if (destination?.startsWith("/topic/arama/") && message.body) {
+        console.log("📞 GLOBAL WEBRTC ARAMA SİNYALİ ALINDI:", destination);
+
+        try {
+          aramaWebRTC.gelenAramaSinyaliniIsle(message.body);
+        } catch (error) {
+          console.error("❌ GLOBAL WEBRTC SİNYAL İŞLEME HATASI:", error);
+        }
+      }
+    });
+
+    // WebRTC'nin bütün giden arama sinyallerini
+    // merkezi STOMP servisine yönlendir.
+    aramaWebRTC.sinyalGondericiyiAyarla(async (sinyal) => {
+      if (!aktif) {
+        throw new Error("Global WebRTC taşıyıcısı aktif değil.");
+      }
+
+      await merkeziStompServisi.aramaSinyaliGonder(sinyal);
+    });
+
+    // Merkezi STOMP yeniden bağlandığında WebRTC'yi bilgilendir.
+    merkeziStompServisi.baglantiKurulduCallbackAyarla(() => {
+      if (!aktif) {
+        return;
+      }
+
+      console.log("🟢 GLOBAL STOMP BAĞLANTISI WEBRTC'YE BİLDİRİLDİ");
+
+      aramaWebRTC.stompBaglantisiYenidenKuruldu();
+    });
+
+    // JWT sağlayıcısı.
+    merkeziStompServisi.tokenSaglayicisiniAyarla(gecerliAccessTokenGetir);
+    merkeziStompServisi.premiumKontrolFonksiyonunuAyarla(premiumKontrolEt);
+
+    const merkeziStompBaslat = async () => {
+      try {
+        const userIdText = await AsyncStorage.getItem("userId");
+
+        if (!aktif) {
+          return;
+        }
+
+        if (!userIdText) {
+          console.log("ℹ️ GLOBAL STOMP BEKLEMEDE: KULLANICI OTURUMU YOK.");
+
+          return;
+        }
+
+        const userId = Number(userIdText);
+
+        if (!Number.isFinite(userId) || userId <= 0) {
+          console.warn("⚠️ GLOBAL STOMP: GEÇERSİZ USER ID:", userIdText);
+
+          return;
+        }
+
+        // Önce WebRTC kullanıcı kimliğini ayarla.
+        // Harici gönderici yukarıda ayarlandığı için
+        // WebRTC kendi ikinci STOMP bağlantısını açmaz.
+        await aramaWebRTC.gelenAramalariDinlemeyeBaslat(userId);
+
+        if (!aktif) {
+          return;
+        }
+
+        const basarili = await merkeziStompServisi.baslat();
+
+        console.log(
+          basarili
+            ? "🟢 GLOBAL WEBRTC VE STOMP BAŞLATILDI"
+            : "❌ GLOBAL STOMP BAŞLATILAMADI",
+        );
+      } catch (error) {
+        console.error("❌ GLOBAL WEBRTC BAŞLATMA HATASI:", error);
+      }
+    };
+
+    void merkeziStompBaslat();
+
+    return () => {
+      aktif = false;
+
+      dinleyiciTemizle();
+
+      aramaWebRTC.sinyalGondericiyiAyarla(null);
+
+      merkeziStompServisi.baglantiKurulduCallbackAyarla(null);
+
+      console.log("🔴 GLOBAL WEBRTC DİNLEYİCİSİ TEMİZLENDİ");
+    };
+  }, []);
   /*
    * =====================================================
    * FCM VE NOTIFEE BAŞLATMA
@@ -516,6 +629,7 @@ function App({
  */
 
 export default function AnaUygulama() {
+  console.log("🔵 NORMAL ANA UYGULAMA AÇILDI");
   return <App baslangicEkrani="index" aramaModu={false} />;
 }
 
@@ -526,5 +640,6 @@ export default function AnaUygulama() {
  */
 
 export function GelenAramaApp() {
+  console.log("🟢 ÖZEL GELEN ARAMA UYGULAMASI AÇILDI");
   return <App baslangicEkrani="messages" aramaModu={true} />;
 }

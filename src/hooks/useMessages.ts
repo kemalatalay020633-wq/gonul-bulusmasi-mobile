@@ -168,42 +168,6 @@ function useMessages() {
   const stompClientRef = useRef<Client | null>(null);
 
   const stompBagliRef = useRef(false);
-  type BekleyenAramaOnayi = {
-    resolve: () => void;
-    reject: (error: Error) => void;
-    timeout: ReturnType<typeof setTimeout>;
-  };
-
-  const bekleyenAramaOnaylariRef = useRef(
-    new Map<string, BekleyenAramaOnayi>(),
-  );
-
-  const bekleyenAramaOnaylariniReddet = useCallback((error: Error) => {
-    for (const [oturumId, bekleyen] of bekleyenAramaOnaylariRef.current) {
-      clearTimeout(bekleyen.timeout);
-      bekleyenAramaOnaylariRef.current.delete(oturumId);
-      bekleyen.reject(error);
-    }
-  }, []);
-  /*
-   * =========================================================
-   * ARAMA SİNYAL DİNLEYİCİLERİ
-   * =========================================================
-   */
-  const aramaSinyalDinleyicileriRef = useRef<Set<(body: string) => void>>(
-    new Set(),
-  );
-
-  /*
-   * =========================================================
-   * ARAMA SİNYAL DİNLEYİCİLERİ
-   * =========================================================
-   *
-   * Arama için ayrı bir STOMP bağlantısı açmıyoruz.
-   * Mevcut mesaj STOMP bağlantısı üzerinden
-   * /topic/arama/{currentUserId} dinlenir.
-   */
-
   const yaziyorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -750,115 +714,6 @@ function useMessages() {
   );
   /*
    * =========================================================
-   * ARAMA SİNYAL DİNLE
-   * =========================================================
-   */
-  const aramaSinyaliDinle = useCallback((callback: (body: string) => void) => {
-    aramaSinyalDinleyicileriRef.current.add(callback);
-
-    return () => {
-      aramaSinyalDinleyicileriRef.current.delete(callback);
-    };
-  }, []);
-
-  /*
-   * =========================================================
-   * ARAMA SİNYALİ GÖNDER
-   * =========================================================
-   */
-  const aramaSinyaliGonder = useCallback(
-    async (sinyal: any): Promise<void> => {
-      if (sinyal?.tip === "CALL_OFFER") {
-        console.log("📞 CALL_OFFER PREMIUM KONTROLÜ BAŞLIYOR.");
-
-        const premium = await premiumKontrolEt();
-
-        if (!premium) {
-          throw new Error("Arama başlatmak için Premium üyelik gereklidir.");
-        }
-
-        const oturumId = String(sinyal?.aramaOturumId ?? "").trim();
-
-        if (!oturumId) {
-          throw new Error(
-            "CALL_OFFER gönderilemedi: Arama oturum kimliği bulunamadı.",
-          );
-        }
-
-        if (bekleyenAramaOnaylariRef.current.has(oturumId)) {
-          throw new Error("Bu arama oturumu için zaten ACK bekleniyor.");
-        }
-
-        let bekleyen!: BekleyenAramaOnayi;
-
-        const ackPromise = new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => {
-            if (bekleyenAramaOnaylariRef.current.get(oturumId) === bekleyen) {
-              bekleyenAramaOnaylariRef.current.delete(oturumId);
-            }
-
-            reject(
-              new Error(
-                "CALL_OFFER_ACK zaman aşımına uğradı. Sunucu arama oturumunu onaylamadı.",
-              ),
-            );
-          }, 15000);
-
-          bekleyen = {
-            resolve,
-            reject,
-            timeout,
-          };
-
-          bekleyenAramaOnaylariRef.current.set(oturumId, bekleyen);
-        });
-
-        console.log("⏳ CALL_OFFER gönderiliyor, ACK bekleniyor:", oturumId);
-
-        try {
-          const gonderildi = await stompFrameGonder(
-            "/app/arama/sinyal",
-            sinyal,
-          );
-
-          if (!gonderildi) {
-            throw new Error("CALL_OFFER STOMP üzerinden gönderilemedi.");
-          }
-
-          await ackPromise;
-
-          console.log("🟢 CALL_OFFER_ACK ALINDI:", oturumId);
-        } catch (hata) {
-          const mevcut = bekleyenAramaOnaylariRef.current.get(oturumId);
-
-          if (mevcut === bekleyen) {
-            clearTimeout(bekleyen.timeout);
-            bekleyenAramaOnaylariRef.current.delete(oturumId);
-          }
-
-          throw hata instanceof Error
-            ? hata
-            : new Error("CALL_OFFER gönderimi veya sunucu onayı başarısız.");
-        }
-
-        return;
-      }
-
-      const gonderildi = await stompFrameGonder("/app/arama/sinyal", sinyal);
-
-      if (!gonderildi) {
-        throw new Error(
-          "Arama sinyali gönderilemedi. WebSocket/STOMP bağlantısı hazır değil.",
-        );
-      }
-
-      console.log("📞 ARAMA SİNYALİ GÖNDERİLDİ:", sinyal?.tip);
-    },
-    [premiumKontrolEt, stompFrameGonder],
-  );
-
-  /*
-   * =========================================================
    * ARAMA İZNİ VER
    * =========================================================
    *
@@ -983,69 +838,6 @@ function useMessages() {
           veri = JSON.parse(bodyPart);
         } catch {
           console.log("❌ STOMP JSON PARSE EDİLEMEDİ:", bodyPart);
-          return;
-        }
-
-        /*
-         * =========================================================
-         * ARAMA SİNYALİ
-         * =========================================================
-         */
-        if (veri?.tip === "CALL_OFFER_ACK") {
-          const oturumId = String(veri?.aramaOturumId ?? "").trim();
-
-          console.log("📨 CALL_OFFER_ACK ALINDI:", oturumId);
-
-          const bekleyen = bekleyenAramaOnaylariRef.current.get(oturumId);
-
-          if (!bekleyen) {
-            console.warn("⚠️ ACK için bekleyen arama bulunamadı:", oturumId);
-            return;
-          }
-
-          clearTimeout(bekleyen.timeout);
-          bekleyenAramaOnaylariRef.current.delete(oturumId);
-
-          bekleyen.resolve();
-
-          return;
-        }
-        if (
-          destination?.includes("/queue/arama-hatalari") ||
-          destination?.includes("/queue/hatalar")
-        ) {
-          console.error("❌ ARAMA SUNUCU HATASI:", veri);
-
-          bekleyenAramaOnaylariniReddet(
-            new Error(
-              veri?.mesaj || veri?.message || "Sunucu arama isteğini reddetti.",
-            ),
-          );
-
-          return;
-        }
-        if (destination?.includes("/topic/arama/")) {
-          console.log("📨 STOMP ARAMA SİNYALİ GELDİ:", {
-            destination,
-            dinleyiciSayisi: aramaSinyalDinleyicileriRef.current.size,
-          });
-          console.log(
-            "📨 ARAMA DİNLEYİCİ SAYISI:",
-            aramaSinyalDinleyicileriRef.current.size,
-          );
-
-          aramaSinyalDinleyicileriRef.current.forEach((callback) => {
-            try {
-              console.log(
-                "📨📨📨 useMessages ARAMA SİNYALİ DİNLİYİCİYE AKTARILIYOR",
-              );
-
-              callback(bodyPart);
-            } catch (hata) {
-              console.error("❌ ARAMA SİNYAL CALLBACK HATASI:", hata);
-            }
-          });
-
           return;
         }
 
@@ -1221,7 +1013,6 @@ function useMessages() {
       mesajEkleVeyaGuncelle,
       mesajMedyalariniGetir,
       stompFrameGonder,
-      bekleyenAramaOnaylariniReddet,
     ],
   );
 
@@ -1260,47 +1051,9 @@ function useMessages() {
    * kullanır. İkinci bir sinyal dinleyicisi kurulmaz.
    */
 
-  useEffect(() => {
-    let aktif = true;
+  // WebRTC arama sinyalleri artık App.tsx üzerinden
+  // merkezi STOMP servisiyle yönetiliyor.
 
-    const dinleyiciTemizle = aramaSinyaliDinle((body) => {
-      if (!aktif) {
-        return;
-      }
-
-      try {
-        console.log("📨 WEBRTC ARAMA SİNYALİ TEK NOKTADAN İŞLENİYOR");
-
-        aramaWebRTC.gelenAramaSinyaliniIsle(body);
-      } catch (hata) {
-        console.error("❌ WEBRTC GELEN ARAMA SİNYALİ İŞLEME HATASI:", hata);
-      }
-    });
-
-    aramaWebRTC.sinyalGondericiyiAyarla((sinyal) => {
-      if (!aktif) {
-        return Promise.reject(
-          new Error("Arama sinyal taşıyıcısı artık aktif değil."),
-        );
-      }
-
-      return aramaSinyaliGonder(sinyal).catch((hata) => {
-        console.error("❌ WEBRTC SİNYALİ GÖNDERİLEMEDİ:", hata);
-        throw hata;
-      });
-    });
-
-    console.log("🟢 WEBRTC -> MESAJ STOMP TAŞIYICISI BAĞLANDI");
-
-    return () => {
-      aktif = false;
-
-      dinleyiciTemizle();
-      aramaWebRTC.sinyalGondericiyiAyarla(null);
-
-      console.log("🔴 WEBRTC -> MESAJ STOMP TAŞIYICISI AYRILDI");
-    };
-  }, [aramaSinyaliDinle, aramaSinyaliGonder]);
   /*
    * =========================================================
    * STOMP SUBSCRIBE
@@ -1471,8 +1224,6 @@ function useMessages() {
           }
 
           console.log("🟢🟢🟢 STOMP CONNECTED 🟢🟢🟢");
-          stompSubscribe("/user/queue/arama-onaylari");
-          stompSubscribe("/user/queue/arama-hatalari");
           stompBagliRef.current = true;
           stompClientRef.current = client;
 
@@ -1485,12 +1236,11 @@ function useMessages() {
           stompSubscribe(`/topic/yeni-mesaj/${currentUserId}`);
           stompSubscribe(`/topic/mesaj-okundu/${currentUserId}`);
           stompSubscribe(`/topic/yaziyor/${currentUserId}`);
-          stompSubscribe(`/topic/arama/${currentUserId}`);
 
           console.log("🟢🟢🟢 STOMP TÜM ABONELİKLER TAMAMLANDI 🟢🟢🟢");
 
           // STOMP yeniden bağlandı: yalnızca bekleyen ICE kuyruğunu devam ettir.
-          aramaWebRTC.stompBaglantisiYenidenKuruldu();
+
 
         },
 
@@ -1502,17 +1252,11 @@ function useMessages() {
           );
 
           stompBagliRef.current = false;
-          bekleyenAramaOnaylariniReddet(
-            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
-          );
         },
 
         onWebSocketError: (event) => {
           console.error("❌ WEBSOCKET HATASI:", event);
           stompBagliRef.current = false;
-          bekleyenAramaOnaylariniReddet(
-            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
-          );
         },
 
         onWebSocketClose: (event) => {
@@ -1522,17 +1266,11 @@ function useMessages() {
           });
 
           stompBagliRef.current = false;
-          bekleyenAramaOnaylariniReddet(
-            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
-          );
         },
 
         onDisconnect: () => {
           console.log("🔴 STOMP DISCONNECT");
           stompBagliRef.current = false;
-          bekleyenAramaOnaylariniReddet(
-            new Error("STOMP bağlantısı kesildi. Arama onayı alınamadı."),
-          );
         },
       });
 
@@ -1543,7 +1281,7 @@ function useMessages() {
 
       client.activate();
     },
-    [getToken, getCurrentUserId, stompSubscribe, bekleyenAramaOnaylariniReddet],
+    [getToken, getCurrentUserId, stompSubscribe],
   );
 
   /*
@@ -3097,8 +2835,6 @@ function useMessages() {
      */
     premiumKontrolEt,
 
-    aramaSinyaliDinle,
-    aramaSinyaliGonder,
 
     /*
      * Arama izinleri
