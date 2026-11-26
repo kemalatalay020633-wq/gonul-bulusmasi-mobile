@@ -15,11 +15,12 @@ import {
 import { API_BASE_URL } from "../config/api";
 import { diliDegistir, type DesteklenenDil } from "../dil/i18n";
 import { gecerliAccessTokenGetir } from "../services/api";
-import aramaWebRTC from "../services/AramaWebRTC";
 import { bekleyenAramayiGetir } from "../services/bekleyenAramaServisi";
 import E2EEDeviceService from "../services/E2EEDeviceService";
-import { fcmCihazKaydet } from "../services/fcmServisi";
-import merkeziStompServisi from "../services/MerkeziStompServisi";
+import {
+  fcmCihazKaydet,
+  fcmTokenYenilemeDinleyicisiniBaslat,
+} from "../services/fcmServisi";
 
 import {
   refreshTokenKaydet,
@@ -28,7 +29,12 @@ import {
   tokenKaydet,
 } from "../services/tokenServisi";
 
-import { oturumAcildi } from "../services/authSession";
+import {
+  oturumAcildi,
+  oturumGecisiniSirayaAl,
+  oturumNesliniGetir,
+  oturumNesliGecerliMi,
+} from "../services/authSession";
 
 console.log("INDEX DOSYASI ÇALIŞIYOR");
 
@@ -248,7 +254,10 @@ export default function AnaSayfa() {
           // Böylece eski logout işlemi yeni kullanıcının tokenlarını
           // silemez veya refresh işlemi login tokenlarını ezemez.
 
-          await tokenDepolamaIslemi(async () => {
+          let loginOturumNesli = -1;
+
+          await oturumGecisiniSirayaAl(async () => {
+            await tokenDepolamaIslemi(async () => {
             // Önce refresh token kaydedilir.
             await refreshTokenKaydet(veri.refreshToken);
 
@@ -265,26 +274,15 @@ export default function AnaSayfa() {
             // Bütün kayıtlar başarılı olduktan sonra
             // yeni oturum aktif hâle getirilir.
             oturumAcildi();
-          });
-          // ============================================
-          // MERKEZİ STOMP VE GLOBAL WEBRTC BAŞLAT
-          // ============================================
+            loginOturumNesli = oturumNesliniGetir();
 
-          merkeziStompServisi.tokenSaglayicisiniAyarla(gecerliAccessTokenGetir);
-
-          void aramaWebRTC
-            .gelenAramalariDinlemeyeBaslat(Number(veri.userId))
-            .then(() => merkeziStompServisi.baslat())
-            .then((basarili) => {
-              console.log(
-                basarili
-                  ? "🟢 LOGIN: MERKEZİ STOMP BAŞLATILDI"
-                  : "❌ LOGIN: MERKEZİ STOMP BAŞLATILAMADI",
-              );
-            })
-            .catch((error) => {
-              console.error("❌ LOGIN WEBRTC BAŞLATMA HATASI:", error);
+            // FCM token değişikliklerini yalnızca bu oturumda dinle.
+            fcmTokenYenilemeDinleyicisiniBaslat(
+              gecerliAccessTokenGetir,
+              () => oturumNesliGecerliMi(loginOturumNesli),
+            );
             });
+          });
           console.log("ACCESS TOKEN KAYDEDİLDİ.");
           console.log("REFRESH TOKEN KEYCHAIN'E KAYDEDİLDİ.");
           console.log("KULLANICI BİLGİLERİ KAYDEDİLDİ.");
@@ -317,7 +315,16 @@ export default function AnaSayfa() {
           try {
             console.log("FCM CİHAZ KAYDI BAŞLATILIYOR...");
 
-            const fcmKayitBasarili = await fcmCihazKaydet(veri.token);
+            if (!oturumNesliGecerliMi(loginOturumNesli)) {
+              console.log("LOGIN FCM KAYDI İPTAL: OTURUM DEĞİŞMİŞ.");
+              return;
+            }
+
+            const fcmKayitBasarili = await fcmCihazKaydet(
+              veri.token,
+              undefined,
+              () => oturumNesliGecerliMi(loginOturumNesli),
+            );
 
             if (fcmKayitBasarili) {
               console.log("FCM CİHAZ KAYDI BAŞARILI:", veri.userId);

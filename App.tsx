@@ -1,11 +1,14 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   getMessaging,
-  getToken,
   onMessage,
-  onTokenRefresh,
 } from "@react-native-firebase/messaging";
 import { useEffect, useState } from "react";
+import {
+  oturumDurumuDinle,
+  oturumDurumunuGetir,
+} from "./src/services/authSession";
+import { uygulamaOturumunuBaslat } from "./src/services/uygulamaBaslangicServisi";
 import { PermissionsAndroid, Platform } from "react-native";
 import { i18nHazir } from "./src/dil/i18n";
 import aramaWebRTC from "./src/services/AramaWebRTC";
@@ -18,7 +21,6 @@ import AppNavigator from "./src/navigation/AppNavigator";
 import { gelenAramaBildiriminiKapat } from "./src/services/aramaBildirimServisi";
 
 import { gecerliAccessTokenGetir } from "./src/services/api";
-import { fcmCihazKaydet } from "./src/services/fcmServisi";
 import { premiumKontrolEt } from "./src/services/premiumKontrolServisi";
 
 import {
@@ -162,6 +164,9 @@ function App({
 }) {
   const [aramaHazir, setAramaHazir] = useState(!aramaModu);
   const [dilHazir, setDilHazir] = useState(false);
+  const [oturumKontrolHazir, setOturumKontrolHazir] = useState(aramaModu);
+  const [oturumAktif, setOturumAktif] = useState(oturumDurumunuGetir());
+  const [acilisEkrani, setAcilisEkrani] = useState<BaslangicEkrani>(baslangicEkrani);
 
   /*
    * =====================================================
@@ -186,6 +191,71 @@ function App({
       aktif = false;
     };
   }, []);
+
+  /*
+   * =====================================================
+   * NORMAL UYGULAMA OTURUMUNU GERİ YÜKLE
+   * =====================================================
+   */
+
+  useEffect(() => {
+    // Kilit ekranından açılan özel arama akışı bu kontrolden bağımsızdır.
+    if (aramaModu) {
+      return;
+    }
+
+    let aktif = true;
+
+    const abonelikTemizle = oturumDurumuDinle((durum) => {
+      if (aktif) {
+        setOturumAktif(durum);
+      }
+    });
+
+    const oturumuKontrolEt = async () => {
+      try {
+        const sonuc = await uygulamaOturumunuBaslat();
+
+        if (!aktif) return;
+
+        if (sonuc.durum === "cancelled") {
+          console.log("ℹ️ AÇILIŞ OTURUM KONTROLÜ İPTAL EDİLDİ.");
+          return;
+        }
+
+        if (sonuc.durum === "authenticated") {
+          setAcilisEkrani(
+            sonuc.ekran === "messages" ? "messages" : "index",
+          );
+          console.log("🟢 OTOMATİK OTURUM GERİ YÜKLENDİ.");
+        } else {
+          setOturumAktif(false);
+          setAcilisEkrani("index");
+          console.log("🔐 OTURUM BULUNAMADI. GİRİŞ EKRANI AÇILACAK.");
+        }
+      } catch (hata) {
+        // Ağ hatasında kayıtlı tokenları silme.
+        console.error("❌ OTOMATİK OTURUM KONTROLÜ HATASI:", hata);
+
+        if (aktif) {
+          setOturumAktif(false);
+          setAcilisEkrani("index");
+        }
+      } finally {
+        if (aktif) {
+          setOturumKontrolHazir(true);
+        }
+      }
+    };
+
+    void oturumuKontrolEt();
+
+    return () => {
+      aktif = false;
+      abonelikTemizle();
+    };
+  }, [aramaModu]);
+
   /*
    * =========================================================
    * GLOBAL WEBRTC VE MERKEZİ STOMP
@@ -196,6 +266,11 @@ function App({
    */
 
   useEffect(() => {
+    // Özel gelen arama uygulaması bu global normal oturum akışını kullanmaz.
+    if (aramaModu || !oturumAktif) {
+      return;
+    }
+
     let aktif = true;
 
     // Merkezi STOMP üzerinden gelen arama sinyallerini dinle.
@@ -298,7 +373,7 @@ function App({
 
       console.log("🔴 GLOBAL WEBRTC DİNLEYİCİSİ TEMİZLENDİ");
     };
-  }, []);
+  }, [aramaModu, oturumAktif]);
   /*
    * =====================================================
    * FCM VE NOTIFEE BAŞLATMA
@@ -307,7 +382,6 @@ function App({
 
   useEffect(() => {
     let mesajDinleyici: (() => void) | undefined;
-    let tokenDinleyici: (() => void) | undefined;
     let bildirimDinleyici: (() => void) | undefined;
 
     let aktif = true;
@@ -379,70 +453,6 @@ function App({
         if (!aktif) return;
 
         const mesajlasma = getMessaging();
-
-        /*
-         * -------------------------------------------------
-         * FCM CİHAZ TOKENI
-         * -------------------------------------------------
-         */
-
-        const fcmToken = await getToken(mesajlasma);
-
-        if (!aktif) return;
-
-        console.log("FCM TOKEN ALINDI");
-        console.log("TOKEN UZUNLUĞU:", fcmToken.length);
-
-        // Güncel access token al.
-        const jwt = await gecerliAccessTokenGetir();
-
-        if (!aktif) return;
-
-        if (jwt) {
-          try {
-            const kayitBasarili = await fcmCihazKaydet(jwt, fcmToken);
-
-            if (kayitBasarili) {
-              console.log("FCM CİHAZ KAYDI TAMAMLANDI");
-            } else {
-              console.error("FCM CİHAZ KAYDI BAŞARISIZ");
-            }
-          } catch (error) {
-            console.error("FCM CİHAZ KAYIT HATASI:", error);
-          }
-        } else {
-          console.warn(
-            "FCM CİHAZ KAYDI ATLANDI: GEÇERLİ OTURUM TOKENI BULUNAMADI.",
-          );
-        }
-
-        /*
-         * -------------------------------------------------
-         * TOKEN YENİLENMESİ
-         * -------------------------------------------------
-         */
-
-        tokenDinleyici = onTokenRefresh(mesajlasma, async (yeniToken) => {
-          if (!aktif) return;
-
-          try {
-            const mevcutJwt = await gecerliAccessTokenGetir();
-
-            if (!aktif) return;
-
-            if (mevcutJwt) {
-              await fcmCihazKaydet(mevcutJwt, yeniToken);
-
-              console.log("FCM YENİ TOKEN KAYDEDİLDİ");
-            } else {
-              console.warn(
-                "FCM TOKEN GÜNCELLEME ATLANDI: OTURUM TOKENI BULUNAMADI.",
-              );
-            }
-          } catch (error) {
-            console.error("FCM TOKEN GÜNCELLEME HATASI:", error);
-          }
-        });
 
         /*
          * -------------------------------------------------
@@ -596,7 +606,6 @@ function App({
       aktif = false;
 
       mesajDinleyici?.();
-      tokenDinleyici?.();
       bildirimDinleyici?.();
 
       console.log("FCM DİNLEYİCİLERİ TEMİZLENDİ");
@@ -613,12 +622,23 @@ function App({
     return null;
   }
 
+  if (!aramaModu && !oturumKontrolHazir) {
+    return null;
+  }
+
   if (aramaModu && !aramaHazir) {
     return null;
   }
 
+  const navigatorBaslangicEkrani = aramaModu
+    ? baslangicEkrani
+    : acilisEkrani;
+
   return (
-    <AppNavigator baslangicEkrani={baslangicEkrani} aramaModu={aramaModu} />
+    <AppNavigator
+      baslangicEkrani={navigatorBaslangicEkrani}
+      aramaModu={aramaModu}
+    />
   );
 }
 
