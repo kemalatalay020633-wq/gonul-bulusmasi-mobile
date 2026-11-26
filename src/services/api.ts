@@ -129,7 +129,7 @@ const refreshTokenYenile = async (): Promise<string | null> => {
       console.log("REFRESH TOKEN BULUNAMADI.");
 
       if (oturumNesliGecerliMi(baslangicOturumNesli)) {
-        await oturumuSonlandir(baslangicOturumNesli);
+        await oturumuSonlandir();
       }
 
       return null;
@@ -241,7 +241,7 @@ const refreshTokenYenile = async (): Promise<string | null> => {
       console.log("REFRESH TOKEN GEÇERSİZ VEYA SÜRESİ DOLMUŞ.");
 
       if (oturumNesliGecerliMi(baslangicOturumNesli)) {
-        await oturumuSonlandir(baslangicOturumNesli);
+        await oturumuSonlandir();
       }
 
       return null;

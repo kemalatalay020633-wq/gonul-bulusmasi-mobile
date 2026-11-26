@@ -8,14 +8,8 @@ import merkeziStompServisi from "./MerkeziStompServisi";
 import {
   refreshTokenGetir,
   tokenDepolamaIslemi,
-  tokenGetir,
   tokenSil,
 } from "./tokenServisi";
-
-import {
-  fcmCihazPasifYap,
-  fcmTokenYenilemeDinleyicisiniDurdur,
-} from "./fcmServisi";
 
 // ============================================
 // SESSION STATE
@@ -23,65 +17,9 @@ import {
 
 let cikisIslemiBasladi = false;
 
-// Eş zamanlı logout çağrılarını tek işlemde birleştirir.
-let cikisPromise: Promise<void> | null = null;
-
 // Her yeni oturum veya çıkış işleminde artırılır.
 // Eski async işlemlerin yeni oturumu değiştirmesini önler.
 let oturumNesli = 0;
-
-// Uygulamanın doğrulanmış oturum durumunu takip eder.
-let oturumAktif = false;
-
-// Oturum geçişlerini tek sırada yürütür.
-// Login, logout ve otomatik oturum doğrulaması bu kuyruğu kullanır.
-let oturumGecisKuyrugu: Promise<void> = Promise.resolve();
-
-export const oturumGecisiniSirayaAl = async <T>(
-  islem: () => Promise<T>,
-): Promise<T> => {
-  const oncekiIslem = oturumGecisKuyrugu;
-
-  let kilidiBirak!: () => void;
-  oturumGecisKuyrugu = new Promise<void>((resolve) => {
-    kilidiBirak = resolve;
-  });
-
-  await oncekiIslem;
-
-  try {
-    return await islem();
-  } finally {
-    kilidiBirak();
-  }
-};
-
-
-type OturumDinleyicisi = (aktif: boolean) => void;
-
-const oturumDinleyicileri = new Set<OturumDinleyicisi>();
-
-const oturumDurumunuYayinla = (): void => {
-  oturumDinleyicileri.forEach((dinleyici) => {
-    try {
-      dinleyici(oturumAktif);
-    } catch (hata) {
-      console.error("OTURUM DURUM DİNLEYİCİ HATASI:", hata);
-    }
-  });
-};
-
-export const oturumDurumunuGetir = (): boolean => oturumAktif;
-
-export const oturumDurumuDinle = (
-  dinleyici: OturumDinleyicisi,
-): (() => void) => {
-  oturumDinleyicileri.add(dinleyici);
-
-  return () => {
-    oturumDinleyicileri.delete(dinleyici);
-  };
-};
 
 // ============================================
 // SESSION GENERATION
@@ -141,75 +79,18 @@ const sunucuOturumunuKapat = async (refreshToken: string): Promise<void> => {
 // LOGOUT
 // ============================================
 
-export const oturumuSonlandir = (
-  beklenenOturumNesli?: number,
-): Promise<void> => {
-  // Eski oturuma ait gecikmiş hata yeni oturumu kapatamaz.
-  if (
-    beklenenOturumNesli !== undefined &&
-    !oturumNesliGecerliMi(beklenenOturumNesli)
-  ) {
-    console.log("LOGOUT ATLANDI: OTURUM NESLİ ARTIK GEÇERLİ DEĞİL.");
-    return Promise.resolve();
+export const oturumuSonlandir = async (): Promise<void> => {
+  if (cikisIslemiBasladi) {
+    return;
   }
-
-  // Devam eden logout işlemi varsa aynı Promise paylaşılır.
-  if (cikisPromise) {
-    return cikisPromise;
-  }
-
-  const ortakIslem = oturumGecisiniSirayaAl(async () => {
-    // Kuyrukta beklerken oturum değişmiş olabilir.
-    if (
-      beklenenOturumNesli !== undefined &&
-      !oturumNesliGecerliMi(beklenenOturumNesli)
-    ) {
-      console.log("LOGOUT KUYRUKTA İPTAL: OTURUM NESLİ DEĞİŞMİŞ.");
-      return;
-    }
-
-    if (cikisIslemiBasladi) {
-      return;
-    }
 
   // Await öncesinde oturumu geçersizleştir.
   cikisIslemiBasladi = true;
   oturumNesli++;
 
-  oturumAktif = false;
-  oturumDurumunuYayinla();
-
   const cikisNesli = oturumNesli;
 
   console.log("OTURUM SONLANDIRMA BAŞLATILDI.");
-
-  // ============================================
-  // FCM DİNLEYİCİSİNİ DURDUR VE CİHAZI PASİFLEŞTİR
-  // ============================================
-
-  fcmTokenYenilemeDinleyicisiniDurdur();
-
-  try {
-    // Logout başladığı için access token yenileme mekanizması
-    // kullanılmaz. Mevcut token doğrudan Keychain'den okunur.
-    const mevcutAccessToken = await tokenGetir();
-
-    if (mevcutAccessToken) {
-      const pasiflestirildi = await fcmCihazPasifYap(
-        mevcutAccessToken,
-      );
-
-      console.log(
-        pasiflestirildi
-          ? "LOGOUT: FCM CİHAZI PASİFLEŞTİRİLDİ."
-          : "LOGOUT: FCM PASİFLEŞTİRME TAMAMLANAMADI.",
-      );
-    } else {
-      console.warn("LOGOUT: FCM PASİFLEŞTİRME İÇİN JWT BULUNAMADI.");
-    }
-  } catch (fcmHata) {
-    console.error("LOGOUT FCM TEMİZLEME HATASI:", fcmHata);
-  }
 
   // ============================================
   // WEBRTC ARAMA TEMİZLİĞİ
@@ -318,12 +199,6 @@ export const oturumuSonlandir = (
       loginEkraninaYonlendir();
     }
   }
-  }).finally(() => {
-    cikisPromise = null;
-  });
-
-  cikisPromise = ortakIslem;
-  return ortakIslem;
 };
 
 // ============================================
@@ -336,9 +211,6 @@ export const oturumAcildi = (): void => {
 
   // Yeni oturum için çıkış korumasını sıfırla.
   cikisIslemiBasladi = false;
-
-  oturumAktif = true;
-  oturumDurumunuYayinla();
 
   console.log("YENİ OTURUM AÇILDI. OTURUM NESLİ:", oturumNesli);
 };
