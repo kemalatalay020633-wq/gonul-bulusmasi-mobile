@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - calisan-surum-2026-11-26
   pull_request:
     branches:
       - main
