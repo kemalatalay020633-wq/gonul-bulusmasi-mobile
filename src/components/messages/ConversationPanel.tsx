@@ -412,8 +412,7 @@ function ConversationPanel({
   const aramaTemizle = useCallback(async () => {
     console.log("🧹 ARAMA TEMİZLE BAŞLADI");
 
-    // Kapat butonuna basıldığında karşı tarafa açıkça CALL_END gönder.
-    // Ekranı kapatma işlemi sinyal gönderimi hata verse bile çalışmalı.
+    // Tekrar tetiklenmesini engelle.
     aramaSonlandirmaRef.current = true;
 
     if (aramaSonuZamanlayiciRef.current) {
@@ -426,26 +425,29 @@ function ConversationPanel({
       uzakStreamKontrolRef.current = null;
     }
 
+    // Önce arama arayüzünü kapat.
+    setAramaSonuGorunur(false);
+    setAramaSonuMesaji("");
+    kabulIsleniyorRef.current = false;
+    setKabulIsleniyor(false);
+    setAramaGorunur(false);
+    setAramaDurumu("YOK");
+    setAramaArayanId(null);
+    setGelenTeklif(null);
+    setYerelStreamUrl(null);
+    setUzakStreamUrl(null);
+    setAramaSuresi(0);
+    setHoparlorAcik(false);
+
+    console.log("✅ ARAMA ARAYÜZÜ KAPATILDI");
+
+    // WebRTC temizliğini tamamla.
     try {
-      console.log("📴 Kapat butonu: karşı tarafa CALL_END gönderiliyor...");
+      console.log("📴 CALL_END gönderiliyor, WebRTC temizleniyor...");
       await aramaWebRTC.aramayiBitir(false);
       console.log("✅ CALL_END gönderildi, WebRTC temizlendi");
     } catch (error) {
       console.error("❌ CALL_END / ARAMA KAPATMA HATASI:", error);
-    } finally {
-      setAramaSonuGorunur(false);
-      setAramaSonuMesaji("");
-      kabulIsleniyorRef.current = false;
-      setKabulIsleniyor(false);
-      setAramaGorunur(false);
-      setAramaDurumu("YOK");
-      setAramaArayanId(null);
-      setGelenTeklif(null);
-      setYerelStreamUrl(null);
-      setUzakStreamUrl(null);
-      setAramaSuresi(0);
-      setHoparlorAcik(false);
-      console.log("🧹 ARAMA EKRANI KAPATILDI");
     }
   }, []);
 

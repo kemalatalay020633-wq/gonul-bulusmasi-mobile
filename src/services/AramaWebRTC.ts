@@ -4118,7 +4118,7 @@ class AramaWebRTC {
 
     // Eski medya akışını kapat.
     if (eskiYerelStream) {
-      console.error("🔴 ARAMA TEMİZLİĞİ KAMERAYI DURDURUYOR", {
+      console.log("📷 ARAMA TEMİZLİĞİ KAMERAYI DURDURUYOR", {
         cleanupNesli,
         mevcutNesil: this.aramaNesli,
         streamId: eskiYerelStream.id,
